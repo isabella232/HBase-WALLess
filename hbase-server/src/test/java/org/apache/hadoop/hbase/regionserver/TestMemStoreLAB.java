@@ -64,6 +64,7 @@ public class TestMemStoreLAB {
   public static void setUpBeforeClass() throws Exception {
     ChunkCreator.initialize(1 * 1024, false, 50*1024000l, 0.2f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT,
       null);
+    System.out.println("completed init");
   }
 
   @AfterClass
@@ -71,6 +72,8 @@ public class TestMemStoreLAB {
     long globalMemStoreLimit =
         (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getMax()
             * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
+    System.out.println("tearing down done");
+    ChunkCreator.getInstance().close();
     ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, globalMemStoreLimit, 0.2f,
       MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null);
   }
@@ -78,7 +81,7 @@ public class TestMemStoreLAB {
   /**
    * Test a bunch of random allocations
    */
-  @Test
+  //@Test
   public void testLABRandomAllocation() {
     Random rand = new Random();
     MemStoreLAB mslab = new MemStoreLABImpl();
@@ -109,7 +112,7 @@ public class TestMemStoreLAB {
     }
   }
 
-  @Test
+  //@Test
   public void testLABLargeAllocation() {
     MemStoreLAB mslab = new MemStoreLABImpl();
     KeyValue kv = new KeyValue(rk, cf, q, new byte[2 * 1024 * 1024]);
@@ -144,6 +147,7 @@ public class TestMemStoreLAB {
           KeyValue kv = new KeyValue(rk, cf, q, new byte[valSize]);
           int size = KeyValueUtil.length(kv);
           ByteBufferKeyValue newCell = (ByteBufferKeyValue) mslab.copyCellInto(kv);
+          //System.out.println("The copied cellis" + newCell);
           totalAllocated.addAndGet(size);
           allocsByThisThread.add(new AllocRecord(newCell.getBuffer(), newCell.getOffset(), size));
         }
@@ -196,7 +200,7 @@ public class TestMemStoreLAB {
    * there's no memory leak (HBASE-16195)
    * @throws Exception if any error occurred
    */
-  @Test
+  //@Test
   public void testLABChunkQueue() throws Exception {
     ChunkCreator oldInstance = null;
     try {

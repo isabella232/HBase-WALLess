@@ -256,9 +256,12 @@ public class HStore implements Store {
     scanInfo = new ScanInfo(conf, family, ttl, timeToPurgeDeletes, this.comparator);
     MemoryCompactionPolicy inMemoryCompaction = family.getInMemoryCompaction();
     if(inMemoryCompaction == null) {
+      String string = conf.get(CompactingMemStore.COMPACTING_MEMSTORE_TYPE_KEY,
+          CompactingMemStore.COMPACTING_MEMSTORE_TYPE_DEFAULT);
+      LOG.info("The string that we got is "+string);
       inMemoryCompaction = MemoryCompactionPolicy.valueOf(
-          conf.get(CompactingMemStore.COMPACTING_MEMSTORE_TYPE_KEY,
-              CompactingMemStore.COMPACTING_MEMSTORE_TYPE_DEFAULT));
+          string);
+      LOG.info("The compacton policy that we got is "+inMemoryCompaction.toString());
     }
     String className;
     switch (inMemoryCompaction) {

@@ -20,8 +20,15 @@ package org.apache.hadoop.hbase.regionserver;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.mnemonic.Allocator;
+import org.apache.mnemonic.ChunkBuffer;
+import org.apache.mnemonic.DurableChunk;
+import org.apache.mnemonic.MemChunkHolder;
+import org.apache.mnemonic.NonVolatileMemAllocator;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -33,6 +40,7 @@ import com.google.common.base.Preconditions;
 public abstract class Chunk {
   /** Actual underlying data */
   protected ByteBuffer data;
+  protected static final Log LOG = LogFactory.getLog(Chunk.class);
 
   protected static final int UNINITIALIZED = -1;
   protected static final int OOM = -2;
@@ -53,6 +61,10 @@ public abstract class Chunk {
 
   // indicates if the chunk is formed by ChunkCreator#MemstorePool
   private final boolean fromPool;
+  
+  protected ChunkBuffer chunkBuffer;
+  
+  protected final MemChunkHolder<NonVolatileMemAllocator> durableChunk;
 
   /**
    * Create an uninitialized chunk. Note that memory is not allocated yet, so
@@ -61,7 +73,7 @@ public abstract class Chunk {
    * @param id the chunk id
    */
   public Chunk(int size, int id) {
-    this(size, id, false);
+    this(size, id, false, null);
   }
 
   /**
@@ -71,10 +83,11 @@ public abstract class Chunk {
    * @param id the chunk id
    * @param fromPool if the chunk is formed by pool
    */
-  public Chunk(int size, int id, boolean fromPool) {
+  public Chunk(int size, int id, boolean fromPool, DurableChunk<NonVolatileMemAllocator> durableChunk) {
     this.size = size;
     this.id = id;
     this.fromPool = fromPool;
+    this.durableChunk = durableChunk;
   }
 
   int getId() {

@@ -36,6 +36,9 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.regionserver.HeapMemoryManager.HeapMemoryTuneObserver;
 import org.apache.hadoop.util.StringUtils;
+import org.apache.mnemonic.DurableChunk;
+import org.apache.mnemonic.NonVolatileMemAllocator;
+import org.apache.mnemonic.Utils;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -62,9 +65,20 @@ public class ChunkCreator {
   static boolean chunkPoolDisabled = false;
   private MemStoreChunkPool pool;
 
+  private DurableChunk<NonVolatileMemAllocator> durableChunk;
+
   @VisibleForTesting
   ChunkCreator(int chunkSize, boolean offheap, long globalMemStoreSize, float poolSizePercentage,
       float initialCountPercentage, HeapMemoryManager heapMemoryManager) {
+    // Do validation. but for now creating max sized allocator
+    NonVolatileMemAllocator allocator = new NonVolatileMemAllocator(Utils.getNonVolatileMemoryAllocatorService("pmem"),
+      (long)((globalMemStoreSize * poolSizePercentage  + (2048l))), "/mnt/mem/chunkpoolbuffer1.dat", true);
+/*    NonVolatileMemAllocator allocator = new NonVolatileMemAllocator(Utils.getNonVolatileMemoryAllocatorService("pmem"),
+      (long)(1024l * 1024L * 1024l), "/mnt/mem/chunkpoolbuffer1.dat", true);*/
+    durableChunk = allocator.createChunk((long)((globalMemStoreSize * poolSizePercentage)));
+    if (durableChunk == null) {
+      throw new RuntimeException("Not able to create a durable chunk");
+    }
     this.chunkSize = chunkSize;
     this.offheap = offheap;
     this.pool = initializePool(globalMemStoreSize, poolSizePercentage, initialCountPercentage);
@@ -97,6 +111,20 @@ public class ChunkCreator {
 
   static ChunkCreator getInstance() {
     return INSTANCE;
+  }
+  
+  void close() {
+    INSTANCE.durableChunk.destroy();
+  }
+
+  void persist(Chunk c) {
+    // may be even cache this in chunk
+    if(c.chunkBuffer != null) {
+      c.chunkBuffer.sync();
+      c.chunkBuffer.flush();
+      c.chunkBuffer.persist();
+    }
+    LOG.info("Persited the chunk "+c);
   }
 
   /**
@@ -141,9 +169,9 @@ public class ChunkCreator {
     assert id > 0;
     // do not create offheap chunk on demand
     if (pool && this.offheap) {
-      return new OffheapChunk(chunkSize, id, pool);
+      return new OffheapChunk(chunkSize, id, pool, this.durableChunk);
     } else {
-      return new OnheapChunk(chunkSize, id, pool);
+      return new OnheapChunk(chunkSize, id, pool, this.durableChunk);
     }
   }
 
@@ -213,9 +241,11 @@ public class ChunkCreator {
       this.poolSizePercentage = poolSizePercentage;
       this.reclaimedChunks = new LinkedBlockingQueue<>();
       for (int i = 0; i < initialCount; i++) {
+        // for now initial count and total size are same so no extra offheap buffers will be required
         Chunk chunk = createChunk(true);
         chunk.init();
         reclaimedChunks.add(chunk);
+        //LOG.info("Created chunk "+i);
       }
       chunkCount.set(initialCount);
       final String n = Thread.currentThread().getName();

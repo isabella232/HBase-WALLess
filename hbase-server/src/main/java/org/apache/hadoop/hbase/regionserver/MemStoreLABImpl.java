@@ -129,6 +129,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
         }
         // not enough space!
         // try to retire this chunk
+        // make the persistence here
         tryRetireChunk(c);
       }
     }
@@ -210,6 +211,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
    * @return true if we won the race to retire the chunk
    */
   private void tryRetireChunk(Chunk c) {
+    this.chunkCreator.persist(c);
     curChunk.compareAndSet(c, null);
     // If the CAS succeeds, that means that we won the race
     // to retire the chunk. We could use this opportunity to

@@ -20,27 +20,39 @@ package org.apache.hadoop.hbase.regionserver;
 import java.nio.ByteBuffer;
 
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
+import org.apache.mnemonic.DurableChunk;
+import org.apache.mnemonic.NonVolatileMemAllocator;
 
 /**
  * An off heap chunk implementation.
  */
 @InterfaceAudience.Private
 public class OffheapChunk extends Chunk {
+  private long offset = 0;
 
   OffheapChunk(int size, int id) {
     // better if this is always created fromPool. This should not be called
-    super(size, id);
+    this(size, id, false, null);
   }
 
-  OffheapChunk(int size, int id, boolean fromPool) {
-    super(size, id, fromPool);
+  OffheapChunk(int size, int id, boolean fromPool, DurableChunk<NonVolatileMemAllocator> durableChunk) {
+    super(size, id, fromPool, durableChunk);
     assert fromPool == true;
   }
 
   @Override
   void allocateDataBuffer() {
     if (data == null) {
-      data = ByteBuffer.allocateDirect(this.size);
+      if (durableChunk != null) {
+        // fill the data here
+        // this causes NPE
+        // createBuffer.cancelAutoReclaim();
+        chunkBuffer = ((DurableChunk) durableChunk).getChunkBuffer(offset, size);
+        data = chunkBuffer.get();
+        offset += size;
+      } else {
+        data = ByteBuffer.allocateDirect(this.size);
+      }
       data.putInt(0, this.getId());
     }
   }

@@ -20,6 +20,8 @@ package org.apache.hadoop.hbase.regionserver;
 import java.nio.ByteBuffer;
 
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
+import org.apache.mnemonic.DurableChunk;
+import org.apache.mnemonic.NonVolatileMemAllocator;
 
 /**
  * An on heap chunk implementation.
@@ -28,11 +30,11 @@ import org.apache.hadoop.hbase.classification.InterfaceAudience;
 public class OnheapChunk extends Chunk {
 
   OnheapChunk(int size, int id) {
-    super(size, id);
+    this(size, id, false, null);
   }
 
-  OnheapChunk(int size, int id, boolean fromPool) {
-    super(size, id, fromPool);
+  OnheapChunk(int size, int id, boolean fromPool, DurableChunk<NonVolatileMemAllocator> durableChunk) {
+    super(size, id, fromPool, durableChunk);
   }
 
   @Override

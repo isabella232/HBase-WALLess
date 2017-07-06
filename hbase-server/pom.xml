@@ -380,6 +380,26 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+        <dependency>
+     <artifactId>mnemonic-core</artifactId>
+    <groupId>org.apache.mnemonic</groupId>
+    <version>0.8.0-incubating-SNAPSHOT</version>
+    </dependency>
+        <dependency>
+     <artifactId>mnemonic-collections</artifactId>
+    <groupId>org.apache.mnemonic</groupId>
+    <version>0.8.0-incubating-SNAPSHOT</version>
+    </dependency>
+        <dependency>
+     <artifactId>mnemonic-nvml-pmem-service</artifactId>
+    <groupId>org.apache.mnemonic</groupId>
+    <version>0.8.0-incubating-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+     <artifactId>mnemonic-nvml-vmem-service</artifactId>
+    <groupId>org.apache.mnemonic</groupId>
+    <version>0.8.0-incubating-SNAPSHOT</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-procedure</artifactId>
