@@ -59,8 +59,9 @@ public class TestMemStoreChunkPool {
     ChunkCreator.chunkPoolDisabled = false;
     long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
         .getMax() * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
-    chunkCreator = ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
+    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
       globalMemStoreLimit, 0.2f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null);
+    chunkCreator = ChunkCreator.getInstance();
     assertTrue(chunkCreator != null);
   }
 
@@ -227,13 +228,13 @@ public class TestMemStoreChunkPool {
     final int initialCount = 5;
     final int chunkSize = 40;
     final int valSize = 7;
-    ChunkCreator oldCreator = ChunkCreator.getInstance();
-    ChunkCreator newCreator = new ChunkCreator(chunkSize, false, 400, 1, 0.5f, null);
+    ChunkCreator oldCreator = ChunkCreator.resetInstance();
+    // Replace the global ref with a new one.
+    // Used it for the testing. Later in finally we put back the original
+    ChunkCreator.initialize(chunkSize, false, 400, 1, 0.5f, null);
+    ChunkCreator newCreator = ChunkCreator.getInstance();
     assertEquals(initialCount, newCreator.getPoolSize());
     assertEquals(maxCount, newCreator.getMaxCount());
-    ChunkCreator.INSTANCE = newCreator;// Replace the global ref with the new one we created.
-                                             // Used it for the testing. Later in finally we put
-                                             // back the original
     final KeyValue kv = new KeyValue(Bytes.toBytes("r"), Bytes.toBytes("f"), Bytes.toBytes("q"),
         new byte[valSize]);
     try {

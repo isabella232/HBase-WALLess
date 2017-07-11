@@ -17,29 +17,43 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
-import java.nio.ByteBuffer;
-
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
+import org.apache.mnemonic.ChunkBuffer;
+import org.apache.mnemonic.DurableChunk;
+import org.apache.mnemonic.NonVolatileMemAllocator;
 
 /**
- * An on heap chunk implementation.
+ * An implementation of Durable chunk
  */
 @InterfaceAudience.Private
-public class OnheapChunk extends Chunk {
+public class DurableSlicedChunk extends Chunk {
 
-  OnheapChunk(int size, int id) {
-    this(size, id, false);
-  }
+  private DurableChunk<NonVolatileMemAllocator> durableChunk;
+  private long offset;
+  private ChunkBuffer chunkBuffer;
 
-  OnheapChunk(int size, int id, boolean fromPool) {
-    super(size, id, fromPool);
+  public DurableSlicedChunk(int id, DurableChunk<NonVolatileMemAllocator> durableBigChunk,
+      long offset, int size) {
+    super(size, id, true);// Durable chunks are always created out of pool.
+    this.offset = offset;
+    this.durableChunk = durableBigChunk;
   }
 
   @Override
   void allocateDataBuffer() {
     if (data == null) {
-      data = ByteBuffer.allocate(this.size);
+      // fill the data here
+      // this causes NPE
+      // createBuffer.cancelAutoReclaim();
+      chunkBuffer = durableChunk.getChunkBuffer(offset, size);
+      data = chunkBuffer.get();
       data.putInt(0, this.getId());
     }
+  }
+
+  void persist() {
+    this.chunkBuffer.sync();
+    this.chunkBuffer.flush();
+    this.chunkBuffer.persist();
   }
 }

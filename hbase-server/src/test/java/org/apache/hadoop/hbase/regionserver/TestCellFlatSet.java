@@ -77,16 +77,15 @@ public class TestCellFlatSet extends TestCase {
     long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
         .getMax() * MemorySizeUtil.getGlobalMemStoreHeapPercent(CONF, false));
     if (chunkType == "NORMAL_CHUNKS") {
-      chunkCreator = ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
+      ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
           globalMemStoreLimit, 0.2f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null);
-      assertTrue(chunkCreator != null);
     } else {
       // chunkCreator with smaller chunk size, so only 3 cell-representations can accommodate a chunk
-      chunkCreator = ChunkCreator.initialize(64, false,
+      ChunkCreator.initialize(64, false,
           globalMemStoreLimit, 0.2f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null);
-      assertTrue(chunkCreator != null);
-
     }
+    chunkCreator = ChunkCreator.getInstance();
+    assertTrue(chunkCreator != null);
   }
 
   @Before

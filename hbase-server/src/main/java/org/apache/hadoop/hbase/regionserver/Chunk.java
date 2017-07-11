@@ -24,11 +24,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.mnemonic.Allocator;
-import org.apache.mnemonic.ChunkBuffer;
-import org.apache.mnemonic.DurableChunk;
-import org.apache.mnemonic.MemChunkHolder;
-import org.apache.mnemonic.NonVolatileMemAllocator;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -62,10 +57,6 @@ public abstract class Chunk {
   // indicates if the chunk is formed by ChunkCreator#MemstorePool
   private final boolean fromPool;
   
-  protected ChunkBuffer chunkBuffer;
-  
-  protected final MemChunkHolder<NonVolatileMemAllocator> durableChunk;
-
   /**
    * Create an uninitialized chunk. Note that memory is not allocated yet, so
    * this is cheap.
@@ -73,7 +64,7 @@ public abstract class Chunk {
    * @param id the chunk id
    */
   public Chunk(int size, int id) {
-    this(size, id, false, null);
+    this(size, id, false);
   }
 
   /**
@@ -83,11 +74,10 @@ public abstract class Chunk {
    * @param id the chunk id
    * @param fromPool if the chunk is formed by pool
    */
-  public Chunk(int size, int id, boolean fromPool, DurableChunk<NonVolatileMemAllocator> durableChunk) {
+  public Chunk(int size, int id, boolean fromPool) {
     this.size = size;
     this.id = id;
     this.fromPool = fromPool;
-    this.durableChunk = durableChunk;
   }
 
   int getId() {
