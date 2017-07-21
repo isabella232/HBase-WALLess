@@ -46,7 +46,14 @@ public class FlushRegionCallable extends RegionAdminServiceCallable<FlushRegionR
   public FlushRegionCallable(ClusterConnection connection,
       RpcControllerFactory rpcControllerFactory, TableName tableName, byte[] regionName,
       byte[] regionStartKey, boolean writeFlushWalMarker) {
-    super(connection, rpcControllerFactory, tableName, regionStartKey);
+    this(connection, rpcControllerFactory, tableName, regionName, regionStartKey,
+        writeFlushWalMarker, RegionReplicaUtil.DEFAULT_REPLICA_ID);
+  }
+
+  public FlushRegionCallable(ClusterConnection connection,
+      RpcControllerFactory rpcControllerFactory, TableName tableName, byte[] regionName,
+      byte[] regionStartKey, boolean writeFlushWalMarker, int replicaId) {
+    super(connection, rpcControllerFactory, null, tableName, regionStartKey, replicaId);
     this.regionName = regionName;
     this.writeFlushWalMarker = writeFlushWalMarker;
   }
@@ -55,7 +62,14 @@ public class FlushRegionCallable extends RegionAdminServiceCallable<FlushRegionR
       RpcControllerFactory rpcControllerFactory, HRegionInfo regionInfo,
       boolean writeFlushWalMarker) {
     this(connection, rpcControllerFactory, regionInfo.getTable(), regionInfo.getRegionName(),
-      regionInfo.getStartKey(), writeFlushWalMarker);
+        regionInfo.getStartKey(), writeFlushWalMarker, RegionReplicaUtil.DEFAULT_REPLICA_ID);
+  }
+
+  public FlushRegionCallable(ClusterConnection connection,
+      RpcControllerFactory rpcControllerFactory, HRegionInfo regionInfo,
+      boolean writeFlushWalMarker, int replicaId) {
+    this(connection, rpcControllerFactory, regionInfo.getTable(), regionInfo.getRegionName(),
+        regionInfo.getStartKey(), writeFlushWalMarker, replicaId);
   }
 
   @Override

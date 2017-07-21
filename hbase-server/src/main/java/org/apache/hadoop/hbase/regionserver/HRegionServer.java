@@ -128,6 +128,8 @@ import org.apache.hadoop.hbase.regionserver.compactions.CompactionProgress;
 import org.apache.hadoop.hbase.regionserver.handler.CloseMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RegionReplicaFlushHandler;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicaFlushHandler;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.FlushThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.regionserver.wal.MetricsWAL;
@@ -485,6 +487,8 @@ public class HRegionServer extends HasThread implements
   private RegionServerRpcQuotaManager rsQuotaManager;
   private RegionServerSpaceQuotaManager rsSpaceQuotaManager;
 
+  private MemstoreReplicator memstoreReplicator;
+
   /**
    * Nonce manager. Nonces are used to make operations like increment and append idempotent
    * in the case where client doesn't receive the response from a successful operation and
@@ -667,6 +671,8 @@ public class HRegionServer extends HasThread implements
     this.compactedFileDischarger =
         new CompactedHFilesDischarger(cleanerInterval, this, this);
     choreService.scheduleChore(compactedFileDischarger);
+    // TODO : Reset and create new for tests
+    this.memstoreReplicator = MemstoreReplicator.init(this.conf, this);
   }
 
   private void initializeFileSystem() throws IOException {
@@ -2057,6 +2063,11 @@ public class HRegionServer extends HasThread implements
     return wal;
   }
 
+  @Override
+  public MemstoreReplicator getMemstoreReplicator() {
+    return this.memstoreReplicator;
+  }
+
   public LogRoller getWalRoller() {
     return walRoller;
   }
@@ -2295,6 +2306,25 @@ public class HRegionServer extends HasThread implements
         rpcRetryingCallerFactory, rpcControllerFactory, operationTimeout, region));
   }
 
+  void triggerFlushInReplicaRegion(final HRegion region) {
+    /*if (!ServerRegionReplicaUtil.isRegionReplicaReplicationEnabled(region.conf) ||
+        !ServerRegionReplicaUtil.isRegionReplicaWaitForPrimaryFlushEnabled(
+          region.conf)) {
+      region.setReadsEnabled(true);
+      return;
+    }
+
+    region.setReadsEnabled(false); */// disable reads before marking the region as opened.
+    // RegionReplicaFlushHandler might reset this.
+
+    // submit it to be handled by one of the handlers so that we do not block OpenRegionHandler
+    // TODOO : This needs some more work
+    this.service.submit(
+      new MemstoreReplicaFlushHandler(this, clusterConnection,
+        rpcRetryingCallerFactory, rpcControllerFactory, operationTimeout, region));
+  }
+
+  
   @Override
   public RpcServerInterface getRpcServer() {
     return rpcServices.rpcServer;

@@ -167,28 +167,28 @@ public class TestRegionReplicas {
     }
   }
 
-  @Test(timeout = 60000)
+  @Test(timeout = 6000000)
   public void testGetOnTargetRegionReplica() throws Exception {
     try {
+      openRegion(HTU, getRS(), hriSecondary);
       //load some data to primary
-      HTU.loadNumericRows(table, f, 0, 1000);
+      HTU.loadNumericRows(table, f, 0, 10);
       // assert that we can read back from primary
-      Assert.assertEquals(1000, HTU.countRows(table));
+      Assert.assertEquals(10, HTU.countRows(table));
       // flush so that region replica can read
       Region region = getRS().getRegionByEncodedName(hriPrimary.getEncodedName());
-      region.flush(true);
+      //region.flush(true);
 
-      openRegion(HTU, getRS(), hriSecondary);
 
       // try directly Get against region replica
-      byte[] row = Bytes.toBytes(String.valueOf(42));
+      byte[] row = Bytes.toBytes(String.valueOf(5));
       Get get = new Get(row);
       get.setConsistency(Consistency.TIMELINE);
       get.setReplicaId(1);
       Result result = table.get(get);
       Assert.assertArrayEquals(row, result.getValue(f, null));
     } finally {
-      HTU.deleteNumericRows(table, HConstants.CATALOG_FAMILY, 0, 1000);
+      HTU.deleteNumericRows(table, HConstants.CATALOG_FAMILY, 0, 10);
       closeRegion(HTU, getRS(), hriSecondary);
     }
   }
@@ -439,6 +439,8 @@ public class TestRegionReplicas {
         HTU.loadNumericRows(table, f, i * 1000, (i + 1) * 1000);
         Region region = getRS().getRegionByEncodedName(hriPrimary.getEncodedName());
         region.flush(true);
+        Region secRegion = getRS().getRegionByEncodedName(hriSecondary.getEncodedName());
+        secRegion.flush(true);
       }
 
       Region primaryRegion = getRS().getFromOnlineRegions(hriPrimary.getEncodedName());

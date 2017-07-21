@@ -2168,6 +2168,7 @@ public class HBaseTestingUtility extends HBaseCommonTestingUtility {
     for (int i = startRow; i < endRow; i++) {
       byte[] data = Bytes.toBytes(String.valueOf(i));
       Put put = new Put(data);
+      put.setDurability(Durability.SKIP_WAL);
       put.addColumn(f, null, data);
       t.put(put);
     }

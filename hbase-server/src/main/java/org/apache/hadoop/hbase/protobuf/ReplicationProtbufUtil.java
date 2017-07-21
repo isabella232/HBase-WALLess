@@ -37,6 +37,9 @@ import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.io.SizedCellScanner;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.HBaseRpcControllerImpl;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
 import org.apache.hadoop.hbase.regionserver.wal.WALEdit;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.UnsafeByteOperations;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
@@ -169,6 +172,56 @@ public class ReplicationProtbufUtil {
       getCellScanner(allCells, size));
   }
 
+  // TODO : Recreating WAL PBs only. For now. We need to change it to Memstore replication PBs
+  public static Pair<AdminProtos.ReplicateWALEntryRequest, CellScanner>
+      buildReplicateMemstoreEntryRequest(final MemstoreReplicationEntry[] entries, byte[] encodedRegionName,
+          String replicationClusterId, Path sourceBaseNamespaceDir, Path sourceHFileArchiveDir) {
+    // Accumulate all the Cells seen in here.
+    List<List<? extends Cell>> allCells = new ArrayList<>(entries.length);
+    int size = 0;
+    WALProtos.FamilyScope.Builder scopeBuilder = WALProtos.FamilyScope.newBuilder();
+    AdminProtos.WALEntry.Builder entryBuilder = AdminProtos.WALEntry.newBuilder();
+    AdminProtos.ReplicateWALEntryRequest.Builder builder =
+        AdminProtos.ReplicateWALEntryRequest.newBuilder();
+    HBaseProtos.UUID.Builder uuidBuilder = HBaseProtos.UUID.newBuilder();
+    for (MemstoreReplicationEntry entry : entries) {
+      entryBuilder.clear();
+      // TODO: this duplicates a lot in WALKey#getBuilder
+      WALProtos.WALKey.Builder keyBuilder = entryBuilder.getKeyBuilder();
+      MemstoreReplicationKey key = entry.getMemstoreReplicationKey();
+      keyBuilder.setEncodedRegionName(UnsafeByteOperations
+          .unsafeWrap(encodedRegionName == null ? key.getEncodedRegionName() : encodedRegionName));
+      keyBuilder.setTableName(UnsafeByteOperations.unsafeWrap(key.getTableName().getName()));
+      keyBuilder.setLogSequenceNumber(key.getSequenceId());
+      keyBuilder.setWriteTime(key.getWriteTime());
+     
+      MemstoreEdits edit = entry.getMemstoreEdits();
+      List<Cell> cells = edit.getCells();
+      // Add up the size. It is used later serializing out the kvs.
+      for (Cell cell : cells) {
+        size += CellUtil.estimatedSerializedSizeOf(cell);
+      }
+      // Collect up the cells
+      allCells.add(cells);
+      // Write out how many cells associated with this entry.
+      entryBuilder.setAssociatedCellCount(cells.size());
+      builder.addEntry(entryBuilder.build());
+    }
+
+    if (replicationClusterId != null) {
+      builder.setReplicationClusterId(replicationClusterId);
+    }
+    if (sourceBaseNamespaceDir != null) {
+      builder.setSourceBaseNamespaceDirPath(sourceBaseNamespaceDir.toString());
+    }
+    if (sourceHFileArchiveDir != null) {
+      builder.setSourceHFileArchiveDirPath(sourceHFileArchiveDir.toString());
+    }
+
+    return new Pair<>(builder.build(), getCellScanner(allCells, size));
+  }
+
+  
   /**
    * @param cells
    * @return <code>cells</code> packaged as a CellScanner

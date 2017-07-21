@@ -152,6 +152,7 @@ import org.apache.hadoop.hbase.regionserver.RegionCoprocessorHost;
 import org.apache.hadoop.hbase.regionserver.RegionSplitPolicy;
 import org.apache.hadoop.hbase.regionserver.compactions.ExploringCompactionPolicy;
 import org.apache.hadoop.hbase.regionserver.compactions.FIFOCompactionPolicy;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.replication.ReplicationException;
 import org.apache.hadoop.hbase.replication.ReplicationFactory;
 import org.apache.hadoop.hbase.replication.ReplicationPeerConfig;
@@ -402,6 +403,8 @@ public class HMaster extends HRegionServer implements MasterServices {
 
   /* Handle favored nodes information */
   private FavoredNodesManager favoredNodesManager;
+
+  private MemstoreReplicator memstoreReplicator;
 
   /** jetty server for master to redirect requests to regionserver infoServer */
   private Server masterJettyServer;
@@ -742,6 +745,7 @@ public class HMaster extends HRegionServer implements MasterServices {
     // TODO: Do this using Dependency Injection, using PicoContainer, Guice or Spring.
     // Initialize the chunkCreator
     initializeMemStoreChunkCreator();
+    this.memstoreReplicator = MemstoreReplicator.init(this.conf, this);
     this.fileSystemManager = new MasterFileSystem(this);
     this.walManager = new MasterWalManager(this);
 
@@ -929,6 +933,11 @@ public class HMaster extends HRegionServer implements MasterServices {
     zombieDetector.interrupt();
   }
 
+  
+  @Override
+  public MemstoreReplicator getMemstoreReplicator() {
+    return this.memstoreReplicator;
+  }
   /**
    * Adds the {@code MasterSpaceQuotaObserver} to the list of configured Master observers to
    * automatically remove space quotas for a table when that table is deleted.
