@@ -697,6 +697,9 @@ public interface Region extends ConfigurationObserver {
 
     /** @return True if the flush requested a compaction, else false */
     boolean isCompactionNeeded();
+
+    /** @return the flushed seqId */
+    long getFlushedSeqId();
   }
 
   /**

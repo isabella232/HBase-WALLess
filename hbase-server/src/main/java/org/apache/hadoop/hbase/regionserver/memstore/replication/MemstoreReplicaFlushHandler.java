@@ -64,16 +64,18 @@ public class MemstoreReplicaFlushHandler extends EventHandler {
   private final RpcControllerFactory rpcControllerFactory;
   private final int operationTimeout;
   private final HRegion region;
+  private final long seqId;
 
   public MemstoreReplicaFlushHandler(Server server, ClusterConnection connection,
       RpcRetryingCallerFactory rpcRetryingCallerFactory, RpcControllerFactory rpcControllerFactory,
-      int operationTimeout, HRegion region) {
+      int operationTimeout, HRegion region, long seqId) {
     super(server, EventType.RS_REGION_REPLICA_FLUSH);
     this.connection = connection;
     this.rpcRetryingCallerFactory = rpcRetryingCallerFactory;
     this.rpcControllerFactory = rpcControllerFactory;
     this.operationTimeout = operationTimeout;
     this.region = region;
+    this.seqId = seqId;
   }
 
   @Override
@@ -122,8 +124,6 @@ public class MemstoreReplicaFlushHandler extends EventHandler {
     while (!region.isClosing() && !region.isClosed()
         && !server.isAborted() && !server.isStopped()) {
       try {
-        // TODO : Better pass the pipeline regions in the RPC call from the primary itself? It save getting it from cache?
-        // But may be what if the regions have already moved?
         locations = RegionReplicaReplayCallable.getRegionLocations(connection,
           region.getTableDesc().getTableName(), region.getRegionInfo().getStartKey(), useCache, 0);
 
@@ -152,10 +152,9 @@ public class MemstoreReplicaFlushHandler extends EventHandler {
         return;
       }
       
-      ArrayList<Future<ReplicateWALEntryResponse>> tasks = new ArrayList<>(locations.size() - 1);
-
       // All passed entries should belong to one region because it is coming from the EntryBuffers
       // split per region. But the regions might split and merge (unlike log recovery case).
+      // TODO : Unify all these code
       FlushRegionResponse response = null;
       for (int replicaId = 0; replicaId < locations.size(); replicaId++) {
         HRegionLocation location = locations.getRegionLocation(replicaId);
@@ -164,9 +163,9 @@ public class MemstoreReplicaFlushHandler extends EventHandler {
               ? RegionReplicaUtil.getRegionInfoForReplica(
                 locations.getDefaultRegionLocation().getRegionInfo(), replicaId)
               : location.getRegionInfo();
-
+          // TODO : change param ordering
           FlushRegionCallable flushCallable =
-              new FlushRegionCallable(connection, rpcControllerFactory, regionInfo, true, replicaId);
+              new FlushRegionCallable(connection, rpcControllerFactory, regionInfo, true, replicaId, seqId);
 
           // do not have to wait for the whole flush here, just initiate it.
           try {

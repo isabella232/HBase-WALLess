@@ -9035,6 +9035,24 @@ public final class AdminProtos {
      * </pre>
      */
     boolean getWriteFlushWalMarker();
+
+    // optional bool flushReplica = 4;
+    /**
+     * <code>optional bool flushReplica = 4;</code>
+     *
+     * <pre>
+     * TODO : This has to be removed. Or we add some new flushRegionRequest
+     * </pre>
+     */
+    boolean hasFlushReplica();
+    /**
+     * <code>optional bool flushReplica = 4;</code>
+     *
+     * <pre>
+     * TODO : This has to be removed. Or we add some new flushRegionRequest
+     * </pre>
+     */
+    boolean getFlushReplica();
   }
   /**
    * Protobuf type {@code hbase.pb.FlushRegionRequest}
@@ -9115,6 +9133,11 @@ public final class AdminProtos {
             case 24: {
               bitField0_ |= 0x00000004;
               writeFlushWalMarker_ = input.readBool();
+              break;
+            }
+            case 32: {
+              bitField0_ |= 0x00000008;
+              flushReplica_ = input.readBool();
               break;
             }
           }
@@ -9219,10 +9242,35 @@ public final class AdminProtos {
       return writeFlushWalMarker_;
     }
 
+    // optional bool flushReplica = 4;
+    public static final int FLUSHREPLICA_FIELD_NUMBER = 4;
+    private boolean flushReplica_;
+    /**
+     * <code>optional bool flushReplica = 4;</code>
+     *
+     * <pre>
+     * TODO : This has to be removed. Or we add some new flushRegionRequest
+     * </pre>
+     */
+    public boolean hasFlushReplica() {
+      return ((bitField0_ & 0x00000008) == 0x00000008);
+    }
+    /**
+     * <code>optional bool flushReplica = 4;</code>
+     *
+     * <pre>
+     * TODO : This has to be removed. Or we add some new flushRegionRequest
+     * </pre>
+     */
+    public boolean getFlushReplica() {
+      return flushReplica_;
+    }
+
     private void initFields() {
       region_ = org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.RegionSpecifier.getDefaultInstance();
       ifOlderThanTs_ = 0L;
       writeFlushWalMarker_ = false;
+      flushReplica_ = false;
     }
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
@@ -9253,6 +9301,9 @@ public final class AdminProtos {
       if (((bitField0_ & 0x00000004) == 0x00000004)) {
         output.writeBool(3, writeFlushWalMarker_);
       }
+      if (((bitField0_ & 0x00000008) == 0x00000008)) {
+        output.writeBool(4, flushReplica_);
+      }
       getUnknownFields().writeTo(output);
     }
 
@@ -9273,6 +9324,10 @@ public final class AdminProtos {
       if (((bitField0_ & 0x00000004) == 0x00000004)) {
         size += com.google.protobuf.CodedOutputStream
           .computeBoolSize(3, writeFlushWalMarker_);
+      }
+      if (((bitField0_ & 0x00000008) == 0x00000008)) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBoolSize(4, flushReplica_);
       }
       size += getUnknownFields().getSerializedSize();
       memoizedSerializedSize = size;
@@ -9312,6 +9367,11 @@ public final class AdminProtos {
         result = result && (getWriteFlushWalMarker()
             == other.getWriteFlushWalMarker());
       }
+      result = result && (hasFlushReplica() == other.hasFlushReplica());
+      if (hasFlushReplica()) {
+        result = result && (getFlushReplica()
+            == other.getFlushReplica());
+      }
       result = result &&
           getUnknownFields().equals(other.getUnknownFields());
       return result;
@@ -9336,6 +9396,10 @@ public final class AdminProtos {
       if (hasWriteFlushWalMarker()) {
         hash = (37 * hash) + WRITE_FLUSH_WAL_MARKER_FIELD_NUMBER;
         hash = (53 * hash) + hashBoolean(getWriteFlushWalMarker());
+      }
+      if (hasFlushReplica()) {
+        hash = (37 * hash) + FLUSHREPLICA_FIELD_NUMBER;
+        hash = (53 * hash) + hashBoolean(getFlushReplica());
       }
       hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
@@ -9464,6 +9528,8 @@ public final class AdminProtos {
         bitField0_ = (bitField0_ & ~0x00000002);
         writeFlushWalMarker_ = false;
         bitField0_ = (bitField0_ & ~0x00000004);
+        flushReplica_ = false;
+        bitField0_ = (bitField0_ & ~0x00000008);
         return this;
       }
 
@@ -9508,6 +9574,10 @@ public final class AdminProtos {
           to_bitField0_ |= 0x00000004;
         }
         result.writeFlushWalMarker_ = writeFlushWalMarker_;
+        if (((from_bitField0_ & 0x00000008) == 0x00000008)) {
+          to_bitField0_ |= 0x00000008;
+        }
+        result.flushReplica_ = flushReplica_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -9532,6 +9602,9 @@ public final class AdminProtos {
         }
         if (other.hasWriteFlushWalMarker()) {
           setWriteFlushWalMarker(other.getWriteFlushWalMarker());
+        }
+        if (other.hasFlushReplica()) {
+          setFlushReplica(other.getFlushReplica());
         }
         this.mergeUnknownFields(other.getUnknownFields());
         return this;
@@ -9763,6 +9836,55 @@ public final class AdminProtos {
       public Builder clearWriteFlushWalMarker() {
         bitField0_ = (bitField0_ & ~0x00000004);
         writeFlushWalMarker_ = false;
+        onChanged();
+        return this;
+      }
+
+      // optional bool flushReplica = 4;
+      private boolean flushReplica_ ;
+      /**
+       * <code>optional bool flushReplica = 4;</code>
+       *
+       * <pre>
+       * TODO : This has to be removed. Or we add some new flushRegionRequest
+       * </pre>
+       */
+      public boolean hasFlushReplica() {
+        return ((bitField0_ & 0x00000008) == 0x00000008);
+      }
+      /**
+       * <code>optional bool flushReplica = 4;</code>
+       *
+       * <pre>
+       * TODO : This has to be removed. Or we add some new flushRegionRequest
+       * </pre>
+       */
+      public boolean getFlushReplica() {
+        return flushReplica_;
+      }
+      /**
+       * <code>optional bool flushReplica = 4;</code>
+       *
+       * <pre>
+       * TODO : This has to be removed. Or we add some new flushRegionRequest
+       * </pre>
+       */
+      public Builder setFlushReplica(boolean value) {
+        bitField0_ |= 0x00000008;
+        flushReplica_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional bool flushReplica = 4;</code>
+       *
+       * <pre>
+       * TODO : This has to be removed. Or we add some new flushRegionRequest
+       * </pre>
+       */
+      public Builder clearFlushReplica() {
+        bitField0_ = (bitField0_ & ~0x00000008);
+        flushReplica_ = false;
         onChanged();
         return this;
       }
@@ -24012,83 +24134,83 @@ public final class AdminProtos {
       "n_in_ZK\030\003 \001(\010:\004true\0220\n\022destination_serve" +
       "r\030\004 \001(\0132\024.hbase.pb.ServerName\022\027\n\017serverS" +
       "tartCode\030\005 \001(\004\"%\n\023CloseRegionResponse\022\016\n" +
-      "\006closed\030\001 \002(\010\"y\n\022FlushRegionRequest\022)\n\006r" +
-      "egion\030\001 \002(\0132\031.hbase.pb.RegionSpecifier\022\030" +
-      "\n\020if_older_than_ts\030\002 \001(\004\022\036\n\026write_flush_" +
-      "wal_marker\030\003 \001(\010\"_\n\023FlushRegionResponse\022" +
-      "\027\n\017last_flush_time\030\001 \002(\004\022\017\n\007flushed\030\002 \001(",
-      "\010\022\036\n\026wrote_flush_wal_marker\030\003 \001(\010\"T\n\022Spl" +
-      "itRegionRequest\022)\n\006region\030\001 \002(\0132\031.hbase." +
-      "pb.RegionSpecifier\022\023\n\013split_point\030\002 \001(\014\"" +
-      "\025\n\023SplitRegionResponse\"`\n\024CompactRegionR" +
-      "equest\022)\n\006region\030\001 \002(\0132\031.hbase.pb.Region" +
-      "Specifier\022\r\n\005major\030\002 \001(\010\022\016\n\006family\030\003 \001(\014" +
-      "\"\027\n\025CompactRegionResponse\"\315\001\n\031UpdateFavo" +
-      "redNodesRequest\022I\n\013update_info\030\001 \003(\01324.h" +
-      "base.pb.UpdateFavoredNodesRequest.Region" +
-      "UpdateInfo\032e\n\020RegionUpdateInfo\022$\n\006region",
-      "\030\001 \002(\0132\024.hbase.pb.RegionInfo\022+\n\rfavored_" +
-      "nodes\030\002 \003(\0132\024.hbase.pb.ServerName\".\n\032Upd" +
-      "ateFavoredNodesResponse\022\020\n\010response\030\001 \001(" +
-      "\r\"\244\001\n\023MergeRegionsRequest\022+\n\010region_a\030\001 " +
-      "\002(\0132\031.hbase.pb.RegionSpecifier\022+\n\010region" +
-      "_b\030\002 \002(\0132\031.hbase.pb.RegionSpecifier\022\027\n\010f" +
-      "orcible\030\003 \001(\010:\005false\022\032\n\022master_system_ti" +
-      "me\030\004 \001(\004\"\026\n\024MergeRegionsResponse\"a\n\010WALE" +
-      "ntry\022\035\n\003key\030\001 \002(\0132\020.hbase.pb.WALKey\022\027\n\017k" +
-      "ey_value_bytes\030\002 \003(\014\022\035\n\025associated_cell_",
-      "count\030\003 \001(\005\"\242\001\n\030ReplicateWALEntryRequest" +
-      "\022!\n\005entry\030\001 \003(\0132\022.hbase.pb.WALEntry\022\034\n\024r" +
-      "eplicationClusterId\030\002 \001(\t\022\"\n\032sourceBaseN" +
-      "amespaceDirPath\030\003 \001(\t\022!\n\031sourceHFileArch" +
-      "iveDirPath\030\004 \001(\t\"\033\n\031ReplicateWALEntryRes" +
-      "ponse\"\026\n\024RollWALWriterRequest\"0\n\025RollWAL" +
-      "WriterResponse\022\027\n\017region_to_flush\030\001 \003(\014\"" +
-      "#\n\021StopServerRequest\022\016\n\006reason\030\001 \002(\t\"\024\n\022" +
-      "StopServerResponse\"\026\n\024GetServerInfoReque" +
-      "st\"K\n\nServerInfo\022)\n\013server_name\030\001 \002(\0132\024.",
-      "hbase.pb.ServerName\022\022\n\nwebui_port\030\002 \001(\r\"" +
-      "B\n\025GetServerInfoResponse\022)\n\013server_info\030" +
-      "\001 \002(\0132\024.hbase.pb.ServerInfo\"\034\n\032UpdateCon" +
-      "figurationRequest\"\035\n\033UpdateConfiguration" +
-      "Response2\207\013\n\014AdminService\022P\n\rGetRegionIn" +
-      "fo\022\036.hbase.pb.GetRegionInfoRequest\032\037.hba" +
-      "se.pb.GetRegionInfoResponse\022M\n\014GetStoreF" +
-      "ile\022\035.hbase.pb.GetStoreFileRequest\032\036.hba" +
-      "se.pb.GetStoreFileResponse\022V\n\017GetOnlineR" +
-      "egion\022 .hbase.pb.GetOnlineRegionRequest\032",
-      "!.hbase.pb.GetOnlineRegionResponse\022G\n\nOp" +
-      "enRegion\022\033.hbase.pb.OpenRegionRequest\032\034." +
-      "hbase.pb.OpenRegionResponse\022M\n\014WarmupReg" +
-      "ion\022\035.hbase.pb.WarmupRegionRequest\032\036.hba" +
-      "se.pb.WarmupRegionResponse\022J\n\013CloseRegio" +
-      "n\022\034.hbase.pb.CloseRegionRequest\032\035.hbase." +
-      "pb.CloseRegionResponse\022J\n\013FlushRegion\022\034." +
-      "hbase.pb.FlushRegionRequest\032\035.hbase.pb.F" +
-      "lushRegionResponse\022J\n\013SplitRegion\022\034.hbas" +
-      "e.pb.SplitRegionRequest\032\035.hbase.pb.Split",
-      "RegionResponse\022P\n\rCompactRegion\022\036.hbase." +
-      "pb.CompactRegionRequest\032\037.hbase.pb.Compa" +
-      "ctRegionResponse\022M\n\014MergeRegions\022\035.hbase" +
-      ".pb.MergeRegionsRequest\032\036.hbase.pb.Merge" +
-      "RegionsResponse\022\\\n\021ReplicateWALEntry\022\".h" +
-      "base.pb.ReplicateWALEntryRequest\032#.hbase" +
-      ".pb.ReplicateWALEntryResponse\022Q\n\006Replay\022" +
-      "\".hbase.pb.ReplicateWALEntryRequest\032#.hb" +
-      "ase.pb.ReplicateWALEntryResponse\022P\n\rRoll" +
-      "WALWriter\022\036.hbase.pb.RollWALWriterReques",
-      "t\032\037.hbase.pb.RollWALWriterResponse\022P\n\rGe" +
-      "tServerInfo\022\036.hbase.pb.GetServerInfoRequ" +
-      "est\032\037.hbase.pb.GetServerInfoResponse\022G\n\n" +
-      "StopServer\022\033.hbase.pb.StopServerRequest\032" +
-      "\034.hbase.pb.StopServerResponse\022_\n\022UpdateF" +
-      "avoredNodes\022#.hbase.pb.UpdateFavoredNode" +
-      "sRequest\032$.hbase.pb.UpdateFavoredNodesRe" +
-      "sponse\022b\n\023UpdateConfiguration\022$.hbase.pb" +
-      ".UpdateConfigurationRequest\032%.hbase.pb.U" +
-      "pdateConfigurationResponseBA\n*org.apache",
-      ".hadoop.hbase.protobuf.generatedB\013AdminP" +
-      "rotosH\001\210\001\001\240\001\001"
+      "\006closed\030\001 \002(\010\"\217\001\n\022FlushRegionRequest\022)\n\006" +
+      "region\030\001 \002(\0132\031.hbase.pb.RegionSpecifier\022" +
+      "\030\n\020if_older_than_ts\030\002 \001(\004\022\036\n\026write_flush" +
+      "_wal_marker\030\003 \001(\010\022\024\n\014flushReplica\030\004 \001(\010\"" +
+      "_\n\023FlushRegionResponse\022\027\n\017last_flush_tim",
+      "e\030\001 \002(\004\022\017\n\007flushed\030\002 \001(\010\022\036\n\026wrote_flush_" +
+      "wal_marker\030\003 \001(\010\"T\n\022SplitRegionRequest\022)" +
+      "\n\006region\030\001 \002(\0132\031.hbase.pb.RegionSpecifie" +
+      "r\022\023\n\013split_point\030\002 \001(\014\"\025\n\023SplitRegionRes" +
+      "ponse\"`\n\024CompactRegionRequest\022)\n\006region\030" +
+      "\001 \002(\0132\031.hbase.pb.RegionSpecifier\022\r\n\005majo" +
+      "r\030\002 \001(\010\022\016\n\006family\030\003 \001(\014\"\027\n\025CompactRegion" +
+      "Response\"\315\001\n\031UpdateFavoredNodesRequest\022I" +
+      "\n\013update_info\030\001 \003(\01324.hbase.pb.UpdateFav" +
+      "oredNodesRequest.RegionUpdateInfo\032e\n\020Reg",
+      "ionUpdateInfo\022$\n\006region\030\001 \002(\0132\024.hbase.pb" +
+      ".RegionInfo\022+\n\rfavored_nodes\030\002 \003(\0132\024.hba" +
+      "se.pb.ServerName\".\n\032UpdateFavoredNodesRe" +
+      "sponse\022\020\n\010response\030\001 \001(\r\"\244\001\n\023MergeRegion" +
+      "sRequest\022+\n\010region_a\030\001 \002(\0132\031.hbase.pb.Re" +
+      "gionSpecifier\022+\n\010region_b\030\002 \002(\0132\031.hbase." +
+      "pb.RegionSpecifier\022\027\n\010forcible\030\003 \001(\010:\005fa" +
+      "lse\022\032\n\022master_system_time\030\004 \001(\004\"\026\n\024Merge" +
+      "RegionsResponse\"a\n\010WALEntry\022\035\n\003key\030\001 \002(\013" +
+      "2\020.hbase.pb.WALKey\022\027\n\017key_value_bytes\030\002 ",
+      "\003(\014\022\035\n\025associated_cell_count\030\003 \001(\005\"\242\001\n\030R" +
+      "eplicateWALEntryRequest\022!\n\005entry\030\001 \003(\0132\022" +
+      ".hbase.pb.WALEntry\022\034\n\024replicationCluster" +
+      "Id\030\002 \001(\t\022\"\n\032sourceBaseNamespaceDirPath\030\003" +
+      " \001(\t\022!\n\031sourceHFileArchiveDirPath\030\004 \001(\t\"" +
+      "\033\n\031ReplicateWALEntryResponse\"\026\n\024RollWALW" +
+      "riterRequest\"0\n\025RollWALWriterResponse\022\027\n" +
+      "\017region_to_flush\030\001 \003(\014\"#\n\021StopServerRequ" +
+      "est\022\016\n\006reason\030\001 \002(\t\"\024\n\022StopServerRespons" +
+      "e\"\026\n\024GetServerInfoRequest\"K\n\nServerInfo\022",
+      ")\n\013server_name\030\001 \002(\0132\024.hbase.pb.ServerNa" +
+      "me\022\022\n\nwebui_port\030\002 \001(\r\"B\n\025GetServerInfoR" +
+      "esponse\022)\n\013server_info\030\001 \002(\0132\024.hbase.pb." +
+      "ServerInfo\"\034\n\032UpdateConfigurationRequest" +
+      "\"\035\n\033UpdateConfigurationResponse2\207\013\n\014Admi" +
+      "nService\022P\n\rGetRegionInfo\022\036.hbase.pb.Get" +
+      "RegionInfoRequest\032\037.hbase.pb.GetRegionIn" +
+      "foResponse\022M\n\014GetStoreFile\022\035.hbase.pb.Ge" +
+      "tStoreFileRequest\032\036.hbase.pb.GetStoreFil" +
+      "eResponse\022V\n\017GetOnlineRegion\022 .hbase.pb.",
+      "GetOnlineRegionRequest\032!.hbase.pb.GetOnl" +
+      "ineRegionResponse\022G\n\nOpenRegion\022\033.hbase." +
+      "pb.OpenRegionRequest\032\034.hbase.pb.OpenRegi" +
+      "onResponse\022M\n\014WarmupRegion\022\035.hbase.pb.Wa" +
+      "rmupRegionRequest\032\036.hbase.pb.WarmupRegio" +
+      "nResponse\022J\n\013CloseRegion\022\034.hbase.pb.Clos" +
+      "eRegionRequest\032\035.hbase.pb.CloseRegionRes" +
+      "ponse\022J\n\013FlushRegion\022\034.hbase.pb.FlushReg" +
+      "ionRequest\032\035.hbase.pb.FlushRegionRespons" +
+      "e\022J\n\013SplitRegion\022\034.hbase.pb.SplitRegionR",
+      "equest\032\035.hbase.pb.SplitRegionResponse\022P\n" +
+      "\rCompactRegion\022\036.hbase.pb.CompactRegionR" +
+      "equest\032\037.hbase.pb.CompactRegionResponse\022" +
+      "M\n\014MergeRegions\022\035.hbase.pb.MergeRegionsR" +
+      "equest\032\036.hbase.pb.MergeRegionsResponse\022\\" +
+      "\n\021ReplicateWALEntry\022\".hbase.pb.Replicate" +
+      "WALEntryRequest\032#.hbase.pb.ReplicateWALE" +
+      "ntryResponse\022Q\n\006Replay\022\".hbase.pb.Replic" +
+      "ateWALEntryRequest\032#.hbase.pb.ReplicateW" +
+      "ALEntryResponse\022P\n\rRollWALWriter\022\036.hbase",
+      ".pb.RollWALWriterRequest\032\037.hbase.pb.Roll" +
+      "WALWriterResponse\022P\n\rGetServerInfo\022\036.hba" +
+      "se.pb.GetServerInfoRequest\032\037.hbase.pb.Ge" +
+      "tServerInfoResponse\022G\n\nStopServer\022\033.hbas" +
+      "e.pb.StopServerRequest\032\034.hbase.pb.StopSe" +
+      "rverResponse\022_\n\022UpdateFavoredNodes\022#.hba" +
+      "se.pb.UpdateFavoredNodesRequest\032$.hbase." +
+      "pb.UpdateFavoredNodesResponse\022b\n\023UpdateC" +
+      "onfiguration\022$.hbase.pb.UpdateConfigurat" +
+      "ionRequest\032%.hbase.pb.UpdateConfiguratio",
+      "nResponseBA\n*org.apache.hadoop.hbase.pro" +
+      "tobuf.generatedB\013AdminProtosH\001\210\001\001\240\001\001"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
       new com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner() {
@@ -24178,7 +24300,7 @@ public final class AdminProtos {
           internal_static_hbase_pb_FlushRegionRequest_fieldAccessorTable = new
             com.google.protobuf.GeneratedMessage.FieldAccessorTable(
               internal_static_hbase_pb_FlushRegionRequest_descriptor,
-              new java.lang.String[] { "Region", "IfOlderThanTs", "WriteFlushWalMarker", });
+              new java.lang.String[] { "Region", "IfOlderThanTs", "WriteFlushWalMarker", "FlushReplica", });
           internal_static_hbase_pb_FlushRegionResponse_descriptor =
             getDescriptor().getMessageTypes().get(13);
           internal_static_hbase_pb_FlushRegionResponse_fieldAccessorTable = new

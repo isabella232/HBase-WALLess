@@ -825,7 +825,7 @@ public final class RequestConverter {
   */
  public static FlushRegionRequest
      buildFlushRegionRequest(final byte[] regionName) {
-   return buildFlushRegionRequest(regionName, false);
+   return buildFlushRegionRequest(regionName, false, false, -1);
  }
 
  /**
@@ -834,15 +834,18 @@ public final class RequestConverter {
   * @param regionName the name of the region to get info
   * @return a protocol buffer FlushRegionRequest
   */
- public static FlushRegionRequest
-     buildFlushRegionRequest(final byte[] regionName, boolean writeFlushWALMarker) {
-   FlushRegionRequest.Builder builder = FlushRegionRequest.newBuilder();
-   RegionSpecifier region = buildRegionSpecifier(
-     RegionSpecifierType.REGION_NAME, regionName);
-   builder.setRegion(region);
-   builder.setWriteFlushWalMarker(writeFlushWALMarker);
-   return builder.build();
- }
+  public static FlushRegionRequest buildFlushRegionRequest(final byte[] regionName,
+      boolean writeFlushWALMarker, boolean flushReplica, long seqId) {
+    FlushRegionRequest.Builder builder = FlushRegionRequest.newBuilder();
+    RegionSpecifier region = buildRegionSpecifier(RegionSpecifierType.REGION_NAME, regionName);
+    builder.setRegion(region);
+    builder.setWriteFlushWalMarker(writeFlushWALMarker);
+    builder.setFlushReplica(flushReplica);
+    if(seqId != -1) {
+      builder.setSeqId(seqId);
+    }
+    return builder.build();
+  }
 
  /**
   * Create a protocol buffer OpenRegionRequest to open a list of regions

@@ -2306,7 +2306,7 @@ public class HRegionServer extends HasThread implements
         rpcRetryingCallerFactory, rpcControllerFactory, operationTimeout, region));
   }
 
-  void triggerFlushInReplicaRegion(final HRegion region) {
+  void triggerFlushInReplicaRegion(final HRegion region, long seqId) {
     /*if (!ServerRegionReplicaUtil.isRegionReplicaReplicationEnabled(region.conf) ||
         !ServerRegionReplicaUtil.isRegionReplicaWaitForPrimaryFlushEnabled(
           region.conf)) {
@@ -2321,7 +2321,7 @@ public class HRegionServer extends HasThread implements
     // TODOO : This needs some more work
     this.service.submit(
       new MemstoreReplicaFlushHandler(this, clusterConnection,
-        rpcRetryingCallerFactory, rpcControllerFactory, operationTimeout, region));
+        rpcRetryingCallerFactory, rpcControllerFactory, operationTimeout, region, seqId));
   }
 
   
