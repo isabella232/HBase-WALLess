@@ -840,10 +840,6 @@ public final class RequestConverter {
     RegionSpecifier region = buildRegionSpecifier(RegionSpecifierType.REGION_NAME, regionName);
     builder.setRegion(region);
     builder.setWriteFlushWalMarker(writeFlushWALMarker);
-    builder.setFlushReplica(flushReplica);
-    if(seqId != -1) {
-      builder.setSeqId(seqId);
-    }
     return builder.build();
   }
 

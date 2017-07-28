@@ -24,12 +24,14 @@ public class MemstoreReplicationEntry {
   private final MemstoreReplicationKey memstoreReplicationKey;
   private final MemstoreEdits memstoreEdits;
   private final boolean replay;
+  private final int replicaId;
 
   public MemstoreReplicationEntry(MemstoreReplicationKey memstoreRepKey,
-      MemstoreEdits memstoreEdits, final boolean replay) {
+      MemstoreEdits memstoreEdits, final boolean replay, final int replicaId) {
     this.memstoreReplicationKey = memstoreRepKey;
     this.memstoreEdits = memstoreEdits;
     this.replay = replay;
+    this.replicaId = replicaId;
   }
 
   public MemstoreReplicationKey getMemstoreReplicationKey() {
@@ -42,5 +44,9 @@ public class MemstoreReplicationEntry {
   
   public boolean isReplay() {
     return this.replay;
+  }
+
+  public int getReplicaId() {
+    return this.replicaId;
   }
 }

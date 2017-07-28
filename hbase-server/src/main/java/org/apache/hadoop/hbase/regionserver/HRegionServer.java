@@ -2305,25 +2305,6 @@ public class HRegionServer extends HasThread implements
       new RegionReplicaFlushHandler(this, clusterConnection,
         rpcRetryingCallerFactory, rpcControllerFactory, operationTimeout, region));
   }
-
-  void triggerFlushInReplicaRegion(final HRegion region, long seqId) {
-    /*if (!ServerRegionReplicaUtil.isRegionReplicaReplicationEnabled(region.conf) ||
-        !ServerRegionReplicaUtil.isRegionReplicaWaitForPrimaryFlushEnabled(
-          region.conf)) {
-      region.setReadsEnabled(true);
-      return;
-    }
-
-    region.setReadsEnabled(false); */// disable reads before marking the region as opened.
-    // RegionReplicaFlushHandler might reset this.
-
-    // submit it to be handled by one of the handlers so that we do not block OpenRegionHandler
-    // TODOO : This needs some more work
-    this.service.submit(
-      new MemstoreReplicaFlushHandler(this, clusterConnection,
-        rpcRetryingCallerFactory, rpcControllerFactory, operationTimeout, region, seqId));
-  }
-
   
   @Override
   public RpcServerInterface getRpcServer() {

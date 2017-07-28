@@ -36,6 +36,7 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
+import org.apache.hadoop.hbase.NotServingRegionException;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.TestMetaTableAccessor;
 import org.apache.hadoop.hbase.client.Consistency;
@@ -66,7 +67,7 @@ import org.junit.experimental.categories.Category;
 public class TestRegionReplicas {
   private static final Log LOG = LogFactory.getLog(TestRegionReplicas.class);
 
-  private static final int NB_SERVERS = 1;
+  private static final int NB_SERVERS = 2;
   private static Table table;
   private static final byte[] row = "TestRegionReplicas".getBytes();
 
@@ -113,6 +114,10 @@ public class TestRegionReplicas {
     return HTU.getMiniHBaseCluster().getRegionServer(0);
   }
 
+  private HRegionServer getSecondaryRS() {
+    return HTU.getMiniHBaseCluster().getRegionServer(1);
+  }
+
   @Test(timeout = 60000)
   public void testOpenRegionReplica() throws Exception {
     openRegion(HTU, getRS(), hriSecondary);
@@ -154,7 +159,7 @@ public class TestRegionReplicas {
       Region region = getRS().getRegionByEncodedName(hriPrimary.getEncodedName());
       region.flush(true);
 
-      openRegion(HTU, getRS(), hriSecondary);
+      openRegion(HTU, getSecondaryRS(), hriSecondary);
 
       // first try directly against region
       region = getRS().getFromOnlineRegions(hriSecondary.getEncodedName());
@@ -169,28 +174,58 @@ public class TestRegionReplicas {
 
   @Test(timeout = 6000000)
   public void testGetOnTargetRegionReplica() throws Exception {
+    boolean found = true;
     try {
-      openRegion(HTU, getRS(), hriSecondary);
+      found = openSecondary();
       //load some data to primary
-      HTU.loadNumericRows(table, f, 0, 10);
+      HTU.loadNumericRows(table, f, 0, 100);
       // assert that we can read back from primary
-      Assert.assertEquals(10, HTU.countRows(table));
+      Assert.assertEquals(100, HTU.countRows(table));
       // flush so that region replica can read
-      Region region = getRS().getRegionByEncodedName(hriPrimary.getEncodedName());
+      Region region = getPrimaryRegion(found);
       //region.flush(true);
 
-
+      // just sleeping to see if the value is visible
       // try directly Get against region replica
-      byte[] row = Bytes.toBytes(String.valueOf(5));
+      byte[] row = Bytes.toBytes(String.valueOf(42));
       Get get = new Get(row);
       get.setConsistency(Consistency.TIMELINE);
       get.setReplicaId(1);
       Result result = table.get(get);
       Assert.assertArrayEquals(row, result.getValue(f, null));
     } finally {
-      HTU.deleteNumericRows(table, HConstants.CATALOG_FAMILY, 0, 10);
+      HTU.deleteNumericRows(table, HConstants.CATALOG_FAMILY, 0, 100);
+      closeSecondary(found);
+    }
+  }
+
+  private void closeSecondary(boolean found) throws Exception {
+    if (found) {
+      closeRegion(HTU, getSecondaryRS(), hriSecondary);
+    } else {
       closeRegion(HTU, getRS(), hriSecondary);
     }
+  }
+
+  private Region getPrimaryRegion(boolean found) throws NotServingRegionException {
+    Region region;
+    if (found) {
+      region = getRS().getRegionByEncodedName(hriPrimary.getEncodedName());
+    } else {
+      region = getSecondaryRS().getRegionByEncodedName(hriPrimary.getEncodedName());
+    }
+    return region;
+  }
+  
+
+  private Region getSecondaryRegion(boolean found) throws NotServingRegionException {
+    Region region;
+    if (!found) {
+      region = getRS().getRegionByEncodedName(hriSecondary.getEncodedName());
+    } else {
+      region = getSecondaryRS().getRegionByEncodedName(hriSecondary.getEncodedName());
+    }
+    return region;
   }
 
   private void assertGet(Region region, int value, boolean expect) throws IOException {
@@ -429,25 +464,27 @@ public class TestRegionReplicas {
     HTU.getConfiguration().setInt(StorefileRefresherChore.REGIONSERVER_STOREFILE_REFRESH_PERIOD, 0);
     restartRegionServer();
 
+    boolean found = true;
     try {
-      LOG.info("Opening the secondary region " + hriSecondary.getEncodedName());
-      openRegion(HTU, getRS(), hriSecondary);
+      // first see where is the primary hosted.
+      found = openSecondary();
 
       // load some data to primary
       LOG.info("Loading data to primary region");
       for (int i = 0; i < 3; ++i) {
         HTU.loadNumericRows(table, f, i * 1000, (i + 1) * 1000);
-        Region region = getRS().getRegionByEncodedName(hriPrimary.getEncodedName());
-        region.flush(true);
-        Region secRegion = getRS().getRegionByEncodedName(hriSecondary.getEncodedName());
+        Region primaryRegion = getPrimaryRegion(found);
+        primaryRegion.flush(true);
+        Region secRegion = getSecondaryRegion(found);
+        // this flush should not happen at any cost
         secRegion.flush(true);
       }
 
-      Region primaryRegion = getRS().getFromOnlineRegions(hriPrimary.getEncodedName());
+      Region primaryRegion = getPrimaryRegion(found);
       Assert.assertEquals(3, primaryRegion.getStore(f).getStorefilesCount());
 
       // Refresh store files on the secondary
-      Region secondaryRegion = getRS().getFromOnlineRegions(hriSecondary.getEncodedName());
+      Region secondaryRegion = getSecondaryRegion(found);
       secondaryRegion.getStore(f).refreshStoreFiles();
       Assert.assertEquals(3, secondaryRegion.getStore(f).getStorefilesCount());
 
@@ -491,9 +528,32 @@ public class TestRegionReplicas {
       }
       Assert.assertEquals(3000, keys);
       Assert.assertEquals(4498500, sum);
+    } catch (Exception e) {
+      e.printStackTrace();
     } finally {
       HTU.deleteNumericRows(table, HConstants.CATALOG_FAMILY, 0, 1000);
-      closeRegion(HTU, getRS(), hriSecondary);
+      closeSecondary(found);
     }
+  }
+
+  private boolean openSecondary() throws Exception {
+    boolean found = true;
+    try {
+      getRS().getRegion(hriPrimary.getRegionName());
+    } catch (NotServingRegionException e) {
+      found = false;
+      try {
+        getSecondaryRS().getRegion(hriPrimary.getRegionName());
+      } catch (NotServingRegionException e1) {
+        // should not happen
+      }
+    }
+    if (found) {
+      openRegion(HTU, getSecondaryRS(), hriSecondary);
+    } else {
+      // open secondary in the first RS
+      openRegion(HTU, getRS(), hriSecondary);
+    }
+    return found;
   }
 }

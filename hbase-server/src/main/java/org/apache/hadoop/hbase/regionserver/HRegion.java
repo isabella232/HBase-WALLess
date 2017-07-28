@@ -509,11 +509,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     public Result getResult() {
       return result;
     }
-
-    @Override
-    public long getFlushedSeqId() {
-      return this.flushSequenceId;
-    }
   }
 
   /** A result object from prepare flush cache stage */
@@ -2190,11 +2185,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return flushcache(force, false);
   }
 
-  public FlushResult flushcache(boolean forceFlushAllStores, boolean writeFlushRequestWalMarker)
-      throws IOException {
-    return flushcache(forceFlushAllStores, writeFlushRequestWalMarker, false, -1);
-  }
-
   /**
    * Flush the cache.
    *
@@ -2210,8 +2200,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * time-sensitive thread.
    * @param forceFlushAllStores whether we want to flush all stores
    * @param writeFlushRequestWalMarker whether to write the flush request marker to WAL
-   * @param flushReplica force the replica to flush
-   * @param seqId to be used for flushing the replica region
    * @return whether the flush is success and whether the region needs compacting
    *
    * @throws IOException general io exceptions
@@ -2219,8 +2207,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * because a Snapshot was not properly persisted. The region is put in closing mode, and the
    * caller MUST abort after this.
    */
-  public FlushResult flushcache(boolean forceFlushAllStores, boolean writeFlushRequestWalMarker,
-      boolean flushReplica, long seqId) throws IOException {
+  public FlushResult flushcache(boolean forceFlushAllStores, boolean writeFlushRequestWalMarker) throws IOException {
     // fail-fast instead of waiting on the lock
     if (this.closing.get()) {
       String msg = "Skipping flush on " + this + " because closing";
@@ -2249,7 +2236,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         dataInMemoryWithoutWAL.reset();
       }
       synchronized (writestate) {
-        if (flushReplica || (!writestate.flushing && writestate.writesEnabled)) {
+        if (!writestate.flushing && writestate.writesEnabled) {
           this.writestate.flushing = true;
         } else {
           if (LOG.isDebugEnabled()) {
@@ -2268,8 +2255,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       try {
         Collection<Store> specificStoresToFlush =
             forceFlushAllStores ? stores.values() : flushPolicy.selectStoresToFlush();
-        FlushResult fs = internalFlushcache(this.wal, seqId, flushReplica, specificStoresToFlush,
-          status, writeFlushRequestWalMarker);
+        FlushResult fs =
+            internalFlushcache(specificStoresToFlush, status, writeFlushRequestWalMarker);
 
         if (coprocessorHost != null) {
           status.setStatus("Running post-flush coprocessor hooks");
@@ -2277,11 +2264,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         }
 
         status.markComplete("Flush successful");
-        // this is where the flush is successful
-        // TODO : Make it synchronous
-        if (!flushReplica) {
-          triggerFlushinSecondaryRegion(fs.getFlushedSeqId());
-        }
         return fs;
       } finally {
         synchronized (writestate) {
@@ -2294,10 +2276,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       lock.readLock().unlock();
       status.cleanup();
     }
-  }
-
-  private void triggerFlushinSecondaryRegion(long seqId) {
-    ((HRegionServer)this.getRegionServerServices()).triggerFlushInReplicaRegion(this, seqId);
   }
 
   /**
@@ -2414,51 +2392,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   protected FlushResult internalFlushcache(final WAL wal, final long myseqid,
       final Collection<Store> storesToFlush, MonitoredTask status, boolean writeFlushWalMarker)
           throws IOException {
-    return internalFlushcache(wal, myseqid, false, storesToFlush, status, writeFlushWalMarker);
-  }
-
-  /**
-   * Flush the memstore. Flushing the memstore is a little tricky. We have a lot
-   * of updates in the memstore, all of which have also been written to the wal.
-   * We need to write those updates in the memstore out to disk, while being
-   * able to process reads/writes as much as possible during the flush
-   * operation.
-   * <p>
-   * This method may block for some time. Every time you call it, we up the
-   * regions sequence id even if we don't flush; i.e. the returned region id
-   * will be at least one larger than the last edit applied to this region. The
-   * returned id does not refer to an actual edit. The returned id can be used
-   * for say installing a bulk loaded file just ahead of the last hfile that was
-   * the result of this flush, etc.
-   *
-   * @param wal Null if we're NOT to go via wal.
-   * @param myseqid The seqid to use if <code>wal</code> is null writing out flush file.
-   * @param flushReplica if the flush is for the replica
-   * @param storesToFlush The list of stores to flush.
-   * @return object describing the flush's state
-   * @throws IOException general io exceptions
-   * @throws DroppedSnapshotException Thrown when replay of WAL is required.
-   */
-  protected FlushResult internalFlushcache(final WAL wal, final long myseqid, final boolean flushReplica,
-      final Collection<Store> storesToFlush, MonitoredTask status, boolean writeFlushWalMarker)
-          throws IOException {
-    PrepareFlushResult result = null;
-    if (flushReplica && myseqid != -1) {
-      // clear the snapshot and call refresh store files here
-      //  We have to do what replayFlushStartMarker and replayFlushCommitMarker is doing (TODO)
-      result = internalPrepareFlushCache(null, myseqid, storesToFlush, status, writeFlushWalMarker);
-      LOG.info("Received flush for region replica. Clearing the prepared snapshot");
-      synchronized (writestate) {
-        // TODO : move to finally??
-        writestate.flushing = false;
-        dropMemstoreContentsForSeqId(myseqid, null);
-        this.prepareFlushResult = null;
-        writestate.flushing = false;
-      }
-      return result.result;
-    } else {
-      result = internalPrepareFlushCache(wal, myseqid, storesToFlush, status, writeFlushWalMarker);
-    }
+    PrepareFlushResult result = internalPrepareFlushCache(wal, myseqid, storesToFlush, status,
+      writeFlushWalMarker, false);
     if (result.result == null) {
       return internalFlushCacheAndCommit(wal, status, result, storesToFlush);
     } else {
@@ -2469,7 +2404,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   @edu.umd.cs.findbugs.annotations.SuppressWarnings(value="DLS_DEAD_LOCAL_STORE",
       justification="FindBugs seems confused about trxId")
   protected PrepareFlushResult internalPrepareFlushCache(final WAL wal, final long myseqid,
-      final Collection<Store> storesToFlush, MonitoredTask status, boolean writeFlushWalMarker)
+      final Collection<Store> storesToFlush, MonitoredTask status, boolean writeFlushWalMarker, boolean flushReplica)
   throws IOException {
     if (this.rsServices != null && this.rsServices.isAborted()) {
       // Don't flush when server aborting, it's unsafe
@@ -2560,6 +2495,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
               new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH, msg, false),
               myseqid);
         }
+        // Ideally wal should be null.
         flushOpSeqId = getNextSequenceId(wal);
         // Back up 1, minus 1 from oldest sequence id in memstore to get last 'flushed' edit
         flushedSeqId =
@@ -2586,7 +2522,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         WALUtil.writeFlushMarker(wal, this.getReplicationScope(), getRegionInfo(), desc, false,
             mvcc);
       }
-
+      // send an RPC to the replica with the new seqID and the special cell
+      if (!flushReplica) {
+        // Create a start flush indicating the start of flush instead of WAL
+        sendFlushRpc(FlushAction.START_FLUSH, flushReplica, flushOpSeqId, committedFiles);
+      }
       // Prepare flush (take a snapshot)
       for (StoreFlushContext flush : storeFlushCtxs.values()) {
         flush.prepare();
@@ -2603,6 +2543,30 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     doSyncOfUnflushedWALChanges(wal, getRegionInfo());
     return new PrepareFlushResult(storeFlushCtxs, committedFiles, storeFlushableSize, startTime,
         flushOpSeqId, flushedSeqId, totalSizeOfFlushableStores);
+  }
+
+  private void sendFlushRpc(FlushAction action, boolean flushReplica, long flushOpSeqId, TreeMap<byte[], List<Path>> committedFiles) {
+    // TODO : check inside a lock??
+    if (!this.closing.get() && !this.closed.get()) {
+      FlushDescriptor desc =
+          ProtobufUtil.toFlushDescriptor(action, getRegionInfo(), flushOpSeqId, committedFiles);
+      KeyValue kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
+          WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
+      MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
+          this.getRegionInfo().getEncodedNameAsBytes(), this.htableDescriptor.getTableName(), mvcc);
+      MemstoreEdits memstoreEdits = new MemstoreEdits();
+      memstoreEdits.add(kv);
+      // replicate this
+      try {
+        // TODO : this does not get replicated from secondary to tertiary. WE need to change the replay path to do this
+        this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, flushReplica, this.getRegionInfo().getReplicaId());
+      } catch (InterruptedException e) {
+        // Ignore this. Probably next time we will be able to
+        // TODO : Here we may not wait for the result.
+      } catch (IOException e) {
+        // TODO : Handle this
+      }
+    }
   }
 
   /**
@@ -2692,10 +2656,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   @edu.umd.cs.findbugs.annotations.SuppressWarnings(value="NN_NAKED_NOTIFY",
       justification="Intentional; notify is about completed flush")
-  protected FlushResult internalFlushCacheAndCommit(
-        final WAL wal, MonitoredTask status, final PrepareFlushResult prepareResult,
-        final Collection<Store> storesToFlush)
-    throws IOException {
+  protected FlushResult internalFlushCacheAndCommit(final WAL wal, MonitoredTask status,
+      final PrepareFlushResult prepareResult, final Collection<Store> storesToFlush)
+      throws IOException {
 
     // prepare flush context is carried via PrepareFlushResult
     TreeMap<byte[], StoreFlushContext> storeFlushCtxs = prepareResult.storeFlushCtxs;
@@ -2755,6 +2718,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         WALUtil.writeFlushMarker(wal, this.getReplicationScope(), getRegionInfo(), desc, true,
             mvcc);
       }
+      // Mark the end of flush
+      sendFlushRpc(FlushAction.COMMIT_FLUSH, false, flushOpSeqId, committedFiles);
     } catch (Throwable t) {
       // An exception here means that the snapshot was not persisted.
       // The wal needs to be replayed so its content is restored to memstore.
@@ -3436,7 +3401,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       MemstoreReplicationKey memstoreReplicationKey = null;
       long txid;
       if (!replay && memstoreReplicationKey == null) {
-        // If no walKey, then not in replay and skipping WAL or some such. Begin an MVCC transaction
+        // If no memstoreReplicationKey, then not in replay and skipping WAL or some such. Begin an MVCC transaction
         // to get sequence id.
         writeEntry = mvcc.begin();
       }
@@ -3457,18 +3422,26 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       if (!memstoreEdits.isEmpty()) {
         memstoreReplicationKey =
             new MemstoreReplicationKey(this.getRegionInfo().getEncodedNameAsBytes(),
-              this.htableDescriptor.getTableName(), mvcc);
-        if(replay) {
+                this.htableDescriptor.getTableName(), mvcc);
+        if (replay) {
           memstoreReplicationKey.setSequenceId(batchOp.getReplaySequenceId());
         } else {
           memstoreReplicationKey.setSequenceId(writeEntry.getWriteNumber());
-          try {
-            this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, replay);
-            // TODO : need to handle all exceptions - make things synchronous in terms of replicaiton
-            //to all the replicas. End the mvcc in case of exception
-          } catch (InterruptedException e) {
-            throw new IOException(e);
+        }
+        try {
+          // ensure that we do things in order (probably easier for flush special entry? We need
+          // that to be done.)
+          if (!this.getRegionInfo().isSystemTable()) {
+            // TODO : replicate system table also
+            System.out.println("The region name is "+this.getRegionInfo());
+            this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, replay,
+              this.getRegionInfo().getReplicaId());
           }
+          // TODO : need to handle all exceptions - make things synchronous in terms of
+          // replicaiton
+          // to all the replicas. End the mvcc in case of exception
+        } catch (InterruptedException e) {
+          throw new IOException(e);
         }
       }
 
@@ -3524,7 +3497,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           }
         }
       }
-
       success = true;
     } finally {
       // Call complete rather than completeAndWait because we probably had error if walKey != null
@@ -4993,7 +4965,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
           // invoke prepareFlushCache. Send null as wal since we do not want the flush events in wal
           PrepareFlushResult prepareResult = internalPrepareFlushCache(null,
-            flushSeqId, storesToFlush, status, false);
+            flushSeqId, storesToFlush, status, false, true);
           if (prepareResult.result == null) {
             // save the PrepareFlushResult so that we can use it later from commit flush
             this.writestate.flushing = true;

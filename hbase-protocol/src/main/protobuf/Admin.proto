@@ -126,9 +126,6 @@ message FlushRegionRequest {
   required RegionSpecifier region = 1;
   optional uint64 if_older_than_ts = 2;
   optional bool write_flush_wal_marker = 3; // whether to write a marker to WAL even if not flushed
-  // TODO : This has to be removed. Or we add some new flushRegionRequest
-  optional bool flushReplica = 4;
-  optional uint64 seqId = 5;
 }
 
 message FlushRegionResponse {

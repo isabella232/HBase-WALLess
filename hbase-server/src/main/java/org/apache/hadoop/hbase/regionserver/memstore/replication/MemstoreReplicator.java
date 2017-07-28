@@ -187,7 +187,7 @@ public class MemstoreReplicator {
     return tpe;
   }
 
-  public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits, boolean replay)
+  public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits, boolean replay, int replicaId)
       throws IOException, InterruptedException {
     // Create ring buffer we to replicate the entries faster
     // pass it to the sink and create entry buffers. We need a future so that we can
@@ -197,7 +197,7 @@ public class MemstoreReplicator {
     // Shall we try using the Procedure V2 framework here? And ensure that we have control
     // over how this operation is performed?  Read procedure V2 framework code
     MemstoreReplicationEntry entry =
-        new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay);
+        new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay, replicaId);
     this.entryBuffers.appendEntry(entry);
     this.outputSink.flush();
 
@@ -435,8 +435,9 @@ public class MemstoreReplicator {
         return;
       }
       boolean replay = entries.get(0).isReplay();
+      int replicaId = entries.get(0).getReplicaId();
       sinkWriter.append(buffer.getTableName(), buffer.getEncodedRegionName(),
-        CellUtil.cloneRow(entries.get(0).getMemstoreEdits().getCells().get(0)), entries, replay);
+        CellUtil.cloneRow(entries.get(0).getMemstoreEdits().getCells().get(0)), entries, replay, replicaId);
     }
 
     @Override
@@ -484,11 +485,13 @@ public class MemstoreReplicator {
     List<MemstoreReplicationEntry> entryBuffer;
     TableName tableName;
     byte[] encodedRegionName;
+    int replicaId;
 
-    RegionEntryBuffer(TableName tableName, byte[] region) {
+    RegionEntryBuffer(TableName tableName, byte[] region, int replicaId) {
       this.tableName = tableName;
       this.encodedRegionName = region;
       this.entryBuffer = new LinkedList<>();
+      this.replicaId = replicaId;
     }
 
     long appendEntry(MemstoreReplicationEntry entry) {
@@ -523,6 +526,10 @@ public class MemstoreReplicator {
 
     public TableName getTableName() {
       return tableName;
+    }
+
+    public int getReplicaId() {
+      return this.replicaId;
     }
   }
 
@@ -566,7 +573,7 @@ public class MemstoreReplicator {
       synchronized (this) {
         buffer = buffers.get(key.getEncodedRegionName());
         if (buffer == null) {
-          buffer = new RegionEntryBuffer(key.getTableName(), key.getEncodedRegionName());
+          buffer = new RegionEntryBuffer(key.getTableName(), key.getEncodedRegionName(), entry.getReplicaId());
           buffers.put(key.getEncodedRegionName(), buffer);
         }
         incrHeap = buffer.appendEntry(entry);
@@ -718,7 +725,7 @@ public class MemstoreReplicator {
     }
 
     public void append(TableName tableName, byte[] encodedRegionName, byte[] row,
-        List<MemstoreReplicationEntry> entries, boolean replay) throws IOException {
+        List<MemstoreReplicationEntry> entries, boolean replay, int currentReplicaId) throws IOException {
 
       /*
        * if (disabledAndDroppedTables.getIfPresent(tableName) != null) { if (LOG.isTraceEnabled()) {
@@ -759,23 +766,28 @@ public class MemstoreReplicator {
         // check whether we should still replay this entry. If the regions are changed, or the
         // entry is not coming from the primary region, filter it out.
         HRegionLocation primaryLocation = locations.getDefaultRegionLocation();
-        if (!Bytes.equals(primaryLocation.getRegionInfo().getEncodedNameAsBytes(),
-          encodedRegionName)) {
-          if (useCache) {
-            useCache = false;
-            continue; // this will retry location lookup
+        if (currentReplicaId == HRegionInfo.DEFAULT_REPLICA_ID) {
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("Mutation started by primary region");
           }
-          if (LOG.isTraceEnabled()) {
-            LOG.trace("Skipping " + entries.size() + " entries in table " + tableName
-                + " because located region " + primaryLocation.getRegionInfo().getEncodedName()
-                + " is different than the original region "
-                + Bytes.toStringBinary(encodedRegionName) + " from WALEdit");
-            for (MemstoreReplicationEntry entry : entries) {
-              LOG.trace("Skipping : " + entry);
+          if (!Bytes.equals(primaryLocation.getRegionInfo().getEncodedNameAsBytes(),
+            encodedRegionName)) {
+            if (useCache) {
+              useCache = false;
+              continue; // this will retry location lookup
             }
+            if (LOG.isTraceEnabled()) {
+              LOG.trace("Skipping " + entries.size() + " entries in table " + tableName
+                  + " because located region " + primaryLocation.getRegionInfo().getEncodedName()
+                  + " is different than the original region "
+                  + Bytes.toStringBinary(encodedRegionName) + " from WALEdit");
+              for (MemstoreReplicationEntry entry : entries) {
+                LOG.trace("Skipping : " + entry);
+              }
+            }
+            sink.getSkippedEditsCounter().addAndGet(entries.size());
+            return;
           }
-          sink.getSkippedEditsCounter().addAndGet(entries.size());
-          return;
         }
         break;
       }
@@ -795,12 +807,19 @@ public class MemstoreReplicator {
               ? RegionReplicaUtil.getRegionInfoForReplica(
                 locations.getDefaultRegionLocation().getRegionInfo(), replicaId)
               : location.getRegionInfo();
-          RegionReplicaReplayCallable callable =
-              new RegionReplicaReplayCallable(connection, rpcControllerFactory, tableName, location,
-                  regionInfo, row, entries, sink.getSkippedEditsCounter());
-          Future<ReplicateWALEntryResponse> task = pool.submit(
-            new RetryingRpcCallable<>(rpcRetryingCallerFactory, callable, operationTimeout));
-          tasks.add(task);
+          if (regionInfo.getReplicaId() == currentReplicaId + 1) {
+            if (LOG.isDebugEnabled()) {
+              LOG.debug("Mutation being replicated to the next highest replica " + regionInfo);
+            }
+            // send mutations only to the next replica. Let the other replica handle the replication to its replica
+            // Important TODO : Handle failure cases
+            RegionReplicaReplayCallable callable =
+                new RegionReplicaReplayCallable(connection, rpcControllerFactory, tableName,
+                    location, regionInfo, row, entries, sink.getSkippedEditsCounter());
+            Future<ReplicateWALEntryResponse> task = pool.submit(
+              new RetryingRpcCallable<>(rpcRetryingCallerFactory, callable, operationTimeout));
+            tasks.add(task);
+          }
         }
       }
 

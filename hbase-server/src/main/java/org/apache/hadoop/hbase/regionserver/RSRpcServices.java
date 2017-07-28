@@ -1621,16 +1621,8 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
         boolean writeFlushWalMarker =  request.hasWriteFlushWalMarker() ?
             request.getWriteFlushWalMarker() : false;
         // Go behind the curtain so we can manage writing of the flush WAL marker
-        boolean flushReplica = false;
-        long seqId = -1;
-        if (request.hasFlushReplica()) {
-          flushReplica = request.getFlushReplica();
-        }
-        if (request.hasSeqId()) {
-          seqId = request.getSeqId();
-        }
-        HRegion.FlushResultImpl flushResult = (HRegion.FlushResultImpl)
-            ((HRegion)region).flushcache(true, writeFlushWalMarker, flushReplica, seqId);
+        HRegion.FlushResultImpl flushResult =
+            (HRegion.FlushResultImpl) ((HRegion) region).flushcache(true, writeFlushWalMarker);
         boolean compactionNeeded = flushResult.isCompactionNeeded();
         if (compactionNeeded) {
           regionServer.compactSplitThread.requestSystemCompaction(region,

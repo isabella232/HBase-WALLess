@@ -9696,32 +9696,6 @@ public final class AdminProtos {
      * <code>optional bool write_flush_wal_marker = 3;</code>
      */
     boolean getWriteFlushWalMarker();
-
-    /**
-     * <pre>
-     * TODO : This has to be removed. Or we add some new flushRegionRequest
-     * </pre>
-     *
-     * <code>optional bool flushReplica = 4;</code>
-     */
-    boolean hasFlushReplica();
-    /**
-     * <pre>
-     * TODO : This has to be removed. Or we add some new flushRegionRequest
-     * </pre>
-     *
-     * <code>optional bool flushReplica = 4;</code>
-     */
-    boolean getFlushReplica();
-
-    /**
-     * <code>optional uint64 seqId = 5;</code>
-     */
-    boolean hasSeqId();
-    /**
-     * <code>optional uint64 seqId = 5;</code>
-     */
-    long getSeqId();
   }
   /**
    * <pre>
@@ -9744,8 +9718,6 @@ public final class AdminProtos {
     private FlushRegionRequest() {
       ifOlderThanTs_ = 0L;
       writeFlushWalMarker_ = false;
-      flushReplica_ = false;
-      seqId_ = 0L;
     }
 
     @java.lang.Override
@@ -9797,16 +9769,6 @@ public final class AdminProtos {
             case 24: {
               bitField0_ |= 0x00000004;
               writeFlushWalMarker_ = input.readBool();
-              break;
-            }
-            case 32: {
-              bitField0_ |= 0x00000008;
-              flushReplica_ = input.readBool();
-              break;
-            }
-            case 40: {
-              bitField0_ |= 0x00000010;
-              seqId_ = input.readUInt64();
               break;
             }
           }
@@ -9893,44 +9855,6 @@ public final class AdminProtos {
       return writeFlushWalMarker_;
     }
 
-    public static final int FLUSHREPLICA_FIELD_NUMBER = 4;
-    private boolean flushReplica_;
-    /**
-     * <pre>
-     * TODO : This has to be removed. Or we add some new flushRegionRequest
-     * </pre>
-     *
-     * <code>optional bool flushReplica = 4;</code>
-     */
-    public boolean hasFlushReplica() {
-      return ((bitField0_ & 0x00000008) == 0x00000008);
-    }
-    /**
-     * <pre>
-     * TODO : This has to be removed. Or we add some new flushRegionRequest
-     * </pre>
-     *
-     * <code>optional bool flushReplica = 4;</code>
-     */
-    public boolean getFlushReplica() {
-      return flushReplica_;
-    }
-
-    public static final int SEQID_FIELD_NUMBER = 5;
-    private long seqId_;
-    /**
-     * <code>optional uint64 seqId = 5;</code>
-     */
-    public boolean hasSeqId() {
-      return ((bitField0_ & 0x00000010) == 0x00000010);
-    }
-    /**
-     * <code>optional uint64 seqId = 5;</code>
-     */
-    public long getSeqId() {
-      return seqId_;
-    }
-
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -9960,12 +9884,6 @@ public final class AdminProtos {
       if (((bitField0_ & 0x00000004) == 0x00000004)) {
         output.writeBool(3, writeFlushWalMarker_);
       }
-      if (((bitField0_ & 0x00000008) == 0x00000008)) {
-        output.writeBool(4, flushReplica_);
-      }
-      if (((bitField0_ & 0x00000010) == 0x00000010)) {
-        output.writeUInt64(5, seqId_);
-      }
       unknownFields.writeTo(output);
     }
 
@@ -9985,14 +9903,6 @@ public final class AdminProtos {
       if (((bitField0_ & 0x00000004) == 0x00000004)) {
         size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
           .computeBoolSize(3, writeFlushWalMarker_);
-      }
-      if (((bitField0_ & 0x00000008) == 0x00000008)) {
-        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
-          .computeBoolSize(4, flushReplica_);
-      }
-      if (((bitField0_ & 0x00000010) == 0x00000010)) {
-        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
-          .computeUInt64Size(5, seqId_);
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -10026,16 +9936,6 @@ public final class AdminProtos {
         result = result && (getWriteFlushWalMarker()
             == other.getWriteFlushWalMarker());
       }
-      result = result && (hasFlushReplica() == other.hasFlushReplica());
-      if (hasFlushReplica()) {
-        result = result && (getFlushReplica()
-            == other.getFlushReplica());
-      }
-      result = result && (hasSeqId() == other.hasSeqId());
-      if (hasSeqId()) {
-        result = result && (getSeqId()
-            == other.getSeqId());
-      }
       result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
@@ -10060,16 +9960,6 @@ public final class AdminProtos {
         hash = (37 * hash) + WRITE_FLUSH_WAL_MARKER_FIELD_NUMBER;
         hash = (53 * hash) + org.apache.hadoop.hbase.shaded.com.google.protobuf.Internal.hashBoolean(
             getWriteFlushWalMarker());
-      }
-      if (hasFlushReplica()) {
-        hash = (37 * hash) + FLUSHREPLICA_FIELD_NUMBER;
-        hash = (53 * hash) + org.apache.hadoop.hbase.shaded.com.google.protobuf.Internal.hashBoolean(
-            getFlushReplica());
-      }
-      if (hasSeqId()) {
-        hash = (37 * hash) + SEQID_FIELD_NUMBER;
-        hash = (53 * hash) + org.apache.hadoop.hbase.shaded.com.google.protobuf.Internal.hashLong(
-            getSeqId());
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -10207,10 +10097,6 @@ public final class AdminProtos {
         bitField0_ = (bitField0_ & ~0x00000002);
         writeFlushWalMarker_ = false;
         bitField0_ = (bitField0_ & ~0x00000004);
-        flushReplica_ = false;
-        bitField0_ = (bitField0_ & ~0x00000008);
-        seqId_ = 0L;
-        bitField0_ = (bitField0_ & ~0x00000010);
         return this;
       }
 
@@ -10251,14 +10137,6 @@ public final class AdminProtos {
           to_bitField0_ |= 0x00000004;
         }
         result.writeFlushWalMarker_ = writeFlushWalMarker_;
-        if (((from_bitField0_ & 0x00000008) == 0x00000008)) {
-          to_bitField0_ |= 0x00000008;
-        }
-        result.flushReplica_ = flushReplica_;
-        if (((from_bitField0_ & 0x00000010) == 0x00000010)) {
-          to_bitField0_ |= 0x00000010;
-        }
-        result.seqId_ = seqId_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -10309,12 +10187,6 @@ public final class AdminProtos {
         }
         if (other.hasWriteFlushWalMarker()) {
           setWriteFlushWalMarker(other.getWriteFlushWalMarker());
-        }
-        if (other.hasFlushReplica()) {
-          setFlushReplica(other.getFlushReplica());
-        }
-        if (other.hasSeqId()) {
-          setSeqId(other.getSeqId());
         }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
@@ -10544,86 +10416,6 @@ public final class AdminProtos {
       public Builder clearWriteFlushWalMarker() {
         bitField0_ = (bitField0_ & ~0x00000004);
         writeFlushWalMarker_ = false;
-        onChanged();
-        return this;
-      }
-
-      private boolean flushReplica_ ;
-      /**
-       * <pre>
-       * TODO : This has to be removed. Or we add some new flushRegionRequest
-       * </pre>
-       *
-       * <code>optional bool flushReplica = 4;</code>
-       */
-      public boolean hasFlushReplica() {
-        return ((bitField0_ & 0x00000008) == 0x00000008);
-      }
-      /**
-       * <pre>
-       * TODO : This has to be removed. Or we add some new flushRegionRequest
-       * </pre>
-       *
-       * <code>optional bool flushReplica = 4;</code>
-       */
-      public boolean getFlushReplica() {
-        return flushReplica_;
-      }
-      /**
-       * <pre>
-       * TODO : This has to be removed. Or we add some new flushRegionRequest
-       * </pre>
-       *
-       * <code>optional bool flushReplica = 4;</code>
-       */
-      public Builder setFlushReplica(boolean value) {
-        bitField0_ |= 0x00000008;
-        flushReplica_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <pre>
-       * TODO : This has to be removed. Or we add some new flushRegionRequest
-       * </pre>
-       *
-       * <code>optional bool flushReplica = 4;</code>
-       */
-      public Builder clearFlushReplica() {
-        bitField0_ = (bitField0_ & ~0x00000008);
-        flushReplica_ = false;
-        onChanged();
-        return this;
-      }
-
-      private long seqId_ ;
-      /**
-       * <code>optional uint64 seqId = 5;</code>
-       */
-      public boolean hasSeqId() {
-        return ((bitField0_ & 0x00000010) == 0x00000010);
-      }
-      /**
-       * <code>optional uint64 seqId = 5;</code>
-       */
-      public long getSeqId() {
-        return seqId_;
-      }
-      /**
-       * <code>optional uint64 seqId = 5;</code>
-       */
-      public Builder setSeqId(long value) {
-        bitField0_ |= 0x00000010;
-        seqId_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>optional uint64 seqId = 5;</code>
-       */
-      public Builder clearSeqId() {
-        bitField0_ = (bitField0_ & ~0x00000010);
-        seqId_ = 0L;
         onChanged();
         return this;
       }
@@ -30464,106 +30256,105 @@ public final class AdminProtos {
       "\030\003 \001(\010:\004true\0220\n\022destination_server\030\004 \001(\013" +
       "2\024.hbase.pb.ServerName\022\027\n\017serverStartCod" +
       "e\030\005 \001(\004\"%\n\023CloseRegionResponse\022\016\n\006closed" +
-      "\030\001 \002(\010\"\236\001\n\022FlushRegionRequest\022)\n\006region\030" +
-      "\001 \002(\0132\031.hbase.pb.RegionSpecifier\022\030\n\020if_o" +
-      "lder_than_ts\030\002 \001(\004\022\036\n\026write_flush_wal_ma",
-      "rker\030\003 \001(\010\022\024\n\014flushReplica\030\004 \001(\010\022\r\n\005seqI" +
-      "d\030\005 \001(\004\"_\n\023FlushRegionResponse\022\027\n\017last_f" +
-      "lush_time\030\001 \002(\004\022\017\n\007flushed\030\002 \001(\010\022\036\n\026wrot" +
-      "e_flush_wal_marker\030\003 \001(\010\"T\n\022SplitRegionR" +
-      "equest\022)\n\006region\030\001 \002(\0132\031.hbase.pb.Region" +
-      "Specifier\022\023\n\013split_point\030\002 \001(\014\"\025\n\023SplitR" +
-      "egionResponse\"`\n\024CompactRegionRequest\022)\n" +
-      "\006region\030\001 \002(\0132\031.hbase.pb.RegionSpecifier" +
-      "\022\r\n\005major\030\002 \001(\010\022\016\n\006family\030\003 \001(\014\"\027\n\025Compa" +
-      "ctRegionResponse\"\315\001\n\031UpdateFavoredNodesR",
-      "equest\022I\n\013update_info\030\001 \003(\01324.hbase.pb.U" +
-      "pdateFavoredNodesRequest.RegionUpdateInf" +
-      "o\032e\n\020RegionUpdateInfo\022$\n\006region\030\001 \002(\0132\024." +
-      "hbase.pb.RegionInfo\022+\n\rfavored_nodes\030\002 \003" +
-      "(\0132\024.hbase.pb.ServerName\".\n\032UpdateFavore" +
-      "dNodesResponse\022\020\n\010response\030\001 \001(\r\"a\n\010WALE" +
-      "ntry\022\035\n\003key\030\001 \002(\0132\020.hbase.pb.WALKey\022\027\n\017k" +
-      "ey_value_bytes\030\002 \003(\014\022\035\n\025associated_cell_" +
-      "count\030\003 \001(\005\"\242\001\n\030ReplicateWALEntryRequest" +
-      "\022!\n\005entry\030\001 \003(\0132\022.hbase.pb.WALEntry\022\034\n\024r",
-      "eplicationClusterId\030\002 \001(\t\022\"\n\032sourceBaseN" +
-      "amespaceDirPath\030\003 \001(\t\022!\n\031sourceHFileArch" +
-      "iveDirPath\030\004 \001(\t\"\033\n\031ReplicateWALEntryRes" +
-      "ponse\"\026\n\024RollWALWriterRequest\"0\n\025RollWAL" +
-      "WriterResponse\022\027\n\017region_to_flush\030\001 \003(\014\"" +
-      "#\n\021StopServerRequest\022\016\n\006reason\030\001 \002(\t\"\024\n\022" +
-      "StopServerResponse\"\026\n\024GetServerInfoReque" +
-      "st\"K\n\nServerInfo\022)\n\013server_name\030\001 \002(\0132\024." +
-      "hbase.pb.ServerName\022\022\n\nwebui_port\030\002 \001(\r\"" +
-      "B\n\025GetServerInfoResponse\022)\n\013server_info\030",
-      "\001 \002(\0132\024.hbase.pb.ServerInfo\"\034\n\032UpdateCon" +
-      "figurationRequest\"\035\n\033UpdateConfiguration" +
-      "Response\"?\n\024GetRegionLoadRequest\022\'\n\ntabl" +
-      "e_name\030\001 \001(\0132\023.hbase.pb.TableName\"C\n\025Get" +
-      "RegionLoadResponse\022*\n\014region_loads\030\001 \003(\013" +
-      "2\024.hbase.pb.RegionLoad\"2\n\034ClearCompactio" +
-      "nQueuesRequest\022\022\n\nqueue_name\030\001 \003(\t\"\037\n\035Cl" +
-      "earCompactionQueuesResponse\"\200\001\n\030ExecuteP" +
-      "roceduresRequest\0220\n\013open_region\030\001 \003(\0132\033." +
-      "hbase.pb.OpenRegionRequest\0222\n\014close_regi",
-      "on\030\002 \003(\0132\034.hbase.pb.CloseRegionRequest\"\203" +
-      "\001\n\031ExecuteProceduresResponse\0221\n\013open_reg" +
-      "ion\030\001 \003(\0132\034.hbase.pb.OpenRegionResponse\022" +
-      "3\n\014close_region\030\002 \003(\0132\035.hbase.pb.CloseRe" +
-      "gionResponse\"\244\001\n\023MergeRegionsRequest\022+\n\010" +
-      "region_a\030\001 \002(\0132\031.hbase.pb.RegionSpecifie" +
-      "r\022+\n\010region_b\030\002 \002(\0132\031.hbase.pb.RegionSpe" +
-      "cifier\022\027\n\010forcible\030\003 \001(\010:\005false\022\032\n\022maste" +
-      "r_system_time\030\004 \001(\004\"\026\n\024MergeRegionsRespo" +
-      "nse2\216\016\n\014AdminService\022P\n\rGetRegionInfo\022\036.",
-      "hbase.pb.GetRegionInfoRequest\032\037.hbase.pb" +
-      ".GetRegionInfoResponse\022M\n\014GetStoreFile\022\035" +
-      ".hbase.pb.GetStoreFileRequest\032\036.hbase.pb" +
-      ".GetStoreFileResponse\022V\n\017GetOnlineRegion" +
-      "\022 .hbase.pb.GetOnlineRegionRequest\032!.hba" +
-      "se.pb.GetOnlineRegionResponse\022G\n\nOpenReg" +
-      "ion\022\033.hbase.pb.OpenRegionRequest\032\034.hbase" +
-      ".pb.OpenRegionResponse\022M\n\014WarmupRegion\022\035" +
-      ".hbase.pb.WarmupRegionRequest\032\036.hbase.pb" +
-      ".WarmupRegionResponse\022J\n\013CloseRegion\022\034.h",
-      "base.pb.CloseRegionRequest\032\035.hbase.pb.Cl" +
-      "oseRegionResponse\022J\n\013FlushRegion\022\034.hbase" +
-      ".pb.FlushRegionRequest\032\035.hbase.pb.FlushR" +
-      "egionResponse\022J\n\013SplitRegion\022\034.hbase.pb." +
-      "SplitRegionRequest\032\035.hbase.pb.SplitRegio" +
-      "nResponse\022P\n\rCompactRegion\022\036.hbase.pb.Co" +
-      "mpactRegionRequest\032\037.hbase.pb.CompactReg" +
-      "ionResponse\022\\\n\021ReplicateWALEntry\022\".hbase" +
-      ".pb.ReplicateWALEntryRequest\032#.hbase.pb." +
-      "ReplicateWALEntryResponse\022Q\n\006Replay\022\".hb",
-      "ase.pb.ReplicateWALEntryRequest\032#.hbase." +
-      "pb.ReplicateWALEntryResponse\022P\n\rRollWALW" +
-      "riter\022\036.hbase.pb.RollWALWriterRequest\032\037." +
-      "hbase.pb.RollWALWriterResponse\022P\n\rGetSer" +
-      "verInfo\022\036.hbase.pb.GetServerInfoRequest\032" +
-      "\037.hbase.pb.GetServerInfoResponse\022G\n\nStop" +
-      "Server\022\033.hbase.pb.StopServerRequest\032\034.hb" +
-      "ase.pb.StopServerResponse\022_\n\022UpdateFavor" +
-      "edNodes\022#.hbase.pb.UpdateFavoredNodesReq" +
-      "uest\032$.hbase.pb.UpdateFavoredNodesRespon",
-      "se\022b\n\023UpdateConfiguration\022$.hbase.pb.Upd" +
-      "ateConfigurationRequest\032%.hbase.pb.Updat" +
-      "eConfigurationResponse\022P\n\rGetRegionLoad\022" +
-      "\036.hbase.pb.GetRegionLoadRequest\032\037.hbase." +
-      "pb.GetRegionLoadResponse\022h\n\025ClearCompact" +
-      "ionQueues\022&.hbase.pb.ClearCompactionQueu" +
-      "esRequest\032\'.hbase.pb.ClearCompactionQueu" +
-      "esResponse\022k\n\026GetSpaceQuotaSnapshots\022\'.h" +
-      "base.pb.GetSpaceQuotaSnapshotsRequest\032(." +
-      "hbase.pb.GetSpaceQuotaSnapshotsResponse\022",
-      "\\\n\021ExecuteProcedures\022\".hbase.pb.ExecuteP" +
-      "roceduresRequest\032#.hbase.pb.ExecuteProce" +
-      "duresResponse\022M\n\014MergeRegions\022\035.hbase.pb" +
-      ".MergeRegionsRequest\032\036.hbase.pb.MergeReg" +
-      "ionsResponseBH\n1org.apache.hadoop.hbase." +
-      "shaded.protobuf.generatedB\013AdminProtosH\001" +
-      "\210\001\001\240\001\001"
+      "\030\001 \002(\010\"y\n\022FlushRegionRequest\022)\n\006region\030\001" +
+      " \002(\0132\031.hbase.pb.RegionSpecifier\022\030\n\020if_ol" +
+      "der_than_ts\030\002 \001(\004\022\036\n\026write_flush_wal_mar",
+      "ker\030\003 \001(\010\"_\n\023FlushRegionResponse\022\027\n\017last" +
+      "_flush_time\030\001 \002(\004\022\017\n\007flushed\030\002 \001(\010\022\036\n\026wr" +
+      "ote_flush_wal_marker\030\003 \001(\010\"T\n\022SplitRegio" +
+      "nRequest\022)\n\006region\030\001 \002(\0132\031.hbase.pb.Regi" +
+      "onSpecifier\022\023\n\013split_point\030\002 \001(\014\"\025\n\023Spli" +
+      "tRegionResponse\"`\n\024CompactRegionRequest\022" +
+      ")\n\006region\030\001 \002(\0132\031.hbase.pb.RegionSpecifi" +
+      "er\022\r\n\005major\030\002 \001(\010\022\016\n\006family\030\003 \001(\014\"\027\n\025Com" +
+      "pactRegionResponse\"\315\001\n\031UpdateFavoredNode" +
+      "sRequest\022I\n\013update_info\030\001 \003(\01324.hbase.pb",
+      ".UpdateFavoredNodesRequest.RegionUpdateI" +
+      "nfo\032e\n\020RegionUpdateInfo\022$\n\006region\030\001 \002(\0132" +
+      "\024.hbase.pb.RegionInfo\022+\n\rfavored_nodes\030\002" +
+      " \003(\0132\024.hbase.pb.ServerName\".\n\032UpdateFavo" +
+      "redNodesResponse\022\020\n\010response\030\001 \001(\r\"a\n\010WA" +
+      "LEntry\022\035\n\003key\030\001 \002(\0132\020.hbase.pb.WALKey\022\027\n" +
+      "\017key_value_bytes\030\002 \003(\014\022\035\n\025associated_cel" +
+      "l_count\030\003 \001(\005\"\242\001\n\030ReplicateWALEntryReque" +
+      "st\022!\n\005entry\030\001 \003(\0132\022.hbase.pb.WALEntry\022\034\n" +
+      "\024replicationClusterId\030\002 \001(\t\022\"\n\032sourceBas",
+      "eNamespaceDirPath\030\003 \001(\t\022!\n\031sourceHFileAr" +
+      "chiveDirPath\030\004 \001(\t\"\033\n\031ReplicateWALEntryR" +
+      "esponse\"\026\n\024RollWALWriterRequest\"0\n\025RollW" +
+      "ALWriterResponse\022\027\n\017region_to_flush\030\001 \003(" +
+      "\014\"#\n\021StopServerRequest\022\016\n\006reason\030\001 \002(\t\"\024" +
+      "\n\022StopServerResponse\"\026\n\024GetServerInfoReq" +
+      "uest\"K\n\nServerInfo\022)\n\013server_name\030\001 \002(\0132" +
+      "\024.hbase.pb.ServerName\022\022\n\nwebui_port\030\002 \001(" +
+      "\r\"B\n\025GetServerInfoResponse\022)\n\013server_inf" +
+      "o\030\001 \002(\0132\024.hbase.pb.ServerInfo\"\034\n\032UpdateC",
+      "onfigurationRequest\"\035\n\033UpdateConfigurati" +
+      "onResponse\"?\n\024GetRegionLoadRequest\022\'\n\nta" +
+      "ble_name\030\001 \001(\0132\023.hbase.pb.TableName\"C\n\025G" +
+      "etRegionLoadResponse\022*\n\014region_loads\030\001 \003" +
+      "(\0132\024.hbase.pb.RegionLoad\"2\n\034ClearCompact" +
+      "ionQueuesRequest\022\022\n\nqueue_name\030\001 \003(\t\"\037\n\035" +
+      "ClearCompactionQueuesResponse\"\200\001\n\030Execut" +
+      "eProceduresRequest\0220\n\013open_region\030\001 \003(\0132" +
+      "\033.hbase.pb.OpenRegionRequest\0222\n\014close_re" +
+      "gion\030\002 \003(\0132\034.hbase.pb.CloseRegionRequest",
+      "\"\203\001\n\031ExecuteProceduresResponse\0221\n\013open_r" +
+      "egion\030\001 \003(\0132\034.hbase.pb.OpenRegionRespons" +
+      "e\0223\n\014close_region\030\002 \003(\0132\035.hbase.pb.Close" +
+      "RegionResponse\"\244\001\n\023MergeRegionsRequest\022+" +
+      "\n\010region_a\030\001 \002(\0132\031.hbase.pb.RegionSpecif" +
+      "ier\022+\n\010region_b\030\002 \002(\0132\031.hbase.pb.RegionS" +
+      "pecifier\022\027\n\010forcible\030\003 \001(\010:\005false\022\032\n\022mas" +
+      "ter_system_time\030\004 \001(\004\"\026\n\024MergeRegionsRes" +
+      "ponse2\216\016\n\014AdminService\022P\n\rGetRegionInfo\022" +
+      "\036.hbase.pb.GetRegionInfoRequest\032\037.hbase.",
+      "pb.GetRegionInfoResponse\022M\n\014GetStoreFile" +
+      "\022\035.hbase.pb.GetStoreFileRequest\032\036.hbase." +
+      "pb.GetStoreFileResponse\022V\n\017GetOnlineRegi" +
+      "on\022 .hbase.pb.GetOnlineRegionRequest\032!.h" +
+      "base.pb.GetOnlineRegionResponse\022G\n\nOpenR" +
+      "egion\022\033.hbase.pb.OpenRegionRequest\032\034.hba" +
+      "se.pb.OpenRegionResponse\022M\n\014WarmupRegion" +
+      "\022\035.hbase.pb.WarmupRegionRequest\032\036.hbase." +
+      "pb.WarmupRegionResponse\022J\n\013CloseRegion\022\034" +
+      ".hbase.pb.CloseRegionRequest\032\035.hbase.pb.",
+      "CloseRegionResponse\022J\n\013FlushRegion\022\034.hba" +
+      "se.pb.FlushRegionRequest\032\035.hbase.pb.Flus" +
+      "hRegionResponse\022J\n\013SplitRegion\022\034.hbase.p" +
+      "b.SplitRegionRequest\032\035.hbase.pb.SplitReg" +
+      "ionResponse\022P\n\rCompactRegion\022\036.hbase.pb." +
+      "CompactRegionRequest\032\037.hbase.pb.CompactR" +
+      "egionResponse\022\\\n\021ReplicateWALEntry\022\".hba" +
+      "se.pb.ReplicateWALEntryRequest\032#.hbase.p" +
+      "b.ReplicateWALEntryResponse\022Q\n\006Replay\022\"." +
+      "hbase.pb.ReplicateWALEntryRequest\032#.hbas",
+      "e.pb.ReplicateWALEntryResponse\022P\n\rRollWA" +
+      "LWriter\022\036.hbase.pb.RollWALWriterRequest\032" +
+      "\037.hbase.pb.RollWALWriterResponse\022P\n\rGetS" +
+      "erverInfo\022\036.hbase.pb.GetServerInfoReques" +
+      "t\032\037.hbase.pb.GetServerInfoResponse\022G\n\nSt" +
+      "opServer\022\033.hbase.pb.StopServerRequest\032\034." +
+      "hbase.pb.StopServerResponse\022_\n\022UpdateFav" +
+      "oredNodes\022#.hbase.pb.UpdateFavoredNodesR" +
+      "equest\032$.hbase.pb.UpdateFavoredNodesResp" +
+      "onse\022b\n\023UpdateConfiguration\022$.hbase.pb.U",
+      "pdateConfigurationRequest\032%.hbase.pb.Upd" +
+      "ateConfigurationResponse\022P\n\rGetRegionLoa" +
+      "d\022\036.hbase.pb.GetRegionLoadRequest\032\037.hbas" +
+      "e.pb.GetRegionLoadResponse\022h\n\025ClearCompa" +
+      "ctionQueues\022&.hbase.pb.ClearCompactionQu" +
+      "euesRequest\032\'.hbase.pb.ClearCompactionQu" +
+      "euesResponse\022k\n\026GetSpaceQuotaSnapshots\022\'" +
+      ".hbase.pb.GetSpaceQuotaSnapshotsRequest\032" +
+      "(.hbase.pb.GetSpaceQuotaSnapshotsRespons" +
+      "e\022\\\n\021ExecuteProcedures\022\".hbase.pb.Execut",
+      "eProceduresRequest\032#.hbase.pb.ExecutePro" +
+      "ceduresResponse\022M\n\014MergeRegions\022\035.hbase." +
+      "pb.MergeRegionsRequest\032\036.hbase.pb.MergeR" +
+      "egionsResponseBH\n1org.apache.hadoop.hbas" +
+      "e.shaded.protobuf.generatedB\013AdminProtos" +
+      "H\001\210\001\001\240\001\001"
     };
     org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -30664,7 +30455,7 @@ public final class AdminProtos {
     internal_static_hbase_pb_FlushRegionRequest_fieldAccessorTable = new
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_hbase_pb_FlushRegionRequest_descriptor,
-        new java.lang.String[] { "Region", "IfOlderThanTs", "WriteFlushWalMarker", "FlushReplica", "SeqId", });
+        new java.lang.String[] { "Region", "IfOlderThanTs", "WriteFlushWalMarker", });
     internal_static_hbase_pb_FlushRegionResponse_descriptor =
       getDescriptor().getMessageTypes().get(13);
     internal_static_hbase_pb_FlushRegionResponse_fieldAccessorTable = new

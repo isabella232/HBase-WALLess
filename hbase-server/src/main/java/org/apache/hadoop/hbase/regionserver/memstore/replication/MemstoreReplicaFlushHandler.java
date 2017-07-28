@@ -64,18 +64,16 @@ public class MemstoreReplicaFlushHandler extends EventHandler {
   private final RpcControllerFactory rpcControllerFactory;
   private final int operationTimeout;
   private final HRegion region;
-  private final long seqId;
 
   public MemstoreReplicaFlushHandler(Server server, ClusterConnection connection,
       RpcRetryingCallerFactory rpcRetryingCallerFactory, RpcControllerFactory rpcControllerFactory,
-      int operationTimeout, HRegion region, long seqId) {
+      int operationTimeout, HRegion region) {
     super(server, EventType.RS_REGION_REPLICA_FLUSH);
     this.connection = connection;
     this.rpcRetryingCallerFactory = rpcRetryingCallerFactory;
     this.rpcControllerFactory = rpcControllerFactory;
     this.operationTimeout = operationTimeout;
     this.region = region;
-    this.seqId = seqId;
   }
 
   @Override
@@ -165,7 +163,7 @@ public class MemstoreReplicaFlushHandler extends EventHandler {
               : location.getRegionInfo();
           // TODO : change param ordering
           FlushRegionCallable flushCallable =
-              new FlushRegionCallable(connection, rpcControllerFactory, regionInfo, true, replicaId, seqId);
+              new FlushRegionCallable(connection, rpcControllerFactory, regionInfo, true, replicaId);
 
           // do not have to wait for the whole flush here, just initiate it.
           try {
