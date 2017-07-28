@@ -184,11 +184,20 @@ public class TestRegionReplicasWith3Replicas {
 
       // Refresh store files on the secondary
       Region secondaryRegion = getSecondaryRegion(pair);
+      // after all the flushes no snapshot should be available and if there is read it should happen
+      // from the store files which should have been created as part of primary flushes.
+      byte[] row = Bytes.toBytes(String.valueOf(45));
+      Get get = new Get(row);
+      get.setConsistency(Consistency.TIMELINE);
+      get.setReplicaId(1);
+      Result result = table.get(get);
+      Assert.assertArrayEquals(row, result.getValue(f, null));
       secondaryRegion.getStore(f).refreshStoreFiles();
       Assert.assertEquals(3, secondaryRegion.getStore(f).getStorefilesCount());
       
       // no manual refresh done on tertiary region. //But lets see how many store files we have
       Region tertiaryRegion = getTertiaryRegion(tertiaryOpenedIn);
+      // this wil fail because for now we don't do refresh of store files nor we replicate the flush entries
       Assert.assertEquals(3, tertiaryRegion.getStore(f).getStorefilesCount());
       // force compaction
       LOG.info("Force Major compaction on primary region " + hriPrimary);
