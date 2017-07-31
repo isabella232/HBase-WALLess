@@ -192,12 +192,11 @@ public class TestRegionReplicasWith3Replicas {
       get.setReplicaId(1);
       Result result = table.get(get);
       Assert.assertArrayEquals(row, result.getValue(f, null));
-      secondaryRegion.getStore(f).refreshStoreFiles();
+      // without refreshFiles also we should get 3 files
       Assert.assertEquals(3, secondaryRegion.getStore(f).getStorefilesCount());
       
       // no manual refresh done on tertiary region. //But lets see how many store files we have
       Region tertiaryRegion = getTertiaryRegion(tertiaryOpenedIn);
-      // this wil fail because for now we don't do refresh of store files nor we replicate the flush entries
       Assert.assertEquals(3, tertiaryRegion.getStore(f).getStorefilesCount());
       // force compaction
       LOG.info("Force Major compaction on primary region " + hriPrimary);

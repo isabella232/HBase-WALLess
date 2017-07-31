@@ -2515,18 +2515,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
 
       // write the snapshot start to WAL
-      if (wal != null && !writestate.readOnly) {
-        FlushDescriptor desc = ProtobufUtil.toFlushDescriptor(FlushAction.START_FLUSH,
-            getRegionInfo(), flushOpSeqId, committedFiles);
-        // No sync. Sync is below where no updates lock and we do FlushAction.COMMIT_FLUSH
-        WALUtil.writeFlushMarker(wal, this.getReplicationScope(), getRegionInfo(), desc, false,
-            mvcc);
-      }
       // send an RPC to the replica with the new seqID and the special cell
-      if (!flushReplica) {
-        // Create a start flush indicating the start of flush instead of WAL
-        sendFlushRpc(FlushAction.START_FLUSH, flushReplica, flushOpSeqId, committedFiles);
-      }
+      // Create a start flush indicating the start of flush instead of WAL
+      // TODO : Everything under lock
+      sendFlushRpc(FlushAction.START_FLUSH, flushReplica, flushOpSeqId, committedFiles);
       // Prepare flush (take a snapshot)
       for (StoreFlushContext flush : storeFlushCtxs.values()) {
         flush.prepare();
@@ -2550,6 +2542,30 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     if (!this.closing.get() && !this.closed.get()) {
       FlushDescriptor desc =
           ProtobufUtil.toFlushDescriptor(action, getRegionInfo(), flushOpSeqId, committedFiles);
+      KeyValue kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
+          WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
+      MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
+          this.getRegionInfo().getEncodedNameAsBytes(), this.htableDescriptor.getTableName(), mvcc);
+      MemstoreEdits memstoreEdits = new MemstoreEdits();
+      memstoreEdits.add(kv);
+      // replicate this
+      try {
+        // TODO : this does not get replicated from secondary to tertiary. WE need to change the
+        // replay path to do this
+        this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, flushReplica,
+          this.getRegionInfo().getReplicaId());
+      } catch (InterruptedException e) {
+        // Ignore this. Probably next time we will be able to
+        // TODO : Here we may not wait for the result.
+      } catch (IOException e) {
+        // TODO : Handle this
+      }
+    }
+  }
+  
+  private void sendFlushRpc(FlushAction action, FlushDescriptor desc, boolean flushReplica) {
+    // TODO : check inside a lock??
+    if (!this.closing.get() && !this.closed.get()) {
       KeyValue kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
           WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
       MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
@@ -5069,7 +5085,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
             // Set down the memstore size by amount of flush.
             this.decrMemstoreSize(prepareFlushResult.totalFlushableSize);
-
+            sendFlushRpc(FlushAction.COMMIT_FLUSH, flush, false);
             this.prepareFlushResult = null;
             writestate.flushing = false;
           } else if (flush.getFlushSequenceNumber() < prepareFlushResult.flushOpSeqId) {
@@ -5083,7 +5099,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
                 + prepareFlushResult.flushOpSeqId + ". Picking up new file, but not dropping"
                 +"  prepared memstore snapshot");
             replayFlushInStores(flush, prepareFlushResult, false);
-
+            sendFlushRpc(FlushAction.COMMIT_FLUSH, flush, false);
             // snapshot is not dropped, so memstore sizes should not be decremented
             // we still have the prepared snapshot, flushing should still be true
           } else {
@@ -5106,7 +5122,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
             // Inspect the memstore contents to see whether the memstore contains only edits
             // with seqId smaller than the flush seqId. If so, we can discard those edits.
             dropMemstoreContentsForSeqId(flush.getFlushSequenceNumber(), null);
-
+            sendFlushRpc(FlushAction.COMMIT_FLUSH, flush, false);
             this.prepareFlushResult = null;
             writestate.flushing = false;
           }
@@ -5127,6 +5143,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           // Inspect the memstore contents to see whether the memstore contains only edits
           // with seqId smaller than the flush seqId. If so, we can discard those edits.
           dropMemstoreContentsForSeqId(flush.getFlushSequenceNumber(), null);
+          sendFlushRpc(FlushAction.COMMIT_FLUSH, flush, false);
         }
 
         status.markComplete("Flush commit successful");
@@ -5624,6 +5641,22 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         Bytes.equals(encodedRegionName,
           this.fs.getRegionInfoForFS().getEncodedNameAsBytes())) {
       return;
+    }
+    
+    if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
+      int currentReplicaId = this.getRegionInfo().getReplicaId();
+      // since we are in pipeline. Check if the passed encodedRegionName can match with one of the replica names
+      // probably one lesser (TODO: validate this).
+     // if(currentReplicaId -1 != RegionReplicaUtil.DEFAULT_REPLICA_ID) {
+        HRegionInfo regionInfoForReplica = RegionReplicaUtil.getRegionInfoForReplica(this.getRegionInfo(), currentReplicaId - 1);
+        if (Bytes.equals(regionInfoForReplica.getEncodedNameAsBytes(), encodedRegionName)) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Flush marker received for " + this.getRegionInfo()
+              + " from another non-primary replica");
+        }
+          return;
+        }
+     // }
     }
 
     throw new WrongRegionException(exceptionMsg + payload
