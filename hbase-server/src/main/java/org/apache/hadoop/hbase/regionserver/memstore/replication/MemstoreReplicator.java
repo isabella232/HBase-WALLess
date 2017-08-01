@@ -29,6 +29,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -60,6 +62,7 @@ import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.RetryingCallable;
 import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
+import org.apache.hadoop.hbase.exceptions.TimeoutIOException;
 import org.apache.hadoop.hbase.io.HeapSize;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
@@ -71,6 +74,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWA
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.CancelableProgressable;
 import org.apache.hadoop.hbase.util.ClassSize;
+import org.apache.hadoop.hbase.util.CollectionUtils;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.util.Threads;
 import org.apache.hadoop.hbase.wal.WAL.Entry;
@@ -87,9 +91,9 @@ import com.google.common.collect.Lists;
 @InterfaceAudience.Private
 public class MemstoreReplicator {
   private static final Log LOG = LogFactory.getLog(MemstoreReplicator.class);
-  // private final ConcurrentMap<Thread, SyncFuture> syncFuturesByHandler;
-  //private AtomicLong sequence = new AtomicLong(0);;
-  // Can be configured differently than hbase.client.retries.number
+  
+  private static final int DEFAULT_WAL_SYNC_TIMEOUT_MS = 5 * 60 * 1000; // in ms, 5min
+
   private static String CLIENT_RETRIES_NUMBER =
       "hbase.region.replica.replication.client.retries.number";
   private RegionReplicaOutputSink outputSink;
@@ -108,6 +112,10 @@ public class MemstoreReplicator {
   private int operationTimeout;
 
   private ExecutorService pool;
+  // Timeout that specifies the time that it can wait for the replication to be completed.
+  // Probably we should split the total time into number of replicas so that we should wait
+  // in each node for a specific time that totally adds up to the total replica wait time
+  private long replicationTimeoutNs;
 
   static MemstoreReplicator INSTANCE;
 
@@ -139,6 +147,7 @@ public class MemstoreReplicator {
     // that which makes very long retries for disabled tables etc.
     int defaultNumRetries = conf.getInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER,
       HConstants.DEFAULT_HBASE_CLIENT_RETRIES_NUMBER);
+    // TODO : what should be the retries here? This is sync flow so cannot be too high also?
     if (defaultNumRetries > 10) {
       int mult = conf.getInt("hbase.client.serverside.retries.multiplier", 10);
       defaultNumRetries = defaultNumRetries / mult; // reset if HRS has multiplied this already
@@ -148,6 +157,7 @@ public class MemstoreReplicator {
     int numRetries = conf.getInt(CLIENT_RETRIES_NUMBER, defaultNumRetries);
     conf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, numRetries);
 
+    // TODO : Like in WAL I think we should have writer threads equal to the number of handlers
     this.numWriterThreads = this.conf.getInt("hbase.region.replica.replication.writer.threads", 3);
     controller = new PipelineController();
     entryBuffers = new EntryBuffers(controller,
@@ -165,9 +175,57 @@ public class MemstoreReplicator {
     } catch (IOException ex) {
       LOG.warn("Received exception while creating connection :" + ex);
     }
-
+    this.replicationTimeoutNs = TimeUnit.MILLISECONDS
+        .toNanos(conf.getLong("hbase.regionserver.mutations.sync.timeout", DEFAULT_WAL_SYNC_TIMEOUT_MS));
   }
 
+  static class CompletedFuture {
+    volatile boolean completed = false;
+    volatile Throwable throwable = null;
+
+    synchronized boolean isDone() {
+      return this.completed;
+    }
+
+    synchronized boolean get(long timeoutNs)
+        throws InterruptedException, TimeoutIOException, ExecutionException {
+      final long done = System.nanoTime() + timeoutNs;
+      while (!isDone()) {
+        wait(1000);
+        if (System.nanoTime() >= done) {
+          throw new TimeoutIOException(
+              "Failed to get sync result after " + TimeUnit.NANOSECONDS.toMillis(timeoutNs)
+                  +" ms ");
+        }
+      }
+      if (this.throwable != null) {
+        throw new ExecutionException(this.throwable);
+      }
+      return this.completed;
+    }
+
+    synchronized void markDone() {
+      this.completed = true;
+      notify();
+    }
+
+    synchronized void markException(Throwable t) {
+      this.throwable = t;
+      this.completed = true;
+      notify();
+    }
+
+    synchronized CompletedFuture reset() {
+      this.completed = false;
+      notify();
+      return this;
+    }
+
+    // Use this in case of exception
+    synchronized boolean hasException() {
+      return this.throwable != null;
+    }
+  }
   /**
    * Returns a Thread pool for the RPC's to region replicas. Similar to Connection's thread pool.
    */
@@ -187,20 +245,19 @@ public class MemstoreReplicator {
     return tpe;
   }
 
-  public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits, boolean replay, int replicaId)
-      throws IOException, InterruptedException {
-    // Create ring buffer we to replicate the entries faster
-    // pass it to the sink and create entry buffers. We need a future so that we can
-    // wait on that future
+  public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
+      boolean replay, int replicaId) throws IOException, InterruptedException, ExecutionException {
     // TODO : It is better we have one to one mapping on the result of this replication
-    // The below code is just for test purpose. There is not blocking mechanism here
-    // Shall we try using the Procedure V2 framework here? And ensure that we have control
-    // over how this operation is performed?  Read procedure V2 framework code
+    // We have a blocking mechanism here but we may need to create a future that is mapped per thread doing the
+    /// actual replication. (TODO)
+    CompletedFuture future = new CompletedFuture();
     MemstoreReplicationEntry entry =
-        new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay, replicaId);
+        new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, future, replay, replicaId);
     this.entryBuffers.appendEntry(entry);
+    // wait for the result here
+    future.get(replicationTimeoutNs);
     this.outputSink.flush();
-
+    // TODO :Very important. Probably return back if there is no replica here instead of putting them in a pool etc.
   }
 
   public static abstract class OutputSink {
@@ -430,14 +487,15 @@ public class MemstoreReplicator {
     @Override
     public void append(RegionEntryBuffer buffer) throws IOException {
       List<MemstoreReplicationEntry> entries = buffer.getEntryBuffer();
-      
+ 
       if (entries.isEmpty() || entries.get(0).getMemstoreEdits().getCells().isEmpty()) {
         return;
       }
       boolean replay = entries.get(0).isReplay();
       int replicaId = entries.get(0).getReplicaId();
+      CompletedFuture future = entries.get(0).getFuture();
       sinkWriter.append(buffer.getTableName(), buffer.getEncodedRegionName(),
-        CellUtil.cloneRow(entries.get(0).getMemstoreEdits().getCells().get(0)), entries, replay, replicaId);
+        CellUtil.cloneRow(entries.get(0).getMemstoreEdits().getCells().get(0)), future, entries, replay, replicaId);
     }
 
     @Override
@@ -725,7 +783,8 @@ public class MemstoreReplicator {
     }
 
     public void append(TableName tableName, byte[] encodedRegionName, byte[] row,
-        List<MemstoreReplicationEntry> entries, boolean replay, int currentReplicaId) throws IOException {
+        CompletedFuture future, List<MemstoreReplicationEntry> entries, boolean replay,
+        int currentReplicaId) throws IOException {
 
       /*
        * if (disabledAndDroppedTables.getIfPresent(tableName) != null) { if (LOG.isTraceEnabled()) {
@@ -760,6 +819,8 @@ public class MemstoreReplicator {
           disabledAndDroppedTables.put(tableName, Boolean.TRUE); // put to cache. Value ignored
           // skip this entry
           sink.getSkippedEditsCounter().addAndGet(entries.size());
+          // mark the future as done as there is nothing to replicate. // Probably make this more easier to read
+          future.markDone();
           return;
         }
 
@@ -786,6 +847,7 @@ public class MemstoreReplicator {
               }
             }
             sink.getSkippedEditsCounter().addAndGet(entries.size());
+            future.markDone();
             return;
           }
         }
@@ -793,6 +855,7 @@ public class MemstoreReplicator {
       }
 
       if (locations.size() == 1) {
+        future.markDone();
         return;
       }
 
@@ -823,11 +886,17 @@ public class MemstoreReplicator {
         }
       }
 
+      if (tasks.isEmpty()) {
+        future.markDone();
+        return;
+      }
       boolean tasksCancelled = false;
       for (Future<ReplicateWALEntryResponse> task : tasks) {
         try {
           task.get();
+          future.markDone();
         } catch (InterruptedException e) {
+          future.markException(e);
           throw new InterruptedIOException(e.getMessage());
         } catch (ExecutionException e) {
           Throwable cause = e.getCause();
@@ -855,9 +924,11 @@ public class MemstoreReplicator {
               continue;
             }
             // otherwise rethrow
+            future.markException(cause);
             throw (IOException) cause;
           }
           // unexpected exception
+          future.markException(cause);
           throw new IOException(cause);
         }
       }

@@ -18,18 +18,22 @@
 package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator.CompletedFuture;
 
 @InterfaceAudience.Private
 public class MemstoreReplicationEntry {
   private final MemstoreReplicationKey memstoreReplicationKey;
   private final MemstoreEdits memstoreEdits;
+  private final CompletedFuture future;
   private final boolean replay;
   private final int replicaId;
 
   public MemstoreReplicationEntry(MemstoreReplicationKey memstoreRepKey,
-      MemstoreEdits memstoreEdits, final boolean replay, final int replicaId) {
+      MemstoreEdits memstoreEdits, CompletedFuture future, final boolean replay,
+      final int replicaId) {
     this.memstoreReplicationKey = memstoreRepKey;
     this.memstoreEdits = memstoreEdits;
+    this.future = future;
     this.replay = replay;
     this.replicaId = replicaId;
   }
@@ -41,12 +45,16 @@ public class MemstoreReplicationEntry {
   public MemstoreEdits getMemstoreEdits() {
     return this.memstoreEdits;
   }
-  
+
   public boolean isReplay() {
     return this.replay;
   }
 
   public int getReplicaId() {
     return this.replicaId;
+  }
+
+  public CompletedFuture getFuture() {
+    return this.future;
   }
 }

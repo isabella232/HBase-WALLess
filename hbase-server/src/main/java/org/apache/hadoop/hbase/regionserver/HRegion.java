@@ -2537,7 +2537,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         flushOpSeqId, flushedSeqId, totalSizeOfFlushableStores);
   }
 
-  private void sendFlushRpc(FlushAction action, boolean flushReplica, long flushOpSeqId, TreeMap<byte[], List<Path>> committedFiles) {
+  private void sendFlushRpc(FlushAction action, boolean flushReplica, long flushOpSeqId,
+      TreeMap<byte[], List<Path>> committedFiles) {
     // TODO : check inside a lock??
     if (!this.closing.get() && !this.closed.get()) {
       FlushDescriptor desc =
@@ -2559,10 +2560,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // TODO : Here we may not wait for the result.
       } catch (IOException e) {
         // TODO : Handle this
+      } catch (ExecutionException e) {
+        // TODO Handle this
       }
     }
   }
-  
+
   private void sendFlushRpc(FlushAction action, FlushDescriptor desc, boolean flushReplica) {
     // TODO : check inside a lock??
     if (!this.closing.get() && !this.closed.get()) {
@@ -2574,13 +2577,17 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       memstoreEdits.add(kv);
       // replicate this
       try {
-        // TODO : this does not get replicated from secondary to tertiary. WE need to change the replay path to do this
-        this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, flushReplica, this.getRegionInfo().getReplicaId());
+        // TODO : this does not get replicated from secondary to tertiary. WE need to change the
+        // replay path to do this
+        this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, flushReplica,
+          this.getRegionInfo().getReplicaId());
       } catch (InterruptedException e) {
         // Ignore this. Probably next time we will be able to
         // TODO : Here we may not wait for the result.
       } catch (IOException e) {
         // TODO : Handle this
+      } catch (ExecutionException e) {
+        // TODO Handle this
       }
     }
   }
@@ -3449,7 +3456,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           // that to be done.)
           if (!this.getRegionInfo().isSystemTable()) {
             // TODO : replicate system table also
-            System.out.println("The region name is "+this.getRegionInfo());
             this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, replay,
               this.getRegionInfo().getReplicaId());
           }
@@ -3458,8 +3464,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           // to all the replicas. End the mvcc in case of exception
         } catch (InterruptedException e) {
           throw new IOException(e);
+        } catch (ExecutionException e) {
+          throw new IOException(e);
         }
       }
+      // TODO : Now if there is an exception we may have to roll back. Or better add to the current memstore after
+      // the replication is successful. But that would mean that if there is an error in the current region server
+      // rolling back may be difficult? But adding to memstore after replication wil it really have any issues?
 
       // update memstore size
       this.addAndGetMemstoreSize(memstoreSize);
