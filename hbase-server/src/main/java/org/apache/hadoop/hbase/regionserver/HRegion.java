@@ -2551,8 +2551,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       memstoreEdits.add(kv);
       // replicate this
       try {
-        // TODO : this does not get replicated from secondary to tertiary. WE need to change the
-        // replay path to do this
         this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, flushReplica,
           this.getRegionInfo().getReplicaId());
       } catch (InterruptedException e) {
@@ -2577,8 +2575,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       memstoreEdits.add(kv);
       // replicate this
       try {
-        // TODO : this does not get replicated from secondary to tertiary. WE need to change the
-        // replay path to do this
         this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, flushReplica,
           this.getRegionInfo().getReplicaId());
       } catch (InterruptedException e) {

@@ -29,8 +29,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -74,7 +72,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWA
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.CancelableProgressable;
 import org.apache.hadoop.hbase.util.ClassSize;
-import org.apache.hadoop.hbase.util.CollectionUtils;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.util.Threads;
 import org.apache.hadoop.hbase.wal.WAL.Entry;
@@ -250,10 +247,9 @@ public class MemstoreReplicator {
     // TODO : It is better we have one to one mapping on the result of this replication
     // We have a blocking mechanism here but we may need to create a future that is mapped per thread doing the
     /// actual replication. (TODO)
-    CompletedFuture future = new CompletedFuture();
     MemstoreReplicationEntry entry =
-        new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, future, replay, replicaId);
-    this.entryBuffers.appendEntry(entry);
+        new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay, replicaId);
+    CompletedFuture future = this.entryBuffers.appendEntry(entry);
     // wait for the result here
     future.get(replicationTimeoutNs);
     this.outputSink.flush();
@@ -493,7 +489,7 @@ public class MemstoreReplicator {
       }
       boolean replay = entries.get(0).isReplay();
       int replicaId = entries.get(0).getReplicaId();
-      CompletedFuture future = entries.get(0).getFuture();
+      CompletedFuture future = buffer.getFuture();
       sinkWriter.append(buffer.getTableName(), buffer.getEncodedRegionName(),
         CellUtil.cloneRow(entries.get(0).getMemstoreEdits().getCells().get(0)), future, entries, replay, replicaId);
     }
@@ -544,12 +540,14 @@ public class MemstoreReplicator {
     TableName tableName;
     byte[] encodedRegionName;
     int replicaId;
+    CompletedFuture future;
 
-    RegionEntryBuffer(TableName tableName, byte[] region, int replicaId) {
+    RegionEntryBuffer(TableName tableName, CompletedFuture future, byte[] region, int replicaId) {
       this.tableName = tableName;
       this.encodedRegionName = region;
       this.entryBuffer = new LinkedList<>();
       this.replicaId = replicaId;
+      this.future = future;
     }
 
     long appendEntry(MemstoreReplicationEntry entry) {
@@ -589,6 +587,10 @@ public class MemstoreReplicator {
     public int getReplicaId() {
       return this.replicaId;
     }
+
+    public CompletedFuture getFuture() {
+      return this.future;
+    }
   }
 
   /**
@@ -600,6 +602,9 @@ public class MemstoreReplicator {
     PipelineController controller;
 
     Map<byte[], RegionEntryBuffer> buffers = new TreeMap<>(Bytes.BYTES_COMPARATOR);
+    // holds the region entries in the order in which they arrive
+    // TODO : don grow infinite. Have some upper limit here
+    LinkedBlockingQueue<byte[]> regionQueue = new LinkedBlockingQueue<>();
 
     /*
      * Track which regions are currently in the middle of writing. We don't allow an IO thread to
@@ -621,19 +626,25 @@ public class MemstoreReplicator {
      * crossed the specified threshold.
      * @throws InterruptedException
      * @throws IOException
+     * @return CompletedFuture the future associated with this entry
      */
-    public void appendEntry(MemstoreReplicationEntry entry)
+    public CompletedFuture appendEntry(MemstoreReplicationEntry entry)
         throws InterruptedException, IOException {
       MemstoreReplicationKey key = entry.getMemstoreReplicationKey();
       
       RegionEntryBuffer buffer;
       long incrHeap;
+      CompletedFuture future;
       synchronized (this) {
         buffer = buffers.get(key.getEncodedRegionName());
         if (buffer == null) {
-          buffer = new RegionEntryBuffer(key.getTableName(), key.getEncodedRegionName(), entry.getReplicaId());
+          future = new CompletedFuture();
+          // add the region here.
+          regionQueue.add(key.getEncodedRegionName());
+          buffer = new RegionEntryBuffer(key.getTableName(), future, key.getEncodedRegionName(), entry.getReplicaId());
           buffers.put(key.getEncodedRegionName(), buffer);
         }
+        future = buffer.getFuture();
         incrHeap = buffer.appendEntry(entry);
       }
 
@@ -648,29 +659,28 @@ public class MemstoreReplicator {
         controller.dataAvailable.notifyAll();
       }
       controller.checkForErrors();
+      return future;
     }
 
     /**
      * @return RegionEntryBuffer a buffer of edits to be written or replayed.
      */
     synchronized RegionEntryBuffer getChunkToWrite() {
-      long biggestSize = 0;
-      byte[] biggestBufferKey = null;
 
-      for (Map.Entry<byte[], RegionEntryBuffer> entry : buffers.entrySet()) {
-        long size = entry.getValue().heapSize();
-        if (size > biggestSize && (!currentlyWriting.contains(entry.getKey()))) {
-          biggestSize = size;
-          biggestBufferKey = entry.getKey();
+      // TODO : Change this. We have to make it queue based. Means for a given region the writes will be sequential
+      // and in the order they appear
+      // take the head of the queue
+      byte[] regionInQueue = regionQueue.poll();
+      if (regionInQueue != null && !currentlyWriting.contains(regionInQueue)) {
+        RegionEntryBuffer regionEntryBuffer = buffers.get(regionInQueue);
+        if (regionEntryBuffer == null) {
+          return null;
         }
+        regionEntryBuffer = buffers.remove(regionInQueue);
+        currentlyWriting.add(regionInQueue);
+        return regionEntryBuffer;
       }
-      if (biggestBufferKey == null) {
-        return null;
-      }
-
-      RegionEntryBuffer buffer = buffers.remove(biggestBufferKey);
-      currentlyWriting.add(biggestBufferKey);
-      return buffer;
+      return null;
     }
 
     void doneWriting(RegionEntryBuffer buffer) {

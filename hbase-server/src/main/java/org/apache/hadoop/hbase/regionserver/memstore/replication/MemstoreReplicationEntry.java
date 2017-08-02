@@ -24,16 +24,14 @@ import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplica
 public class MemstoreReplicationEntry {
   private final MemstoreReplicationKey memstoreReplicationKey;
   private final MemstoreEdits memstoreEdits;
-  private final CompletedFuture future;
   private final boolean replay;
   private final int replicaId;
 
   public MemstoreReplicationEntry(MemstoreReplicationKey memstoreRepKey,
-      MemstoreEdits memstoreEdits, CompletedFuture future, final boolean replay,
+      MemstoreEdits memstoreEdits, final boolean replay,
       final int replicaId) {
     this.memstoreReplicationKey = memstoreRepKey;
     this.memstoreEdits = memstoreEdits;
-    this.future = future;
     this.replay = replay;
     this.replicaId = replicaId;
   }
@@ -52,9 +50,5 @@ public class MemstoreReplicationEntry {
 
   public int getReplicaId() {
     return this.replicaId;
-  }
-
-  public CompletedFuture getFuture() {
-    return this.future;
   }
 }
