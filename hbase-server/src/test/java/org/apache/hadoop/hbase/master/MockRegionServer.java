@@ -119,6 +119,7 @@ import org.apache.hadoop.hbase.regionserver.RegionServerAccounting;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.SecureBulkLoadManager;
 import org.apache.hadoop.hbase.regionserver.ServerNonceManager;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.DefaultMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.RpcController;
@@ -744,6 +745,6 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
 
   @Override
   public MemstoreReplicator getMemstoreReplicator() {
-    return MemstoreReplicator.init(this.conf, this);
+    return new DefaultMemstoreReplicator(this.conf, this);
   }
 }

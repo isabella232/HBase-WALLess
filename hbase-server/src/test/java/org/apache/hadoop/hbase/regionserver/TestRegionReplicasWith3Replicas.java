@@ -76,6 +76,7 @@ public class TestRegionReplicasWith3Replicas {
     HTU.getConfiguration().setInt(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, 8192);
     HTU.getConfiguration().setInt(DFSConfigKeys.DFS_CLIENT_READ_PREFETCH_SIZE_KEY, 1);
     HTU.getConfiguration().setInt(HConstants.HREGION_MEMSTORE_FLUSH_SIZE, 128 * 1024 * 1024);
+    HTU.getConfiguration().set(HRegionServer.HBASE_REGIONSERVER_MEMSTORE_REPLICATOR_CLASS, "ringbuffer");
 
     HTU.startMiniCluster(NB_SERVERS);
     final TableName tableName = TableName.valueOf(TestRegionReplicasWith3Replicas.class.getSimpleName());

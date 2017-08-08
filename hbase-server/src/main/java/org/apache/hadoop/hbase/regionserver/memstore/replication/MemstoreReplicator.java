@@ -32,9 +32,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -43,10 +40,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.CellScanner;
-import org.apache.hadoop.hbase.CellUtil;
-import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HBaseIOException;
-import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.RegionLocations;
@@ -55,205 +49,124 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.TableNotFoundException;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.client.ClusterConnection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.RetryingCallable;
 import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
-import org.apache.hadoop.hbase.exceptions.TimeoutIOException;
 import org.apache.hadoop.hbase.io.HeapSize;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
 import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
-import org.apache.hadoop.hbase.regionserver.HRegionServer;
-import org.apache.hadoop.hbase.regionserver.RegionServerServices;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.DefaultMemstoreReplicator.EntryBuffers;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.CancelableProgressable;
 import org.apache.hadoop.hbase.util.ClassSize;
 import org.apache.hadoop.hbase.util.Pair;
-import org.apache.hadoop.hbase.util.Threads;
 import org.apache.hadoop.hbase.wal.WAL.Entry;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.Cache;
 import com.google.common.collect.Lists;
 
-/**
- * This replicator per region server collects all the {@link MemstoreEdits} and
- * {@link MemstoreReplicationKey} and forms a {@link MemstoreReplicationEntry} per region and uses
- * the {@link MemstoreReplicaEndPoint} to replicate the entries to another region server
- */
 @InterfaceAudience.Private
-public class MemstoreReplicator {
+public abstract class MemstoreReplicator {
+
   private static final Log LOG = LogFactory.getLog(MemstoreReplicator.class);
-  
-  private static final int DEFAULT_WAL_SYNC_TIMEOUT_MS = 5 * 60 * 1000; // in ms, 5min
+  protected static final int DEFAULT_WAL_SYNC_TIMEOUT_MS = 5 * 60 * 1000; // in ms, 5min
 
-  private static String CLIENT_RETRIES_NUMBER =
+  protected static String CLIENT_RETRIES_NUMBER =
       "hbase.region.replica.replication.client.retries.number";
-  private RegionReplicaOutputSink outputSink;
 
-  private Configuration conf;
-  private ClusterConnection connection;
-  private TableDescriptors tableDescriptors;
+  protected Configuration conf;
+  protected ClusterConnection connection;
+  protected TableDescriptors tableDescriptors;
 
   // Reuse WALSplitter constructs as a WAL pipe
-  private PipelineController controller;
-  private EntryBuffers entryBuffers;
+  protected PipelineController controller;
+  protected EntryBuffers entryBuffers;
 
   // Number of writer threads
-  private int numWriterThreads;
+  protected int numWriterThreads;
 
-  private int operationTimeout;
+  protected int operationTimeout;
 
-  private ExecutorService pool;
+  protected ExecutorService pool;
   // Timeout that specifies the time that it can wait for the replication to be completed.
   // Probably we should split the total time into number of replicas so that we should wait
   // in each node for a specific time that totally adds up to the total replica wait time
-  private long replicationTimeoutNs;
+  protected long replicationTimeoutNs;
 
-  static MemstoreReplicator INSTANCE;
+  public abstract void replicate(MemstoreReplicationKey memstoreReplicationKey,
+      MemstoreEdits memstoreEdits, boolean replay, int replicaId)
+      throws IOException, InterruptedException, ExecutionException;
 
-  public static MemstoreReplicator init(Configuration conf, RegionServerServices rsServices) {
-    // TODO : comment out this line. For now every time create a new instance
-    //if (INSTANCE != null) return INSTANCE;
-    INSTANCE = new MemstoreReplicator(conf, rsServices);
-    return INSTANCE;
-  }
-
-  public static MemstoreReplicator getInstance() {
-    if (INSTANCE == null) {
-      throw new IllegalStateException("MemstoreReplicator still not instantiated");
-    }
-    return INSTANCE;
-  }
-
-  @VisibleForTesting
-  public void resetInstance() {
-    INSTANCE = null;
-  }
-
-  MemstoreReplicator(Configuration conf, RegionServerServices rsServices) {
-    this.conf = HBaseConfiguration.create(conf);
-    this.tableDescriptors = ((HRegionServer) rsServices).getTableDescriptors();
-
-    // HRS multiplies client retries by 10 globally for meta operations, but we do not want this.
-    // We are resetting it here because we want default number of retries (35) rather than 10 times
-    // that which makes very long retries for disabled tables etc.
-    int defaultNumRetries = conf.getInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER,
-      HConstants.DEFAULT_HBASE_CLIENT_RETRIES_NUMBER);
-    // TODO : what should be the retries here? This is sync flow so cannot be too high also?
-    if (defaultNumRetries > 10) {
-      int mult = conf.getInt("hbase.client.serverside.retries.multiplier", 10);
-      defaultNumRetries = defaultNumRetries / mult; // reset if HRS has multiplied this already
-    }
-
-    conf.setInt("hbase.client.serverside.retries.multiplier", 1);
-    int numRetries = conf.getInt(CLIENT_RETRIES_NUMBER, defaultNumRetries);
-    conf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, numRetries);
-
-    // TODO : Like in WAL I think we should have writer threads equal to the number of handlers
-    this.numWriterThreads = this.conf.getInt("hbase.region.replica.replication.writer.threads", 3);
-    controller = new PipelineController();
-    entryBuffers = new EntryBuffers(controller,
-        this.conf.getInt("hbase.region.replica.replication.buffersize", 128 * 1024 * 1024));
-
-    // use the regular RPC timeout for replica replication RPC's
-    this.operationTimeout = conf.getInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT,
-      HConstants.DEFAULT_HBASE_CLIENT_OPERATION_TIMEOUT);
-    try {
-      connection = (ClusterConnection) ConnectionFactory.createConnection(this.conf);
-      this.pool = getDefaultThreadPool(conf);
-      outputSink = new RegionReplicaOutputSink(controller, tableDescriptors, entryBuffers,
-          connection, pool, numWriterThreads, operationTimeout);
-      outputSink.startWriterThreads();
-    } catch (IOException ex) {
-      LOG.warn("Received exception while creating connection :" + ex);
-    }
-    this.replicationTimeoutNs = TimeUnit.MILLISECONDS
-        .toNanos(conf.getLong("hbase.regionserver.mutations.sync.timeout", DEFAULT_WAL_SYNC_TIMEOUT_MS));
-  }
-
-  static class CompletedFuture {
-    volatile boolean completed = false;
-    volatile Throwable throwable = null;
-
-    synchronized boolean isDone() {
-      return this.completed;
-    }
-
-    synchronized boolean get(long timeoutNs)
-        throws InterruptedException, TimeoutIOException, ExecutionException {
-      final long done = System.nanoTime() + timeoutNs;
-      while (!isDone()) {
-        wait(1000);
-        if (System.nanoTime() >= done) {
-          throw new TimeoutIOException(
-              "Failed to get sync result after " + TimeUnit.NANOSECONDS.toMillis(timeoutNs)
-                  +" ms ");
-        }
-      }
-      if (this.throwable != null) {
-        throw new ExecutionException(this.throwable);
-      }
-      return this.completed;
-    }
-
-    synchronized void markDone() {
-      this.completed = true;
-      notify();
-    }
-
-    synchronized void markException(Throwable t) {
-      this.throwable = t;
-      this.completed = true;
-      notify();
-    }
-
-    synchronized CompletedFuture reset() {
-      this.completed = false;
-      notify();
-      return this;
-    }
-
-    // Use this in case of exception
-    synchronized boolean hasException() {
-      return this.throwable != null;
-    }
-  }
   /**
-   * Returns a Thread pool for the RPC's to region replicas. Similar to Connection's thread pool.
+   * A buffer of some number of edits for a given region. This accumulates edits and also provides a
+   * memory optimization in order to share a single byte array instance for the table and region
+   * name. Also tracks memory usage of the accumulated edits.
    */
-  private ExecutorService getDefaultThreadPool(Configuration conf) {
-    int maxThreads = conf.getInt("hbase.region.replica.replication.threads.max", 256);
-    if (maxThreads == 0) {
-      maxThreads = Runtime.getRuntime().availableProcessors() * 8;
-    }
-    long keepAliveTime = conf.getLong("hbase.region.replica.replication.threads.keepalivetime", 60);
-    LinkedBlockingQueue<Runnable> workQueue =
-        new LinkedBlockingQueue<>(maxThreads * conf.getInt(HConstants.HBASE_CLIENT_MAX_TOTAL_TASKS,
-          HConstants.DEFAULT_HBASE_CLIENT_MAX_TOTAL_TASKS));
-    ThreadPoolExecutor tpe =
-        new ThreadPoolExecutor(maxThreads, maxThreads, keepAliveTime, TimeUnit.SECONDS, workQueue,
-            Threads.newDaemonThreadFactory(this.getClass().getSimpleName() + "-rpc-shared-"));
-    tpe.allowCoreThreadTimeOut(true);
-    return tpe;
-  }
+  static class RegionEntryBuffer implements HeapSize {
+    long heapInBuffer = 0;
+    List<MemstoreReplicationEntry> entryBuffer;
+    List<CompletedFuture> futures;
+    TableName tableName;
+    byte[] encodedRegionName;
+    int replicaId;
 
-  public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      boolean replay, int replicaId) throws IOException, InterruptedException, ExecutionException {
-    // TODO : It is better we have one to one mapping on the result of this replication
-    // We have a blocking mechanism here but we may need to create a future that is mapped per thread doing the
-    /// actual replication. (TODO)
-    MemstoreReplicationEntry entry =
-        new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay, replicaId);
-    CompletedFuture future = this.entryBuffers.appendEntry(entry);
-    // wait for the result here
-    future.get(replicationTimeoutNs);
-    this.outputSink.flush();
-    // TODO :Very important. Probably return back if there is no replica here instead of putting them in a pool etc.
+    RegionEntryBuffer(TableName tableName, byte[] region, int replicaId) {
+      this.tableName = tableName;
+      this.encodedRegionName = region;
+      this.entryBuffer = new LinkedList<>();
+      this.futures = new LinkedList<>();
+      this.replicaId = replicaId;
+    }
+
+    void appendFuture(CompletedFuture future) {
+      futures.add(future);
+    }
+
+    long appendEntry(MemstoreReplicationEntry entry) {
+      internify(entry);
+      entryBuffer.add(entry);
+      long incrHeap =
+          entry.getMemstoreEdits().heapSize() + ClassSize.align(2 * ClassSize.REFERENCE) + 1 + // WALKey
+          // pointers
+              0; // TODO linkedlist entry
+      heapInBuffer += incrHeap;
+      return incrHeap;
+    }
+
+    private void internify(MemstoreReplicationEntry entry) {
+      MemstoreReplicationKey k = entry.getMemstoreReplicationKey();
+      k.internTableName(this.tableName);
+      k.internEncodedRegionName(this.encodedRegionName);
+    }
+
+    @Override
+    public long heapSize() {
+      return heapInBuffer;
+    }
+
+    public byte[] getEncodedRegionName() {
+      return encodedRegionName;
+    }
+
+    public List<MemstoreReplicationEntry> getEntryBuffer() {
+      return entryBuffer;
+    }
+
+    public TableName getTableName() {
+      return tableName;
+    }
+
+    public int getReplicaId() {
+      return this.replicaId;
+    }
+
+    public List<CompletedFuture> getFutures() {
+      return this.futures;
+    }
   }
 
   public static abstract class OutputSink {
@@ -335,6 +248,10 @@ public class MemstoreReplicator {
       return this.skippedEdits.get();
     }
 
+    AtomicLong getSkippedEditsCounter() {
+      return skippedEdits;
+    }
+
     /**
      * Wait for writer threads to dump all info to the sink
      * @return true when there is no error
@@ -385,6 +302,7 @@ public class MemstoreReplicator {
      * @param buffer A WAL Edit Entry
      * @throws IOException
      */
+    // Make it one impl
     public abstract void append(RegionEntryBuffer buffer) throws IOException;
 
     /**
@@ -403,377 +321,20 @@ public class MemstoreReplicator {
     public abstract boolean keepRegionEvent(Entry entry);
   }
 
-  public static class WriterThread extends Thread {
-    private volatile boolean shouldStop = false;
-    private PipelineController controller;
-    private EntryBuffers entryBuffers;
-    private OutputSink outputSink = null;
-
-    WriterThread(PipelineController controller, EntryBuffers entryBuffers, OutputSink sink, int i) {
-      super(Thread.currentThread().getName() + "-Writer-" + i);
-      this.controller = controller;
-      this.entryBuffers = entryBuffers;
-      outputSink = sink;
-    }
-
-    @Override
-    public void run() {
-      try {
-        doRun();
-      } catch (Throwable t) {
-        LOG.error("Exiting thread", t);
-        controller.writerThreadError(t);
-      }
-    }
-
-    private void doRun() throws IOException {
-      if (LOG.isTraceEnabled()) LOG.trace("Writer thread starting");
-      while (true) {
-        RegionEntryBuffer buffer = entryBuffers.getChunkToWrite();
-        if (buffer == null) {
-          // No data currently available, wait on some more to show up
-          synchronized (controller.dataAvailable) {
-            if (shouldStop && !this.outputSink.flush()) {
-              return;
-            }
-            try {
-              controller.dataAvailable.wait(500);
-            } catch (InterruptedException ie) {
-              if (!shouldStop) {
-                throw new RuntimeException(ie);
-              }
-            }
-          }
-          continue;
-        }
-
-        assert buffer != null;
-        try {
-          writeBuffer(buffer);
-        } finally {
-          entryBuffers.doneWriting(buffer);
-        }
-      }
-    }
-
-    private void writeBuffer(RegionEntryBuffer buffer) throws IOException {
-      outputSink.append(buffer);
-    }
-
-    void finish() {
-      synchronized (controller.dataAvailable) {
-        shouldStop = true;
-        controller.dataAvailable.notifyAll();
-      }
+  static void markDone(List<CompletedFuture> futures) {
+    for (CompletedFuture future : futures) {
+      future.markDone();
     }
   }
 
-  static class RegionReplicaOutputSink extends OutputSink {
-    private final RegionReplicaSinkWriter sinkWriter;
-    private final TableDescriptors tableDescriptors;
-
-    public RegionReplicaOutputSink(PipelineController controller, TableDescriptors tableDescriptors,
-        EntryBuffers entryBuffers, ClusterConnection connection, ExecutorService pool,
-        int numWriters, int operationTimeout) {
-      super(controller, entryBuffers, numWriters);
-      this.sinkWriter = new RegionReplicaSinkWriter(this, connection, pool, operationTimeout);
-      this.tableDescriptors = tableDescriptors;
-    }
-
-    @Override
-    public void append(RegionEntryBuffer buffer) throws IOException {
-      List<MemstoreReplicationEntry> entries = buffer.getEntryBuffer();
- 
-      if (entries.isEmpty() || entries.get(0).getMemstoreEdits().getCells().isEmpty()) {
-        return;
-      }
-      boolean replay = entries.get(0).isReplay();
-      int replicaId = entries.get(0).getReplicaId();
-      CompletedFuture future = buffer.getFuture();
-      sinkWriter.append(buffer.getTableName(), buffer.getEncodedRegionName(),
-        CellUtil.cloneRow(entries.get(0).getMemstoreEdits().getCells().get(0)), future, entries, replay, replicaId);
-    }
-
-    @Override
-    public boolean flush() throws IOException {
-      // nothing much to do for now. Wait for the Writer threads to finish up
-      // append()'ing the data.
-      entryBuffers.waitUntilDrained();
-      return super.flush();
-    }
-
-    @Override
-    public boolean keepRegionEvent(Entry entry) {
-      return true;
-    }
-
-    @Override
-    public List<Path> finishWritingAndClose() throws IOException {
-      finishWriting(true);
-      return null;
-    }
-
-    @Override
-    public Map<byte[], Long> getOutputCounts() {
-      return null; // only used in tests
-    }
-
-    @Override
-    public int getNumberOfRecoveredRegions() {
-      return 0;
-    }
-
-    AtomicLong getSkippedEditsCounter() {
-      return skippedEdits;
-    }
-
-  }
-
-  /**
-   * A buffer of some number of edits for a given region. This accumulates edits and also provides a
-   * memory optimization in order to share a single byte array instance for the table and region
-   * name. Also tracks memory usage of the accumulated edits.
-   */
-  private static class RegionEntryBuffer implements HeapSize {
-    long heapInBuffer = 0;
-    List<MemstoreReplicationEntry> entryBuffer;
-    TableName tableName;
-    byte[] encodedRegionName;
-    int replicaId;
-    CompletedFuture future;
-
-    RegionEntryBuffer(TableName tableName, CompletedFuture future, byte[] region, int replicaId) {
-      this.tableName = tableName;
-      this.encodedRegionName = region;
-      this.entryBuffer = new LinkedList<>();
-      this.replicaId = replicaId;
-      this.future = future;
-    }
-
-    long appendEntry(MemstoreReplicationEntry entry) {
-      internify(entry);
-      entryBuffer.add(entry);
-      long incrHeap =
-          entry.getMemstoreEdits().heapSize() + ClassSize.align(2 * ClassSize.REFERENCE) + 1 + // WALKey
-                                                                                           // pointers
-              0; // TODO linkedlist entry
-      heapInBuffer += incrHeap;
-      return incrHeap;
-    }
-
-    private void internify(MemstoreReplicationEntry entry) {
-      MemstoreReplicationKey k = entry.getMemstoreReplicationKey();
-      k.internTableName(this.tableName);
-      k.internEncodedRegionName(this.encodedRegionName);
-    }
-
-    @Override
-    public long heapSize() {
-      return heapInBuffer;
-    }
-
-    public byte[] getEncodedRegionName() {
-      return encodedRegionName;
-    }
-
-    public List<MemstoreReplicationEntry> getEntryBuffer() {
-      return entryBuffer;
-    }
-
-    public TableName getTableName() {
-      return tableName;
-    }
-
-    public int getReplicaId() {
-      return this.replicaId;
-    }
-
-    public CompletedFuture getFuture() {
-      return this.future;
-    }
-  }
-
-  /**
-   * Class which accumulates edits and separates them into a buffer per region while simultaneously
-   * accounting RAM usage. Blocks if the RAM usage crosses a predefined threshold. Writer threads
-   * then pull region-specific buffers from this class.
-   */
-  static class EntryBuffers {
-    PipelineController controller;
-
-    Map<byte[], RegionEntryBuffer> buffers = new TreeMap<>(Bytes.BYTES_COMPARATOR);
-    // holds the region entries in the order in which they arrive
-    // TODO : don grow infinite. Have some upper limit here
-    LinkedBlockingQueue<byte[]> regionQueue = new LinkedBlockingQueue<>();
-
-    /*
-     * Track which regions are currently in the middle of writing. We don't allow an IO thread to
-     * pick up bytes from a region if we're already writing data for that region in a different IO
-     * thread.
-     */
-    Set<byte[]> currentlyWriting = new TreeSet<>(Bytes.BYTES_COMPARATOR);
-
-    long totalBuffered = 0;
-    long maxHeapUsage;
-
-    public EntryBuffers(PipelineController controller, long maxHeapUsage) {
-      this.controller = controller;
-      this.maxHeapUsage = maxHeapUsage;
-    }
-
-    /**
-     * Append a log entry into the corresponding region buffer. Blocks if the total heap usage has
-     * crossed the specified threshold.
-     * @throws InterruptedException
-     * @throws IOException
-     * @return CompletedFuture the future associated with this entry
-     */
-    public CompletedFuture appendEntry(MemstoreReplicationEntry entry)
-        throws InterruptedException, IOException {
-      MemstoreReplicationKey key = entry.getMemstoreReplicationKey();
-      
-      RegionEntryBuffer buffer;
-      long incrHeap;
-      CompletedFuture future;
-      synchronized (this) {
-        buffer = buffers.get(key.getEncodedRegionName());
-        if (buffer == null) {
-          future = new CompletedFuture();
-          // add the region here.
-          regionQueue.add(key.getEncodedRegionName());
-          buffer = new RegionEntryBuffer(key.getTableName(), future, key.getEncodedRegionName(), entry.getReplicaId());
-          buffers.put(key.getEncodedRegionName(), buffer);
-        }
-        future = buffer.getFuture();
-        incrHeap = buffer.appendEntry(entry);
-      }
-
-      // If we crossed the chunk threshold, wait for more space to be available
-      synchronized (controller.dataAvailable) {
-        totalBuffered += incrHeap;
-        while (totalBuffered > maxHeapUsage && controller.thrown.get() == null) {
-          LOG.debug(
-            "Used " + totalBuffered + " bytes of buffered edits, waiting for IO threads...");
-          controller.dataAvailable.wait(2000);
-        }
-        controller.dataAvailable.notifyAll();
-      }
-      controller.checkForErrors();
-      return future;
-    }
-
-    /**
-     * @return RegionEntryBuffer a buffer of edits to be written or replayed.
-     */
-    synchronized RegionEntryBuffer getChunkToWrite() {
-
-      // TODO : Change this. We have to make it queue based. Means for a given region the writes will be sequential
-      // and in the order they appear
-      // take the head of the queue
-      byte[] regionInQueue = regionQueue.poll();
-      if (regionInQueue != null && !currentlyWriting.contains(regionInQueue)) {
-        RegionEntryBuffer regionEntryBuffer = buffers.get(regionInQueue);
-        if (regionEntryBuffer == null) {
-          return null;
-        }
-        regionEntryBuffer = buffers.remove(regionInQueue);
-        currentlyWriting.add(regionInQueue);
-        return regionEntryBuffer;
-      }
-      return null;
-    }
-
-    void doneWriting(RegionEntryBuffer buffer) {
-      synchronized (this) {
-        boolean removed = currentlyWriting.remove(buffer.encodedRegionName);
-        assert removed;
-      }
-      long size = buffer.heapSize();
-
-      synchronized (controller.dataAvailable) {
-        totalBuffered -= size;
-        // We may unblock writers
-        controller.dataAvailable.notifyAll();
-      }
-    }
-
-    synchronized boolean isRegionCurrentlyWriting(byte[] region) {
-      return currentlyWriting.contains(region);
-    }
-
-    public void waitUntilDrained() {
-      synchronized (controller.dataAvailable) {
-        while (totalBuffered > 0) {
-          try {
-            controller.dataAvailable.wait(2000);
-          } catch (InterruptedException e) {
-            LOG.warn("Got interrupted while waiting for EntryBuffers is drained");
-            Thread.interrupted();
-            break;
-          }
-        }
-      }
-    }
-
-    /**
-     * Contains some methods to control WAL-entries producer / consumer interactions
-     */
-
-  }
-
-  public static class PipelineController {
-    // If an exception is thrown by one of the other threads, it will be
-    // stored here.
-    AtomicReference<Throwable> thrown = new AtomicReference<>();
-
-    // Wait/notify for when data has been produced by the writer thread,
-    // consumed by the reader thread, or an exception occurred
-    public final Object dataAvailable = new Object();
-
-    void writerThreadError(Throwable t) {
-      thrown.compareAndSet(null, t);
-    }
-
-    /**
-     * Check for errors in the writer threads. If any is found, rethrow it.
-     */
-    void checkForErrors() throws IOException {
-      Throwable thrown = this.thrown.get();
-      if (thrown == null) return;
-      if (thrown instanceof IOException) {
-        throw new IOException(thrown);
-      } else {
-        throw new RuntimeException(thrown);
-      }
-    }
-  }
-
-  /**
-   * Class wraps the actual writer which writes data out and related statistics
-   */
-  public abstract static class SinkWriter {
-    /* Count of edits written to this path */
-    long editsWritten = 0;
-    /* Count of edits skipped to this path */
-    long editsSkipped = 0;
-    /* Number of nanos spent writing to this log */
-    long nanosSpent = 0;
-
-    void incrementEdits(int edits) {
-      editsWritten += edits;
-    }
-
-    void incrementSkippedEdits(int skipped) {
-      editsSkipped += skipped;
-    }
-
-    void incrementNanoTime(long nanos) {
-      nanosSpent += nanos;
+  static void markException(List<CompletedFuture> futures, Throwable t) {
+    for (CompletedFuture future : futures) {
+      future.markException(t);
     }
   }
 
   static class RegionReplicaSinkWriter extends SinkWriter {
-    RegionReplicaOutputSink sink;
+    OutputSink sink;
     ClusterConnection connection;
     RpcControllerFactory rpcControllerFactory;
     RpcRetryingCallerFactory rpcRetryingCallerFactory;
@@ -781,7 +342,7 @@ public class MemstoreReplicator {
     ExecutorService pool;
     Cache<TableName, Boolean> disabledAndDroppedTables;
 
-    public RegionReplicaSinkWriter(RegionReplicaOutputSink sink, ClusterConnection connection,
+    public RegionReplicaSinkWriter(OutputSink sink, ClusterConnection connection,
         ExecutorService pool, int operationTimeout) {
       this.sink = sink;
       this.connection = connection;
@@ -793,7 +354,7 @@ public class MemstoreReplicator {
     }
 
     public void append(TableName tableName, byte[] encodedRegionName, byte[] row,
-        CompletedFuture future, List<MemstoreReplicationEntry> entries, boolean replay,
+        List<CompletedFuture> futures, List<MemstoreReplicationEntry> entries, boolean replay,
         int currentReplicaId) throws IOException {
 
       /*
@@ -829,8 +390,9 @@ public class MemstoreReplicator {
           disabledAndDroppedTables.put(tableName, Boolean.TRUE); // put to cache. Value ignored
           // skip this entry
           sink.getSkippedEditsCounter().addAndGet(entries.size());
-          // mark the future as done as there is nothing to replicate. // Probably make this more easier to read
-          future.markDone();
+          // mark the future as done as there is nothing to replicate. // Probably make this more
+          // easier to read
+          markDone(futures);
           return;
         }
 
@@ -857,7 +419,7 @@ public class MemstoreReplicator {
               }
             }
             sink.getSkippedEditsCounter().addAndGet(entries.size());
-            future.markDone();
+            markDone(futures);
             return;
           }
         }
@@ -865,7 +427,7 @@ public class MemstoreReplicator {
       }
 
       if (locations.size() == 1) {
-        future.markDone();
+        markDone(futures);
         return;
       }
 
@@ -884,7 +446,8 @@ public class MemstoreReplicator {
             if (LOG.isDebugEnabled()) {
               LOG.debug("Mutation being replicated to the next highest replica " + regionInfo);
             }
-            // send mutations only to the next replica. Let the other replica handle the replication to its replica
+            // send mutations only to the next replica. Let the other replica handle the replication
+            // to its replica
             // Important TODO : Handle failure cases
             RegionReplicaReplayCallable callable =
                 new RegionReplicaReplayCallable(connection, rpcControllerFactory, tableName,
@@ -897,16 +460,16 @@ public class MemstoreReplicator {
       }
 
       if (tasks.isEmpty()) {
-        future.markDone();
+        markDone(futures);
         return;
       }
       boolean tasksCancelled = false;
       for (Future<ReplicateWALEntryResponse> task : tasks) {
         try {
           task.get();
-          future.markDone();
+          markDone(futures);
         } catch (InterruptedException e) {
-          future.markException(e);
+          markException(futures, e);
           throw new InterruptedIOException(e.getMessage());
         } catch (ExecutionException e) {
           Throwable cause = e.getCause();
@@ -934,11 +497,11 @@ public class MemstoreReplicator {
               continue;
             }
             // otherwise rethrow
-            future.markException(cause);
+            markException(futures, cause);
             throw (IOException) cause;
           }
           // unexpected exception
-          future.markException(cause);
+          markException(futures, cause);
           throw new IOException(cause);
         }
       }
@@ -1020,23 +583,121 @@ public class MemstoreReplicator {
 
     }
   }
-}
 
-  /*private void blockOnSync(final SyncFuture syncFuture) throws IOException {
-    // Now we have published the ringbuffer, halt the current thread until we get an answer back.
-    try {
-      // TODO set a time here (this needs to be like a config)
-      syncFuture.get(10000l);
-    } catch (TimeoutIOException tioe) {
-      // SyncFuture reuse by thread, if TimeoutIOException happens, ringbuffer
-      // still refer to it, so if this thread use it next time may get a wrong
-      // result.
-      this.syncFuturesByHandler.remove(Thread.currentThread());
-      throw tioe;
-    } catch (InterruptedException ie) {
-      LOG.warn("Interrupted", ie);
-      throw new IOException(ie);
-    } catch (ExecutionException e) {
-      throw new IOException(e.getCause());
+  /**
+   * Class wraps the actual writer which writes data out and related statistics
+   */
+  public abstract static class SinkWriter {
+    /* Count of edits written to this path */
+    long editsWritten = 0;
+    /* Count of edits skipped to this path */
+    long editsSkipped = 0;
+    /* Number of nanos spent writing to this log */
+    long nanosSpent = 0;
+
+    void incrementEdits(int edits) {
+      editsWritten += edits;
     }
-  }*/
+
+    void incrementSkippedEdits(int skipped) {
+      editsSkipped += skipped;
+    }
+
+    void incrementNanoTime(long nanos) {
+      nanosSpent += nanos;
+    }
+  }
+
+  public static class PipelineController {
+    // If an exception is thrown by one of the other threads, it will be
+    // stored here.
+    AtomicReference<Throwable> thrown = new AtomicReference<>();
+
+    // Wait/notify for when data has been produced by the writer thread,
+    // consumed by the reader thread, or an exception occurred
+    public final Object dataAvailable = new Object();
+
+    void writerThreadError(Throwable t) {
+      thrown.compareAndSet(null, t);
+    }
+
+    /**
+     * Check for errors in the writer threads. If any is found, rethrow it.
+     */
+    void checkForErrors() throws IOException {
+      Throwable thrown = this.thrown.get();
+      if (thrown == null) return;
+      if (thrown instanceof IOException) {
+        throw new IOException(thrown);
+      } else {
+        throw new RuntimeException(thrown);
+      }
+    }
+  }
+
+  public static class WriterThread extends Thread {
+    private volatile boolean shouldStop = false;
+    private PipelineController controller;
+    private EntryBuffers entryBuffers;
+    private OutputSink outputSink = null;
+
+    WriterThread(PipelineController controller, EntryBuffers entryBuffers, OutputSink sink, int i) {
+      super(Thread.currentThread().getName() + "-Writer-" + i);
+      this.controller = controller;
+      this.entryBuffers = entryBuffers;
+      outputSink = sink;
+    }
+
+    @Override
+    public void run() {
+      try {
+        doRun();
+      } catch (Throwable t) {
+        LOG.error("Exiting thread", t);
+        controller.writerThreadError(t);
+      }
+    }
+
+    private void doRun() throws IOException {
+      if (LOG.isTraceEnabled()) LOG.trace("Writer thread starting");
+      while (true) {
+        RegionEntryBuffer buffer = entryBuffers.getChunkToWrite();
+        if (buffer == null) {
+          //LOG.info("Got a null");
+          // No data currently available, wait on some more to show up
+         /* synchronized (controller.dataAvailable) {
+            if (shouldStop) {
+              return;
+            }
+            try {
+              controller.dataAvailable.wait(500);
+            } catch (InterruptedException ie) {
+              if (!shouldStop) {
+                throw new RuntimeException(ie);
+              }
+            }
+          }*/
+          continue;
+        }
+
+        assert buffer != null;
+        try {
+          writeBuffer(buffer);
+        } finally {
+          entryBuffers.doneWriting(buffer);
+        }
+      }
+    }
+
+    private void writeBuffer(RegionEntryBuffer buffer) throws IOException {
+      outputSink.append(buffer);
+    }
+
+    void finish() {
+      synchronized (controller.dataAvailable) {
+        shouldStop = true;
+        controller.dataAvailable.notifyAll();
+      }
+    }
+  }
+}

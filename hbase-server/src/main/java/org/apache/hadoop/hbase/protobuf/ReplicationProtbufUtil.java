@@ -190,7 +190,7 @@ public class ReplicationProtbufUtil {
       WALProtos.WALKey.Builder keyBuilder = entryBuilder.getKeyBuilder();
       MemstoreReplicationKey key = entry.getMemstoreReplicationKey();
       keyBuilder.setEncodedRegionName(UnsafeByteOperations
-          .unsafeWrap(encodedRegionName == null ? key.getEncodedRegionName() : encodedRegionName));
+          .unsafeWrap(encodedRegionName == null ? key.getEncodedRegionNameInBytes() : encodedRegionName));
       keyBuilder.setTableName(UnsafeByteOperations.unsafeWrap(key.getTableName().getName()));
       keyBuilder.setLogSequenceNumber(key.getSequenceId());
       keyBuilder.setWriteTime(key.getWriteTime());

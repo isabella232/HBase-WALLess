@@ -149,10 +149,13 @@ import org.apache.hadoop.hbase.regionserver.HRegionServer;
 import org.apache.hadoop.hbase.regionserver.HStore;
 import org.apache.hadoop.hbase.regionserver.RSRpcServices;
 import org.apache.hadoop.hbase.regionserver.RegionCoprocessorHost;
+import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.RegionSplitPolicy;
 import org.apache.hadoop.hbase.regionserver.compactions.ExploringCompactionPolicy;
 import org.apache.hadoop.hbase.regionserver.compactions.FIFOCompactionPolicy;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.DefaultMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.RingBufferMemstoreReplicator;
 import org.apache.hadoop.hbase.replication.ReplicationException;
 import org.apache.hadoop.hbase.replication.ReplicationFactory;
 import org.apache.hadoop.hbase.replication.ReplicationPeerConfig;
@@ -179,6 +182,7 @@ import org.apache.hadoop.hbase.util.HasThread;
 import org.apache.hadoop.hbase.util.IdLock;
 import org.apache.hadoop.hbase.util.ModifyRegionUtils;
 import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hadoop.hbase.util.ReflectionUtils;
 import org.apache.hadoop.hbase.util.Threads;
 import org.apache.hadoop.hbase.util.VersionInfo;
 import org.apache.hadoop.hbase.util.ZKDataMigrator;
@@ -745,7 +749,20 @@ public class HMaster extends HRegionServer implements MasterServices {
     // TODO: Do this using Dependency Injection, using PicoContainer, Guice or Spring.
     // Initialize the chunkCreator
     initializeMemStoreChunkCreator();
-    this.memstoreReplicator = MemstoreReplicator.init(this.conf, this);
+    String memstoreReplicatorType =
+        this.conf.get(HBASE_REGIONSERVER_MEMSTORE_REPLICATOR_CLASS, DEFAULT);
+    String className;
+    if (memstoreReplicatorType.equals(DEFAULT)) {
+      className = DefaultMemstoreReplicator.class.getName();
+      this.memstoreReplicator = ReflectionUtils.instantiateWithCustomCtor(className,
+        new Class[] { Configuration.class, RegionServerServices.class },
+        new Object[] { conf, this });
+    } else {
+      className = RingBufferMemstoreReplicator.class.getName();
+      this.memstoreReplicator = ReflectionUtils.instantiateWithCustomCtor(className,
+        new Class[] { Configuration.class, RegionServerServices.class },
+        new Object[] { conf, this });
+    }
     this.fileSystemManager = new MasterFileSystem(this);
     this.walManager = new MasterWalManager(this);
 

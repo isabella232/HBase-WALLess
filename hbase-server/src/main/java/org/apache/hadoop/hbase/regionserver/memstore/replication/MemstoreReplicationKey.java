@@ -38,7 +38,9 @@ public class MemstoreReplicationKey {
   /**
    */
   public static final long NO_SEQUENCE_ID = -1;
-  private byte [] encodedRegionName;
+  private byte [] encodedRegionNameInBytes;
+
+  private String encodedRegionName;
 
   private TableName tablename;
   /**
@@ -64,20 +66,22 @@ public class MemstoreReplicationKey {
   public static final List<UUID> EMPTY_UUIDS = Collections.unmodifiableList(new ArrayList<UUID>());
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
-  public MemstoreReplicationKey(byte[] encodedRegionName, TableName tableName,
-      MultiVersionConcurrencyControl mvcc) {
-    this(encodedRegionName, tableName, NO_SEQUENCE_ID, HConstants.LATEST_TIMESTAMP, mvcc);
+  public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
+      TableName tableName, MultiVersionConcurrencyControl mvcc) {
+    this(encodedRegionNameInBytes, encodedRegionName, tableName, NO_SEQUENCE_ID,
+        HConstants.LATEST_TIMESTAMP, mvcc);
   }
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
-  public MemstoreReplicationKey(byte[] encodedRegionName, TableName tableName, long now,
-      MultiVersionConcurrencyControl mvcc) {
-    this(encodedRegionName, tableName, NO_SEQUENCE_ID, now, mvcc);
+  public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
+      TableName tableName, long now, MultiVersionConcurrencyControl mvcc) {
+    this(encodedRegionNameInBytes, encodedRegionName, tableName, NO_SEQUENCE_ID, now, mvcc);
   }
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
-  public MemstoreReplicationKey(byte[] encodedRegionName, TableName tableName, long sequenceId,
-      long now, MultiVersionConcurrencyControl mvcc) {
+  public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
+      TableName tableName, long sequenceId, long now, MultiVersionConcurrencyControl mvcc) {
+    this.encodedRegionNameInBytes = encodedRegionNameInBytes;
     this.encodedRegionName = encodedRegionName;
     this.tablename = tableName;
     this.sequenceId = sequenceId;
@@ -85,8 +89,8 @@ public class MemstoreReplicationKey {
     this.mvcc = mvcc;
   }
 
-  public byte[] getEncodedRegionName() {
-    return this.encodedRegionName;
+  public byte[] getEncodedRegionNameInBytes() {
+    return this.encodedRegionNameInBytes;
   }
 
   public TableName getTableName() {
@@ -122,6 +126,9 @@ public class MemstoreReplicationKey {
     return this.sequenceId;
   }
 
+  public String encodedRegionName() {
+    return this.encodedRegionName;
+  }
   /**
    * Drop this instance's region name byte array and instead
    * hold a reference to the provided region name. This is not
@@ -131,7 +138,12 @@ public class MemstoreReplicationKey {
   void internEncodedRegionName(byte []encodedRegionName) {
     // We should not use this as a setter - only to swap
     // in a new reference to the same table name.
-    assert Bytes.equals(this.encodedRegionName, encodedRegionName);
+    assert Bytes.equals(this.encodedRegionNameInBytes, encodedRegionName);
+    this.encodedRegionNameInBytes = encodedRegionName;
+  }
+  
+  void internEncodedRegionName(String encodedRegionName) {
+    assert this.encodedRegionName.equals(encodedRegionName);
     this.encodedRegionName = encodedRegionName;
   }
 

@@ -1,4 +1,5 @@
 /**
+ *
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -20,34 +21,23 @@ package org.apache.hadoop.hbase.regionserver.memstore.replication;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 
 @InterfaceAudience.Private
-public class MemstoreReplicationEntry {
-  private final MemstoreReplicationKey memstoreReplicationKey;
-  private final MemstoreEdits memstoreEdits;
-  private final boolean replay;
-  private final int replicaId;
+public class MemstoreRepRingBufferTruck {
+  private MemstoreReplicationEntry memstoreReplicationEntry;
+  private CompletedFuture syncFuture;
 
-  public MemstoreReplicationEntry(MemstoreReplicationKey memstoreRepKey,
-      MemstoreEdits memstoreEdits, final boolean replay,
-      final int replicaId) {
-    this.memstoreReplicationKey = memstoreRepKey;
-    this.memstoreEdits = memstoreEdits;
-    this.replay = replay;
-    this.replicaId = replicaId;
+  public MemstoreRepRingBufferTruck() {
   }
 
-  public MemstoreReplicationKey getMemstoreReplicationKey() {
-    return this.memstoreReplicationKey;
+  public MemstoreReplicationEntry getMemstoreReplicationEntry() {
+    return this.memstoreReplicationEntry;
   }
 
-  public MemstoreEdits getMemstoreEdits() {
-    return this.memstoreEdits;
+  public CompletedFuture getFuture() {
+    return this.syncFuture;
   }
 
-  public boolean isReplay() {
-    return this.replay;
-  }
-
-  public int getReplicaId() {
-    return this.replicaId;
+  void load(MemstoreReplicationEntry entry, CompletedFuture future) {
+    this.memstoreReplicationEntry = entry;
+    this.syncFuture = future;
   }
 }

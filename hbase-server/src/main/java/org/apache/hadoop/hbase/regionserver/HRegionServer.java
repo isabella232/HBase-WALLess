@@ -57,11 +57,13 @@ import javax.servlet.http.HttpServlet;
 import org.apache.commons.lang.SystemUtils;
 import org.apache.commons.lang.math.RandomUtils;
 import org.apache.commons.logging.Log;
+import org.apache.hadoop.hbase.util.ReflectionUtils;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.Abortable;
+import org.apache.hadoop.hbase.CellComparator;
 import org.apache.hadoop.hbase.ChoreService;
 import org.apache.hadoop.hbase.ClockOutOfSyncException;
 import org.apache.hadoop.hbase.CoordinatedStateManager;
@@ -128,8 +130,10 @@ import org.apache.hadoop.hbase.regionserver.compactions.CompactionProgress;
 import org.apache.hadoop.hbase.regionserver.handler.CloseMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RegionReplicaFlushHandler;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.DefaultMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicaFlushHandler;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.RingBufferMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.FlushThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.regionserver.wal.MetricsWAL;
@@ -200,7 +204,6 @@ import org.apache.hadoop.hbase.zookeeper.ZooKeeperNodeTracker;
 import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.metrics2.util.MBeans;
-import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.NoNodeException;
@@ -221,6 +224,11 @@ import sun.misc.SignalHandler;
 @SuppressWarnings({ "deprecation"})
 public class HRegionServer extends HasThread implements
     RegionServerServices, LastSequenceId, ConfigurationObserver {
+  protected static final String DEFAULT = "default";
+
+  protected static final String HBASE_REGIONSERVER_MEMSTORE_REPLICATOR_CLASS =
+      "hbase.regionserver.memstore.replicator";
+
   // Time to pause if master says 'please hold'. Make configurable if needed.
   private static final int INIT_PAUSE_TIME_MS = 1000;
 
@@ -672,7 +680,21 @@ public class HRegionServer extends HasThread implements
         new CompactedHFilesDischarger(cleanerInterval, this, this);
     choreService.scheduleChore(compactedFileDischarger);
     // TODO : Reset and create new for tests
-    this.memstoreReplicator = MemstoreReplicator.init(this.conf, this);
+    // TODO : Add config to instantiate based on what we nee
+    String memstoreReplicatorType = this.conf.get(HBASE_REGIONSERVER_MEMSTORE_REPLICATOR_CLASS, DEFAULT);
+    String className;
+    if (memstoreReplicatorType.equals(DEFAULT)) {
+      className = DefaultMemstoreReplicator.class.getName();
+      this.memstoreReplicator = ReflectionUtils.instantiateWithCustomCtor(className,
+        new Class[] { Configuration.class, RegionServerServices.class },
+        new Object[] { conf, this });
+    } else {
+      className = RingBufferMemstoreReplicator.class.getName();
+      LOG.info("Using ringbuffer memstore replicator");
+      this.memstoreReplicator = ReflectionUtils.instantiateWithCustomCtor(className,
+        new Class[] { Configuration.class, RegionServerServices.class },
+        new Object[] { conf, this });
+    }
   }
 
   private void initializeFileSystem() throws IOException {
@@ -2942,7 +2964,7 @@ public class HRegionServer extends HasThread implements
 
     // create an instance of the replication object.
     ReplicationService service = (ReplicationService)
-                              ReflectionUtils.newInstance(clazz, conf);
+        org.apache.hadoop.util.ReflectionUtils.newInstance(clazz, conf);
     service.initialize(server, walFs, logDir, oldLogDir);
     return service;
   }

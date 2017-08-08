@@ -2545,8 +2545,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           ProtobufUtil.toFlushDescriptor(action, getRegionInfo(), flushOpSeqId, committedFiles);
       KeyValue kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
           WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
-      MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
-          this.getRegionInfo().getEncodedNameAsBytes(), this.htableDescriptor.getTableName(), mvcc);
+      MemstoreReplicationKey memstoreReplicationKey =
+          new MemstoreReplicationKey(this.getRegionInfo().getEncodedNameAsBytes(),
+              this.getRegionInfo().getEncodedName(), this.htableDescriptor.getTableName(), mvcc);
       MemstoreEdits memstoreEdits = new MemstoreEdits();
       memstoreEdits.add(kv);
       // replicate this
@@ -2569,8 +2570,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     if (!this.closing.get() && !this.closed.get()) {
       KeyValue kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
           WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
-      MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
-          this.getRegionInfo().getEncodedNameAsBytes(), this.htableDescriptor.getTableName(), mvcc);
+      MemstoreReplicationKey memstoreReplicationKey =
+          new MemstoreReplicationKey(this.getRegionInfo().getEncodedNameAsBytes(),
+              this.getRegionInfo().getEncodedName(), this.htableDescriptor.getTableName(), mvcc);
       MemstoreEdits memstoreEdits = new MemstoreEdits();
       memstoreEdits.add(kv);
       // replicate this
@@ -3441,7 +3443,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       if (!memstoreEdits.isEmpty()) {
         memstoreReplicationKey =
             new MemstoreReplicationKey(this.getRegionInfo().getEncodedNameAsBytes(),
-                this.htableDescriptor.getTableName(), mvcc);
+                this.getRegionInfo().getEncodedName(), this.htableDescriptor.getTableName(), mvcc);
         if (replay) {
           memstoreReplicationKey.setSequenceId(batchOp.getReplaySequenceId());
         } else {

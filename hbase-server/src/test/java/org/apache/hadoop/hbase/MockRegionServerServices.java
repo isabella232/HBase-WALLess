@@ -50,7 +50,7 @@ import org.apache.hadoop.hbase.regionserver.RegionServerAccounting;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.SecureBulkLoadManager;
 import org.apache.hadoop.hbase.regionserver.ServerNonceManager;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.DefaultMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.wal.WAL;
@@ -359,7 +359,7 @@ public class MockRegionServerServices implements RegionServerServices {
   }
 
   @Override
-  public MemstoreReplicator getMemstoreReplicator() {
-    return MemstoreReplicator.init(this.conf, this);
+  public DefaultMemstoreReplicator getMemstoreReplicator() {
+    return new DefaultMemstoreReplicator(this.conf, this);
   }
 }
