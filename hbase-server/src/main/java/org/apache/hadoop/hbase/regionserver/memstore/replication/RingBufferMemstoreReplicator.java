@@ -62,7 +62,7 @@ import com.lmax.disruptor.dsl.ProducerType;
  * RingBuffer for execution
  */
 @InterfaceAudience.Private
-public class RingBufferMemstoreReplicator extends MemstoreReplicator {
+public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
   private static final Log LOG = LogFactory.getLog(RingBufferMemstoreReplicator.class);
 
   private final Disruptor<MemstoreRepRingBufferTruck> disruptor;

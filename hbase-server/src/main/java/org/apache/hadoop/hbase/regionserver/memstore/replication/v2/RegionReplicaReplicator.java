@@ -4,6 +4,7 @@ package org.apache.hadoop.hbase.regionserver.memstore.replication.v2;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.HRegionLocation;
@@ -12,37 +13,51 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.ClusterConnection;
 import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.CompletedFuture;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 
 // This is a per Region instance 
 //TODO better name
-public class RegionReplicaReplicator {
+public class RegionReplicaReplicator implements MemstoreReplicator {
 
+  private final MemstoreReplicationService replicationService;
   private final HRegionInfo curRegion;
   private volatile RegionLocations locations;
   private final ClusterConnection connection;
-  
   private List<MemstoreReplicationEntry> entryBuffer;
-  private List<CompletedFuture> futures;
+  private volatile long curSeq = 0;
+  private volatile long curMaxConsumedSeq = -1;
 
-  public RegionReplicaReplicator(HRegionInfo primaryRegion, ClusterConnection connection) {
+  public RegionReplicaReplicator(HRegionInfo primaryRegion, ClusterConnection connection,
+      MemstoreReplicationService replicationService) {
+    this.replicationService = replicationService;
     this.curRegion = primaryRegion;
     this.connection = connection;
     this.entryBuffer = new ArrayList<>();
-    this.futures = new ArrayList<>();
   }
 
   // Seems no way to avoid this sync
-  public synchronized CompletedFuture append(MemstoreReplicationEntry entry) {
-    this.entryBuffer.add(entry);
+  private synchronized CompletedFuture append(MemstoreReplicationEntry entry) {
     CompletedFuture future = new CompletedFuture();
-    this.futures.add(future);
+    entry.attachFuture(future, curSeq++);
+    this.entryBuffer.add(entry);
     return future;
   }
 
-  public synchronized List<MemstoreReplicationEntry> pullEntries() {
+  /**
+   * @param minSeq
+   *          The min sequence number we expect to return. If that is not there (already retrieved
+   *          and processed by some one else), we will return null.
+   */
+  public synchronized List<MemstoreReplicationEntry> pullEntries(long minSeq) {
+    if (this.curMaxConsumedSeq >= minSeq) {
+      return null;
+    }
     List<MemstoreReplicationEntry> local = this.entryBuffer;
     this.entryBuffer = new ArrayList<>();
+    this.curMaxConsumedSeq = this.curSeq;
     return local;
   }
 
@@ -81,5 +96,15 @@ public class RegionReplicaReplicator {
         }
       }
     }
+  }
+
+  @Override
+  public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
+      boolean replay, int replicaId) throws IOException, InterruptedException, ExecutionException {
+    MemstoreReplicationEntry entry = new MemstoreReplicationEntry(memstoreReplicationKey,
+        memstoreEdits, replay, replicaId);
+    CompletedFuture future = append(entry);
+    this.replicationService.offer(this, entry);
+    
   }
 }

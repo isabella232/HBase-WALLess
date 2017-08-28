@@ -18,6 +18,7 @@ import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
 import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.CompletedFuture;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
@@ -29,7 +30,7 @@ import org.apache.hadoop.hbase.util.Pair;
 public class MemstoreReplicationService {
 
   private final Configuration conf;
-  private final BlockingQueue<RegionReplicaReplicator> regionQueue = new LinkedBlockingQueue<>();
+  private final BlockingQueue<Entry> regionQueue = new LinkedBlockingQueue<>();
   private ClusterConnection connection;
   private final int operationTimeout;
   private final ReplicationThread[] replicationThreads;
@@ -66,7 +67,21 @@ public class MemstoreReplicationService {
       thread.stop();
     }
   }
-  
+
+  public void offer(RegionReplicaReplicator replicator, MemstoreReplicationEntry entry) {
+    this.regionQueue.offer(new Entry(replicator, entry.getSeq()));
+  }
+
+  private class Entry {
+    private final RegionReplicaReplicator replicator;
+    private final long seq;
+
+    Entry(RegionReplicaReplicator replicator, long seq) {
+      this.replicator = replicator;
+      this.seq = seq;
+    }
+  }
+
   private class ReplicationThread extends HasThread {
     
     private volatile boolean closed = false;
@@ -84,17 +99,20 @@ public class MemstoreReplicationService {
     public void run() {
       while (!this.closed) {
         try {
-          RegionReplicaReplicator replicator = regionQueue.take();// TODO Check whether this call
+          Entry entry = regionQueue.take();// TODO Check whether this call
                                                                   // will make the thread under wait
                                                                   // or whether consume CPU
-          replicate(replicator);
+          replicate(entry);
         } catch (InterruptedException e) {
           e.printStackTrace();
         }
       }
     }
 
-    private ReplicateWALEntryResponse replicate(RegionReplicaReplicator replicator) {
+    private ReplicateWALEntryResponse replicate(Entry entry) {
+      RegionReplicaReplicator replicator = entry.replicator;
+      List<MemstoreReplicationEntry> entries = replicator.pullEntries(entry.seq);
+      if (entries == null || entries.isEmpty()) return null;
       // TODO we need a new ReplicateWALEntryResponse from where which we can know how many
       // success replicas are there.
       ReplicateWALEntryResponse response = null;
@@ -108,12 +126,13 @@ public class MemstoreReplicationService {
         if (nextRegionLocation != null) {
           RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
               rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
-              replicator.getRegionInfo(), null, replicator.pullEntries());
+              replicator.getRegionInfo(), null, entries);
           // Passing row as null is ok as we already know the region location. This row wont be used
           // at all.
           try {
             response = rpcRetryingCallerFactory.<ReplicateWALEntryResponse>newCaller()
                 .callWithRetries(callable, operationTimeout);
+            markEntriesSuccess(entries);
             return response;// Break the loop. The successful next replica will write to its next
           } catch (IOException | RuntimeException e) {
             // TODO
@@ -127,6 +146,12 @@ public class MemstoreReplicationService {
         }
       }
       return null;
+    }
+
+    private void markEntriesSuccess(List<MemstoreReplicationEntry> entries) {
+      for (MemstoreReplicationEntry entry : entries) {
+        entry.getFuture().markDone();
+      }
     }
 
     public void stop() {

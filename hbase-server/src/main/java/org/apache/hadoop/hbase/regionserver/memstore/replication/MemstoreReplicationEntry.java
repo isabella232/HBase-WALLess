@@ -25,6 +25,8 @@ public class MemstoreReplicationEntry {
   private final MemstoreEdits memstoreEdits;
   private final boolean replay;
   private final int replicaId;
+  private CompletedFuture future;
+  private long seq;
 
   public MemstoreReplicationEntry(MemstoreReplicationKey memstoreRepKey,
       MemstoreEdits memstoreEdits, final boolean replay,
@@ -49,5 +51,18 @@ public class MemstoreReplicationEntry {
 
   public int getReplicaId() {
     return this.replicaId;
+  }
+
+  public void attachFuture(CompletedFuture future, long seq) {
+    this.future = future;
+    this.seq = seq;
+  }
+
+  public CompletedFuture getFuture() {
+    return this.future;
+  }
+
+  public long getSeq() {
+    return this.seq;
   }
 }

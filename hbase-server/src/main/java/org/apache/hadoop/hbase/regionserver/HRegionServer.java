@@ -131,7 +131,6 @@ import org.apache.hadoop.hbase.regionserver.handler.CloseMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RegionReplicaFlushHandler;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.DefaultMemstoreReplicator;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicaFlushHandler;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.RingBufferMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.FlushThroughputControllerFactory;

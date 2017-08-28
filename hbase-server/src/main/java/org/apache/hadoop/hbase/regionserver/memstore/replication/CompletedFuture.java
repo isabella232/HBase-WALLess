@@ -29,11 +29,11 @@ public class CompletedFuture {
   volatile boolean completed = false;
   volatile Throwable throwable = null;
 
-  synchronized boolean isDone() {
+  public synchronized boolean isDone() {
     return this.completed;
   }
 
-  synchronized boolean get(long timeoutNs)
+  public synchronized boolean get(long timeoutNs)
       throws InterruptedException, TimeoutIOException, ExecutionException {
     final long done = System.nanoTime() + timeoutNs;
     while (!isDone()) {
@@ -49,25 +49,25 @@ public class CompletedFuture {
     return this.completed;
   }
 
-  synchronized void markDone() {
+  public synchronized void markDone() {
     this.completed = true;
     notify();
   }
 
-  synchronized void markException(Throwable t) {
+  public synchronized void markException(Throwable t) {
     this.throwable = t;
     this.completed = true;
     notify();
   }
 
-  synchronized CompletedFuture reset() {
+  public synchronized CompletedFuture reset() {
     this.completed = false;
     notify();
     return this;
   }
 
   // Use this in case of exception
-  synchronized boolean hasException() {
+  public synchronized boolean hasException() {
     return this.throwable != null;
   }
 }

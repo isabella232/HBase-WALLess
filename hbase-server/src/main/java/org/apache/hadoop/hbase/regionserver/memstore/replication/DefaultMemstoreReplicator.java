@@ -67,7 +67,7 @@ import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
 import org.apache.hadoop.hbase.regionserver.HRegionServer;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.DefaultMemstoreReplicator.RegionReplicaOutputSink;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator.RegionEntryBuffer;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.BaseMemstoreReplicator.RegionEntryBuffer;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -87,7 +87,7 @@ import com.google.common.collect.Lists;
  * the {@link MemstoreReplicaEndPoint} to replicate the entries to another region server
  */
 @InterfaceAudience.Private
-public class DefaultMemstoreReplicator extends MemstoreReplicator {
+public class DefaultMemstoreReplicator extends BaseMemstoreReplicator {
   private static final Log LOG = LogFactory.getLog(DefaultMemstoreReplicator.class);
 
   private RegionReplicaOutputSink outputSink;
