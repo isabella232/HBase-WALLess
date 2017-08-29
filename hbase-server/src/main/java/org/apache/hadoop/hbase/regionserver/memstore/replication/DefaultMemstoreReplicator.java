@@ -157,14 +157,15 @@ public class DefaultMemstoreReplicator extends BaseMemstoreReplicator {
 
   @Override
   public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      boolean replay, int replicaId) throws IOException, InterruptedException, ExecutionException {
+      boolean replay, int replicaId, RegionLocations locations)
+      throws IOException, InterruptedException, ExecutionException {
     // TODO : It is better we have one to one mapping on the result of this replication
     // We have a blocking mechanism here but we may need to create a future that is mapped per
     // thread doing the
     /// actual replication. (TODO)
     MemstoreReplicationEntry entry =
         new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay, replicaId);
-    CompletedFuture future = this.entryBuffers.appendEntry(entry);
+    CompletedFuture future = this.entryBuffers.appendEntry(entry, locations);
     // wait for the result here
     future.get(replicationTimeoutNs);
     // TODO :Very important. Probably return back if there is no replica here instead of putting
@@ -187,6 +188,7 @@ public class DefaultMemstoreReplicator extends BaseMemstoreReplicator {
     public void append(RegionEntryBuffer buffer) throws IOException {
       List<MemstoreReplicationEntry> entries = buffer.getEntryBuffer();
       List<CompletedFuture> futures = buffer.getFutures();
+      RegionLocations locations = buffer.getLocations();
 
       if (entries.isEmpty() || entries.get(0).getMemstoreEdits().getCells().isEmpty()) {
         return;
@@ -195,7 +197,7 @@ public class DefaultMemstoreReplicator extends BaseMemstoreReplicator {
       int replicaId = entries.get(0).getReplicaId();
       sinkWriter.append(buffer.getTableName(), buffer.getEncodedRegionName(),
         CellUtil.cloneRow(entries.get(0).getMemstoreEdits().getCells().get(0)), futures, entries,
-        replay, replicaId);
+        replay, replicaId, locations);
     }
 
     @Override
@@ -260,11 +262,12 @@ public class DefaultMemstoreReplicator extends BaseMemstoreReplicator {
     /**
      * Append a log entry into the corresponding region buffer. Blocks if the total heap usage has
      * crossed the specified threshold.
+     * @param locations 
      * @throws InterruptedException
      * @throws IOException
      * @return CompletedFuture the future associated with this entry
      */
-    public CompletedFuture appendEntry(MemstoreReplicationEntry entry)
+    public CompletedFuture appendEntry(MemstoreReplicationEntry entry, RegionLocations locations)
         throws InterruptedException, IOException {
       MemstoreReplicationKey key = entry.getMemstoreReplicationKey();
 
@@ -278,7 +281,7 @@ public class DefaultMemstoreReplicator extends BaseMemstoreReplicator {
         if (buffer == null) {
           // add the region here.
           buffer = new RegionEntryBuffer(key.getTableName(), key.getEncodedRegionNameInBytes(),
-              entry.getReplicaId());
+              entry.getReplicaId(), locations);
           buffers.put(key.getEncodedRegionNameInBytes(), buffer);
         }
         incrHeap = buffer.appendEntry(entry);

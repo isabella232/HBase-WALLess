@@ -20,13 +20,6 @@ package org.apache.hadoop.hbase.regionserver;
 import static org.apache.hadoop.hbase.HConstants.REPLICATION_SCOPE_LOCAL;
 import static org.apache.hadoop.hbase.util.CollectionUtils.computeIfAbsent;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.io.Closeables;
-
 import java.io.EOFException;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -98,6 +91,7 @@ import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.NamespaceDescriptor;
 import org.apache.hadoop.hbase.NotServingRegionException;
+import org.apache.hadoop.hbase.RegionLocations;
 import org.apache.hadoop.hbase.RegionTooBusyException;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.Tag;
@@ -105,6 +99,8 @@ import org.apache.hadoop.hbase.TagUtil;
 import org.apache.hadoop.hbase.UnknownScannerException;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.client.Append;
+import org.apache.hadoop.hbase.client.ClusterConnection;
+import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Durability;
 import org.apache.hadoop.hbase.client.Get;
@@ -113,8 +109,10 @@ import org.apache.hadoop.hbase.client.IsolationLevel;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.PackagePrivateFieldAccessor;
 import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.RetriesExhaustedException;
 import org.apache.hadoop.hbase.client.RowMutations;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.conf.ConfigurationManager;
@@ -192,6 +190,13 @@ import org.apache.hadoop.io.MultipleIOException;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.htrace.Trace;
 import org.apache.htrace.TraceScope;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.io.Closeables;
 
 @SuppressWarnings("deprecation")
 @InterfaceAudience.Private
@@ -360,6 +365,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   // Used for testing.
   private volatile Long timeoutForWriteLock = null;
+
+  private volatile RegionLocations locations;
 
   /**
    * @return The smallest mvcc readPoint across all the scanners in this
@@ -2537,7 +2544,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   private void sendFlushRpc(FlushAction action, boolean flushReplica, long flushOpSeqId,
-      TreeMap<byte[], List<Path>> committedFiles) {
+      TreeMap<byte[], List<Path>> committedFiles) throws IOException {
     // TODO : check inside a lock??
     if (!this.closing.get() && !this.closed.get()) {
       FlushDescriptor desc =
@@ -2552,7 +2559,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // replicate this
       try {
         this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, flushReplica,
-          this.getRegionInfo().getReplicaId());
+          this.getRegionInfo().getReplicaId(), locations);
       } catch (InterruptedException e) {
         // Ignore this. Probably next time we will be able to
         // TODO : Here we may not wait for the result.
@@ -2560,11 +2567,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // TODO : Handle this
       } catch (ExecutionException e) {
         // TODO Handle this
+        updateLocationOnException();
       }
     }
   }
 
-  private void sendFlushRpc(FlushAction action, FlushDescriptor desc, boolean flushReplica) {
+  private void sendFlushRpc(FlushAction action, FlushDescriptor desc, boolean flushReplica) throws IOException {
     // TODO : check inside a lock??
     if (!this.closing.get() && !this.closed.get()) {
       KeyValue kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
@@ -2577,7 +2585,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // replicate this
       try {
         this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, flushReplica,
-          this.getRegionInfo().getReplicaId());
+          this.getRegionInfo().getReplicaId(), locations);
       } catch (InterruptedException e) {
         // Ignore this. Probably next time we will be able to
         // TODO : Here we may not wait for the result.
@@ -2585,6 +2593,19 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // TODO : Handle this
       } catch (ExecutionException e) {
         // TODO Handle this
+        // specifically catch location not updated exception and update the location.
+        updateLocationOnException();
+      }
+    }
+  }
+
+  private void updateLocationOnException() throws IOException {
+    synchronized (this) {
+      locations = null;
+      try {
+        updateRegionLocation();
+      } catch (Exception e1) {
+        throw new IOException(e1);
       }
     }
   }
@@ -3152,7 +3173,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           LOG.trace(getRegionInfo().getEncodedName() + " : Skipping : " + mut.mutation);
         }
       }
-
       OperationStatus[] statuses = new OperationStatus[mutations.length];
       for (int i = 0; i < statuses.length; i++) {
         statuses[i] = OperationStatus.SUCCESS;
@@ -3454,7 +3474,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           if (!this.getRegionInfo().isSystemTable()) {
             // TODO : replicate system table also
             this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, replay,
-              this.getRegionInfo().getReplicaId());
+              this.getRegionInfo().getReplicaId(), locations);
           }
           // TODO : need to handle all exceptions - make things synchronous in terms of
           // replicaiton
@@ -3462,6 +3482,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         } catch (InterruptedException e) {
           throw new IOException(e);
         } catch (ExecutionException e) {
+          updateLocationOnException();
           throw new IOException(e);
         }
       }
@@ -3563,12 +3584,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           batchOp.retCodeDetails, batchOp.walEditsFromCoprocessors, firstIndex, lastIndexExclusive);
         coprocessorHost.postBatchMutateIndispensably(miniBatchOp, success);
       }
-
       batchOp.nextIndexToProcess = lastIndexExclusive;
     }
   }
-  
-  
+
   /**
    * Called to do a piece of the batch that came in to {@link #batchMutate(Mutation[], long, long)}
    * In here we also handle replay of edits on region recover.
@@ -8351,9 +8370,27 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       if (coprocessorHost != null) {
         coprocessorHost.postStartRegionOperation(op);
       }
+      updateRegionLocation();
     } catch (Exception e) {
       lock.readLock().unlock();
       throw new IOException(e);
+    }
+  }
+
+  private void updateRegionLocation()
+      throws IOException, RetriesExhaustedException, DoNotRetryIOException, InterruptedIOException {
+    // update the region locations here.
+    if (this.locations == null) {
+      synchronized (this) {
+        if (locations == null) {
+          // this will throw an exception
+          ClusterConnection connection =
+              (ClusterConnection) ConnectionFactory.createConnection(this.conf);
+          locations = RegionAdminServiceCallable.getRegionLocations(connection,
+            this.getRegionInfo().getTable(), this.getRegionInfo().getStartKey(), false,
+            this.getRegionInfo().getReplicaId());
+        }
+      }
     }
   }
 

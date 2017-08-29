@@ -18,12 +18,14 @@
  */
 package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
+import org.apache.hadoop.hbase.RegionLocations;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 
 @InterfaceAudience.Private
 public class MemstoreRepRingBufferTruck {
   private MemstoreReplicationEntry memstoreReplicationEntry;
   private CompletedFuture syncFuture;
+  private RegionLocations locations;
 
   public MemstoreRepRingBufferTruck() {
   }
@@ -36,8 +38,13 @@ public class MemstoreRepRingBufferTruck {
     return this.syncFuture;
   }
 
-  void load(MemstoreReplicationEntry entry, CompletedFuture future) {
+  public RegionLocations getLocations() {
+    return this.locations;
+  }
+
+  void load(MemstoreReplicationEntry entry, CompletedFuture future, RegionLocations locations) {
     this.memstoreReplicationEntry = entry;
     this.syncFuture = future;
+    this.locations = locations;
   }
 }

@@ -21,11 +21,12 @@ package org.apache.hadoop.hbase.regionserver.memstore.replication;
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.hadoop.hbase.RegionLocations;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 
 @InterfaceAudience.Private
 public interface MemstoreReplicator {
-
   void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      boolean replay, int replicaId) throws IOException, InterruptedException, ExecutionException;
+      boolean replay, int replicaId, RegionLocations locations)
+      throws IOException, InterruptedException, ExecutionException;
 }

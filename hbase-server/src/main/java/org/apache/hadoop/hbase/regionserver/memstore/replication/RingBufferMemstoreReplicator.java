@@ -36,6 +36,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.RegionLocations;
 import org.apache.hadoop.hbase.TableDescriptors;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.client.ClusterConnection;
@@ -136,9 +137,9 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
      */
     private int replicationThreadIndex;
 
-    RingBufferEventHandler(final int syncRunnerCount, final int maxHandlersCount) {
-      this.replicationThreads = new ReplicationThread[syncRunnerCount];
-      for (int i = 0; i < syncRunnerCount; i++) {
+    RingBufferEventHandler(final int maxHandlersCount) {
+      this.replicationThreads = new ReplicationThread[maxHandlersCount];
+      for (int i = 0; i < maxHandlersCount; i++) {
         this.replicationThreads[i] = new ReplicationThread(outputSink);
       }
     }
@@ -163,6 +164,7 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
         throws Exception {
       // TODO Auto-generated method stub
       MemstoreReplicationEntry memstoreReplicationEntry = truck.getMemstoreReplicationEntry();
+      RegionLocations locations = truck.getLocations();
       MemstoreReplicationKey memstoreReplicationKey =
           memstoreReplicationEntry.getMemstoreReplicationKey();
       ReentrantReadWriteLock lock = offsetLock.getLock(memstoreReplicationKey.encodedRegionName());
@@ -174,7 +176,7 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
         if (entryBuffer == null) {
           entryBuffer = new RegionEntryBuffer(memstoreReplicationKey.getTableName(),
               memstoreReplicationKey.getEncodedRegionNameInBytes(),
-              memstoreReplicationEntry.getReplicaId());
+              memstoreReplicationEntry.getReplicaId(), locations);
           regionVsEntryBuffer.put(memstoreReplicationKey.encodedRegionName(), entryBuffer);
         }
         entryBuffer.appendEntry(memstoreReplicationEntry);
@@ -239,7 +241,7 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
     this.disruptor.getRingBuffer().next();
     int maxHandlersCount = conf.getInt(HConstants.REGION_SERVER_HANDLER_COUNT, 200);
     // need to pass this here
-    this.ringEventHandler = new RingBufferEventHandler(5, maxHandlersCount);
+    this.ringEventHandler = new RingBufferEventHandler(maxHandlersCount);
     this.disruptor.setDefaultExceptionHandler(new RingBufferExceptionHandler());
     this.disruptor.handleEventsWith(new RingBufferEventHandler[] { this.ringEventHandler });
     // Starting up threads in constructor is a no no; Interface should have an init call.
@@ -293,7 +295,8 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
 
   @Override
   public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      boolean replay, int replicaId) throws IOException, InterruptedException, ExecutionException {
+      boolean replay, int replicaId, RegionLocations locations)
+      throws IOException, InterruptedException, ExecutionException {
     long txid = -1;
     CompletedFuture future = null;
     try {
@@ -301,7 +304,7 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
       txid = disruptor.getRingBuffer().next();
       MemstoreReplicationEntry entry =
           new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay, replicaId);
-      disruptor.getRingBuffer().get(txid).load(entry, future);
+      disruptor.getRingBuffer().get(txid).load(entry, future, locations);
     } finally {
       disruptor.getRingBuffer().publish(txid);
     }
@@ -335,7 +338,7 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
       int replicaId = entries.get(0).getReplicaId();
       sinkWriter.append(buffer.getTableName(), buffer.getEncodedRegionName(),
         CellUtil.cloneRow(entries.get(0).getMemstoreEdits().getCells().get(0)), futures, entries,
-        replay, replicaId);
+        replay, replicaId, buffer.getLocations());
     }
 
     @Override

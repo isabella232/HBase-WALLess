@@ -100,11 +100,11 @@ public class RegionReplicaReplicator implements MemstoreReplicator {
 
   @Override
   public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      boolean replay, int replicaId) throws IOException, InterruptedException, ExecutionException {
-    MemstoreReplicationEntry entry = new MemstoreReplicationEntry(memstoreReplicationKey,
-        memstoreEdits, replay, replicaId);
+      boolean replay, int replicaId, RegionLocations locations)
+      throws IOException, InterruptedException, ExecutionException {
+    MemstoreReplicationEntry entry =
+        new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay, replicaId);
     CompletedFuture future = append(entry);
     this.replicationService.offer(this, entry);
-    
   }
 }
