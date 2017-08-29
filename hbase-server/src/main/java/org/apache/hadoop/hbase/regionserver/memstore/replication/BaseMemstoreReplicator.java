@@ -109,13 +109,16 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
     TableName tableName;
     byte[] encodedRegionName;
     int replicaId;
+    RegionLocations locations;
 
-    RegionEntryBuffer(TableName tableName, byte[] region, int replicaId) {
+    RegionEntryBuffer(TableName tableName, byte[] region, int replicaId,
+        RegionLocations locations) {
       this.tableName = tableName;
       this.encodedRegionName = region;
       this.entryBuffer = new LinkedList<>();
       this.futures = new LinkedList<>();
       this.replicaId = replicaId;
+      this.locations = locations;
     }
 
     void appendFuture(CompletedFuture future) {
@@ -137,6 +140,10 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
       MemstoreReplicationKey k = entry.getMemstoreReplicationKey();
       k.internTableName(this.tableName);
       k.internEncodedRegionName(this.encodedRegionName);
+    }
+
+    public RegionLocations getLocations() {
+      return this.locations;
     }
 
     @Override
@@ -351,7 +358,7 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
 
     public void append(TableName tableName, byte[] encodedRegionName, byte[] row,
         List<CompletedFuture> futures, List<MemstoreReplicationEntry> entries, boolean replay,
-        int currentReplicaId) throws IOException {
+        int currentReplicaId, RegionLocations locations) throws IOException {
 
       /*
        * if (disabledAndDroppedTables.getIfPresent(tableName) != null) { if (LOG.isTraceEnabled()) {
@@ -363,7 +370,7 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
       // If the table is disabled or dropped, we should not replay the entries, and we can skip
       // replaying them. However, we might not know whether the table is disabled until we
       // invalidate the cache and check from meta
-      RegionLocations locations = null;
+      /*RegionLocations locations = null;
       boolean useCache = true;
       while (true) {
         // get the replicas of the primary region
@@ -420,7 +427,7 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
           }
         }
         break;
-      }
+      }*/
 
       if (locations.size() == 1) {
         markDone(futures);
