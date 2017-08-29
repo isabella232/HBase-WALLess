@@ -39,13 +39,18 @@ public class RegionReplicaReplicator implements MemstoreReplicator {
   }
 
   // Seems no way to avoid this sync
-  private synchronized CompletedFuture append(MemstoreReplicationEntry entry) {
+  private CompletedFuture append(MemstoreReplicationEntry entry) throws IOException {
+    this.loadRegionLocationFromMeta();
     CompletedFuture future = new CompletedFuture();
     entry.attachFuture(future, curSeq++);
-    this.entryBuffer.add(entry);
+    addToBuffer(entry);
     return future;
   }
 
+  private synchronized void addToBuffer(MemstoreReplicationEntry entry) {
+    this.entryBuffer.add(entry);
+  }
+  
   /**
    * @param minSeq
    *          The min sequence number we expect to return. If that is not there (already retrieved
