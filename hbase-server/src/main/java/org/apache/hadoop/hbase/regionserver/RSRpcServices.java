@@ -18,10 +18,6 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -40,8 +36,10 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -109,6 +107,7 @@ import org.apache.hadoop.hbase.quotas.RegionServerRpcQuotaManager;
 import org.apache.hadoop.hbase.quotas.RegionServerSpaceQuotaManager;
 import org.apache.hadoop.hbase.quotas.SpaceQuotaSnapshot;
 import org.apache.hadoop.hbase.quotas.SpaceViolationPolicyEnforcement;
+import org.apache.hadoop.hbase.regionserver.HRegion.BatchOperation;
 import org.apache.hadoop.hbase.regionserver.HRegion.RegionScannerImpl;
 import org.apache.hadoop.hbase.regionserver.Leases.Lease;
 import org.apache.hadoop.hbase.regionserver.Leases.LeaseStillHeldException;
@@ -217,6 +216,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.RegionEventDe
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.DNS;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+import org.apache.hadoop.hbase.util.HasThread;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.util.ServerRegionReplicaUtil;
 import org.apache.hadoop.hbase.util.Strings;
@@ -227,6 +227,8 @@ import org.apache.hadoop.hbase.zookeeper.ZKSplitLog;
 import org.apache.zookeeper.KeeperException;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 
 /**
  * Implements the regionserver RPC services.
@@ -315,6 +317,9 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
   private final int rowSizeWarnThreshold;
 
   final AtomicBoolean clearCompactionQueues = new AtomicBoolean(false);
+
+  final Map<String, ReplayCallbackExecutor> regionCallBackExecutor =
+      new ConcurrentHashMap<String, ReplayCallbackExecutor>();
 
   /**
    * An Rpc callback for closing a RegionScanner.
@@ -997,8 +1002,8 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       // sort to improve lock efficiency
       Arrays.sort(mArray);
 
-      OperationStatus[] codes = region.batchMutate(mArray, HConstants.NO_NONCE,
-        HConstants.NO_NONCE);
+      OperationStatus[] codes = region.batchMutateForMemstoreReplication(mArray,
+        HConstants.NO_NONCE, HConstants.NO_NONCE).retCodeDetails;
       for (i = 0; i < codes.length; i++) {
         Mutation currentMutation = mArray[i];
         ClientProtos.Action currentAction = mutationActionMap.get(currentMutation);
@@ -1052,7 +1057,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
    *         exceptionMessage if any
    * @throws IOException
    */
-  private OperationStatus [] doReplayBatchOp(final Region region,
+  private BatchOperation doReplayBatchOp(final Region region,
       final List<WALSplitter.MutationReplay> mutations, long replaySeqId) throws IOException {
     long before = EnvironmentEdgeManager.currentTime();
     boolean batchContainsPuts = false, batchContainsDelete = false;
@@ -1103,7 +1108,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       if (!region.getRegionInfo().isMetaTable()) {
         regionServer.cacheFlusher.reclaimMemStoreMemory();
       }
-      return region.batchReplay(mutations.toArray(
+      return region.batchReplayForMemstoreReplication(mutations.toArray(
         new WALSplitter.MutationReplay[mutations.size()]), replaySeqId);
     } finally {
       if (regionServer.metricsRegionServer != null) {
@@ -2100,13 +2105,35 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           }
           walEntries.add(walEntry);
         }
+        BatchOperation batchOp = null;
         if(edits!=null && !edits.isEmpty()) {
           // HBASE-17924
           // sort to improve lock efficiency
           Collections.sort(edits);
           long replaySeqId = (entry.getKey().hasOrigSequenceNumber()) ?
             entry.getKey().getOrigSequenceNumber() : entry.getKey().getLogSequenceNumber();
-          OperationStatus[] result = doReplayBatchOp(region, edits, replaySeqId);
+
+            // create one per region
+            // DO this or go with an executor. //TODO : How to shutdown these threads on stop??
+          ReplayCallbackExecutor replayCallbackExecutor =
+              regionCallBackExecutor.get(((HRegion) region).getRegionInfo().getEncodedName());
+          if (replayCallbackExecutor == null) {
+            replayCallbackExecutor = new ReplayCallbackExecutor();
+            replayCallbackExecutor.setDaemon(true);
+            regionCallBackExecutor
+                .put(((HRegion) region).getRegionInfo().getEncodedName(), replayCallbackExecutor);
+            // TODO : Handle interrupted exception
+            replayCallbackExecutor.start();
+          }
+          batchOp = doReplayBatchOp(region, edits, replaySeqId);
+          if (batchOp.regionAction != null) {
+            try {
+              replayCallbackExecutor.offer(batchOp.regionAction);
+            } catch (InterruptedException e) {
+              // Handle this case
+            }
+          }
+          OperationStatus[] result =batchOp.retCodeDetails;
           // check if it's a partial success
           for (int i = 0; result != null && i < result.length; i++) {
             if (result[i] != OperationStatus.SUCCESS) {
@@ -2135,6 +2162,32 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       if (regionServer.metricsRegionServer != null) {
         regionServer.metricsRegionServer.updateReplay(
           EnvironmentEdgeManager.currentTime() - before);
+      }
+    }
+  }
+
+  class ReplayCallbackExecutor extends HasThread {
+
+    private BlockingQueue<org.apache.hadoop.hbase.regionserver.Action> callbackList =
+        new LinkedBlockingQueue<org.apache.hadoop.hbase.regionserver.Action>();
+
+    public void offer(org.apache.hadoop.hbase.regionserver.Action action)
+        throws InterruptedException {
+        callbackList.put(action);
+      }
+
+    @Override
+    public void run() {
+      org.apache.hadoop.hbase.regionserver.Action action = null;
+      while (true) {
+        try {
+          action = callbackList.take();
+        } catch (InterruptedException e) {
+        }
+        if(LOG.isDebugEnabled()) {
+          LOG.debug("Performing action");
+        }
+        action.performAction();
       }
     }
   }

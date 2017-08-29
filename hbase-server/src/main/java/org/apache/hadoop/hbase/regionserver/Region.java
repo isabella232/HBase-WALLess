@@ -45,9 +45,10 @@ import org.apache.hadoop.hbase.conf.ConfigurationObserver;
 import org.apache.hadoop.hbase.exceptions.FailedSanityCheckException;
 import org.apache.hadoop.hbase.filter.ByteArrayComparable;
 import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
+import org.apache.hadoop.hbase.regionserver.HRegion.BatchOperation;
+import org.apache.hadoop.hbase.shaded.com.google.protobuf.Service;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.GetRegionInfoResponse.CompactionState;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.CoprocessorServiceCall;
-import org.apache.hadoop.hbase.shaded.com.google.protobuf.Service;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.wal.WALSplitter.MutationReplay;
 
@@ -345,6 +346,19 @@ public interface Region extends ConfigurationObserver {
       throws IOException;
 
   /**
+   * Perform a batch of mutations.
+   * <p>
+   * Note this supports only Put and Delete mutations and will ignore other types passed.
+   * @param mutations the list of mutations
+   * @param nonceGroup
+   * @param nonce
+   * @return the BatchOperation which includes the status of the operations
+   * @throws IOException
+   */
+  BatchOperation batchMutateForMemstoreReplication(Mutation[] mutations, long nonceGroup, long nonce)
+      throws IOException;
+
+  /**
    * Replay a batch of mutations.
    * @param mutations mutations to replay.
    * @param replaySeqId
@@ -352,7 +366,17 @@ public interface Region extends ConfigurationObserver {
    *         OperationStatusCode and the exceptionMessage if any.
    * @throws IOException
    */
-   OperationStatus[] batchReplay(MutationReplay[] mutations, long replaySeqId) throws IOException;
+  OperationStatus[]  batchReplay(MutationReplay[] mutations, long replaySeqId) throws IOException;
+
+  /**
+   * Replay a batch of mutations.
+   * @param mutations mutations to replay.
+   * @param replaySeqId
+   * @return the BatchOperation that contains the status of the operations
+   * @throws IOException
+   */
+  BatchOperation batchReplayForMemstoreReplication(MutationReplay[] mutations, long replaySeqId)
+      throws IOException;
 
   /**
    * Atomically checks if a row/family/qualifier value matches the expected value and if it does,

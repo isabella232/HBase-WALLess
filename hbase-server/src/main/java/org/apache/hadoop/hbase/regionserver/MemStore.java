@@ -72,6 +72,16 @@ public interface MemStore {
    *        This will include both data size and heap overhead delta.
    */
   void add(final Cell cell, MemstoreSize memstoreSize);
+  
+  /**
+   * Write an update
+   * @param cell
+   * @param memstoreSize The delta in memstore size will be passed back via this.
+   *        This will include both data size and heap overhead delta.
+   *  @return Action that needs to be performed at a later point of time
+   */
+  //TODO : remove the duplicate method.
+  Action addForMemstoreReplication(final Cell cell, MemstoreSize memstoreSize);
 
   /**
    * Write the updates
@@ -79,7 +89,18 @@ public interface MemStore {
    * @param memstoreSize The delta in memstore size will be passed back via this.
    *        This will include both data size and heap overhead delta.
    */
-  void add(Iterable<Cell> cells, MemstoreSize memstoreSize);
+  void add(List<Cell> cells, MemstoreSize memstoreSize);
+
+  /**
+   * Write an update
+   * @param cells
+   * @param memstoreSize The delta in memstore size will be passed back via this.
+   *        This will include both data size and heap overhead delta.
+   *  @return Action that needs to be performed at a later point of time
+   */
+  //TODO : remove the duplicate method.
+  // TODO : remove the duplicate method.
+  Action addForMemstoreReplication(List<Cell> cells, MemstoreSize memstoreSize);
 
   /**
    * @return Oldest timestamp of all the Cells in the MemStore

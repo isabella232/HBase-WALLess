@@ -18,11 +18,12 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
-import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.NavigableSet;
 import java.util.SortedSet;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.conf.Configuration;
@@ -34,6 +35,8 @@ import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ClassSize;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * An abstract class, which implements the behaviour shared by all concrete memstore instances.
@@ -53,6 +56,9 @@ public abstract class AbstractMemStore implements MemStore {
   protected volatile long snapshotId;
   // Used to track when to flush
   private volatile long timeOfOldestEdit;
+
+  // Will this grow in size?? TODO : check if CMS also works with this
+  private List<ActionListener> actionListeners = new ArrayList<ActionListener>();
 
   public final static long FIXED_OVERHEAD = ClassSize.OBJECT
           + (4 * ClassSize.REFERENCE)
@@ -85,6 +91,11 @@ public abstract class AbstractMemStore implements MemStore {
   protected void resetActive() {
     // Reset heap to not include any keys
     this.active = SegmentFactory.instance().createMutableSegment(conf, comparator);
+    for (ActionListener actionListener : actionListeners) {
+      actionListener.updateAction();
+    }
+    // remove all the current actionListeners
+    actionListeners.clear();
     this.timeOfOldestEdit = Long.MAX_VALUE;
   }
 
@@ -96,10 +107,40 @@ public abstract class AbstractMemStore implements MemStore {
   public abstract void updateLowestUnflushedSequenceIdInWAL(boolean onlyIfMoreRecent);
 
   @Override
-  public void add(Iterable<Cell> cells, MemstoreSize memstoreSize) {
+  public void add(List<Cell> cells, MemstoreSize memstoreSize) {
     for (Cell cell : cells) {
       add(cell, memstoreSize);
     }
+  }
+
+  @Override
+  public Action addForMemstoreReplication(List<Cell> cells, MemstoreSize memstoreSize) {
+    // This active could change??
+    MemstoreAction action =
+        new MemstoreAction(active.getMemStoreLAB() != null, cells.size(), active, memstoreSize);
+    actionListeners.add(action);
+    for (Cell cell : cells) {
+      add(cell, memstoreSize, action);
+    }
+    return action;
+  }
+
+  private Action add(Cell cell, MemstoreSize memstoreSize, MemstoreAction action) {
+    Cell toAdd = maybeCloneWithAllocator(cell);
+    boolean mslabUsed = (toAdd != cell);
+    // This cell data is backed by the same byte[] where we read request in RPC(See HBASE-15180). By
+    // default MSLAB is ON and we might have copied cell to MSLAB area. If not we must do below deep
+    // copy. Or else we will keep referring to the bigger chunk of memory and prevent it from
+    // getting GCed.
+    // Copy to MSLAB would not have happened if
+    // 1. MSLAB is turned OFF. See "hbase.hregion.memstore.mslab.enabled"
+    // 2. When the size of the cell is bigger than the max size supported by MSLAB. See
+    // "hbase.hregion.memstore.mslab.max.allocation". This defaults to 256 KB
+    // 3. When cells are from Append/Increment operation.
+    if (!mslabUsed) {
+      toAdd = deepCopyIfNeeded(toAdd);
+    }
+    return internalAdd(toAdd, mslabUsed, memstoreSize, action);
   }
 
   @Override
@@ -119,6 +160,13 @@ public abstract class AbstractMemStore implements MemStore {
       toAdd = deepCopyIfNeeded(toAdd);
     }
     internalAdd(toAdd, mslabUsed, memstoreSize);
+  }
+
+  @Override
+  public Action addForMemstoreReplication(Cell cell, MemstoreSize memstoreSize) {
+    MemstoreAction action = new MemstoreAction(active.getMemStoreLAB() != null, 1, active, memstoreSize);
+    actionListeners.add(action);
+    return add (cell , memstoreSize, action);
   }
 
   private static Cell deepCopyIfNeeded(Cell cell) {
@@ -277,10 +325,78 @@ public abstract class AbstractMemStore implements MemStore {
    * @param mslabUsed whether using MSLAB
    * @param memstoreSize
    */
-  private void internalAdd(final Cell toAdd, final boolean mslabUsed, MemstoreSize memstoreSize) {
+  private void internalAdd(final Cell toAdd, final boolean mslabUsed,
+      MemstoreSize memstoreSize) {
     active.add(toAdd, mslabUsed, memstoreSize);
     setOldestEditTimeToNow();
     checkActiveSize();
+  }
+  
+  
+  /*
+   * Internal version of add() that doesn't clone Cells with the
+   * allocator, and doesn't take the lock.
+   *
+   * Callers should ensure they already have the read lock taken
+   * @param toAdd the cell to add
+   * @param mslabUsed whether using MSLAB
+   * @param memstoreSize
+   */
+  private Action internalAdd(final Cell toAdd, final boolean mslabUsed,
+      MemstoreSize memstoreSize, MemstoreAction action) {
+    action.add(toAdd);
+    return action;
+  }
+
+  class MemstoreAction implements Action, ActionListener {
+    private Segment active;
+    private MemstoreSize size;
+    private boolean mslabUsed;
+    private List<Cell> cells;
+    private int noOfCells;
+    // should this simple Reentrant Lock?
+    private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+
+    public MemstoreAction(boolean mslabUsed, int noOfCells, Segment active,
+        MemstoreSize memstoreSize) {
+      this.mslabUsed = mslabUsed;
+      this.active = active;
+      this.size = memstoreSize;
+      cells = new ArrayList<Cell>(noOfCells);
+    }
+
+    public void add(Cell cell) {
+      this.cells.add(cell);
+    }
+
+    public MemstoreSize getSize() {
+      return this.size;
+    }
+
+    @Override
+    public void performAction() {
+      lock.readLock().lock();
+      try {
+        for (Cell cell : cells) {
+          ((MutableSegment) active).add(cell, mslabUsed, size);
+          setOldestEditTimeToNow();
+          checkActiveSize();
+        }
+      } finally {
+        lock.readLock().unlock();
+      }
+    }
+
+    @Override
+    public void updateAction() {
+      lock.writeLock().lock();
+      try {
+        // update the active with the reset Active
+        this.active = AbstractMemStore.this.active;
+      } finally {
+        lock.writeLock().unlock();
+      }
+    }
   }
 
   private void setOldestEditTimeToNow() {
