@@ -153,9 +153,9 @@ import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.RegionSplitPolicy;
 import org.apache.hadoop.hbase.regionserver.compactions.ExploringCompactionPolicy;
 import org.apache.hadoop.hbase.regionserver.compactions.FIFOCompactionPolicy;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.DefaultMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.RingBufferMemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
 import org.apache.hadoop.hbase.replication.ReplicationException;
 import org.apache.hadoop.hbase.replication.ReplicationFactory;
 import org.apache.hadoop.hbase.replication.ReplicationPeerConfig;
@@ -753,7 +753,7 @@ public class HMaster extends HRegionServer implements MasterServices {
         this.conf.get(HBASE_REGIONSERVER_MEMSTORE_REPLICATOR_CLASS, DEFAULT);
     String className;
     if (memstoreReplicatorType.equals(DEFAULT)) {
-      className = DefaultMemstoreReplicator.class.getName();
+      className = SimpleMemstoreReplicator.class.getName();
       this.memstoreReplicator = ReflectionUtils.instantiateWithCustomCtor(className,
         new Class[] { Configuration.class, RegionServerServices.class },
         new Object[] { conf, this });

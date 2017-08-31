@@ -43,6 +43,7 @@ import org.apache.hadoop.hbase.client.ClusterConnection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.regionserver.HRegionServer;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.v2.RegionReplicaReplicator;
 import org.apache.hadoop.hbase.util.HasThread;
 import org.apache.hadoop.hbase.util.IdReadWriteLock;
 import org.apache.hadoop.hbase.util.IdReadWriteLock.ReferenceType;
@@ -160,7 +161,7 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
     }
 
     @Override
-    public void onEvent(MemstoreRepRingBufferTruck truck, long txid, boolean endoOfBatch)
+    public void onEvent(MemstoreRepRingBufferTruck truck, long txid, boolean endofBatch)
         throws Exception {
       // TODO Auto-generated method stub
       MemstoreReplicationEntry memstoreReplicationEntry = truck.getMemstoreReplicationEntry();
@@ -217,7 +218,8 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
     conf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, numRetries);
 
     // TODO : Like in WAL I think we should have writer threads equal to the number of handlers
-    this.numWriterThreads = this.conf.getInt("hbase.region.replica.replication.writer.threads", 3);
+    this.numWriterThreads = this.conf.getInt("hbase.region.replica.replication.writer.threads",
+      HConstants.DEFAULT_REGION_SERVER_HANDLER_COUNT);
 
     // use the regular RPC timeout for replica replication RPC's
     this.operationTimeout = conf.getInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT,
@@ -295,8 +297,11 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
 
   @Override
   public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      boolean replay, int replicaId, RegionLocations locations)
+      boolean replay, int replicaId, RegionReplicaReplicator replicator)
       throws IOException, InterruptedException, ExecutionException {
+    if (replicator.getLocations().isEmpty()) {
+      return;
+    }
     long txid = -1;
     CompletedFuture future = null;
     try {
@@ -304,7 +309,7 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
       txid = disruptor.getRingBuffer().next();
       MemstoreReplicationEntry entry =
           new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay, replicaId);
-      disruptor.getRingBuffer().get(txid).load(entry, future, locations);
+      disruptor.getRingBuffer().get(txid).load(entry, future, replicator.getLocations());
     } finally {
       disruptor.getRingBuffer().publish(txid);
     }

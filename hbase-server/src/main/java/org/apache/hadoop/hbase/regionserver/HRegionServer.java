@@ -130,9 +130,9 @@ import org.apache.hadoop.hbase.regionserver.compactions.CompactionProgress;
 import org.apache.hadoop.hbase.regionserver.handler.CloseMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RegionReplicaFlushHandler;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.DefaultMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.RingBufferMemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.FlushThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.regionserver.wal.MetricsWAL;
@@ -683,10 +683,10 @@ public class HRegionServer extends HasThread implements
     String memstoreReplicatorType = this.conf.get(HBASE_REGIONSERVER_MEMSTORE_REPLICATOR_CLASS, DEFAULT);
     String className;
     if (memstoreReplicatorType.equals(DEFAULT)) {
-      className = DefaultMemstoreReplicator.class.getName();
+      className = SimpleMemstoreReplicator.class.getName();
       this.memstoreReplicator = ReflectionUtils.instantiateWithCustomCtor(className,
-        new Class[] { Configuration.class, RegionServerServices.class },
-        new Object[] { conf, this });
+        new Class[] { Configuration.class },
+        new Object[] { conf });
     } else {
       className = RingBufferMemstoreReplicator.class.getName();
       LOG.info("Using ringbuffer memstore replicator");

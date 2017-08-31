@@ -146,6 +146,7 @@ import org.apache.hadoop.hbase.regionserver.compactions.CompactionContext;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.v2.RegionReplicaReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.CompactionThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.NoLimitThroughputController;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
@@ -669,6 +670,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   // whether to unassign region if we hit FNFE
   private final RegionUnassigner regionUnassigner;
   private MemstoreReplicator memstoreReplicator;
+  private volatile RegionReplicaReplicator regionReplicator;
   /**
    * HRegion constructor. This constructor should only be used for testing and
    * extensions.  Instances of HRegion should be instantiated with the
@@ -2567,7 +2569,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // replicate this
       try {
         this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, flushReplica,
-          this.getRegionInfo().getReplicaId(), locations);
+          this.getRegionInfo().getReplicaId(), regionReplicator);
       } catch (InterruptedException e) {
         // Ignore this. Probably next time we will be able to
         // TODO : Here we may not wait for the result.
@@ -2593,7 +2595,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // replicate this
       try {
         this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, flushReplica,
-          this.getRegionInfo().getReplicaId(), locations);
+          this.getRegionInfo().getReplicaId(), regionReplicator);
       } catch (InterruptedException e) {
         // Ignore this. Probably next time we will be able to
         // TODO : Here we may not wait for the result.
@@ -3609,7 +3611,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           if (!this.getRegionInfo().isSystemTable()) {
             // TODO : replicate system table also
             this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits, replay,
-              this.getRegionInfo().getReplicaId(), locations);
+              this.getRegionInfo().getReplicaId(), regionReplicator);
           }
           // TODO : need to handle all exceptions - make things synchronous in terms of
           // replicaiton
@@ -8575,6 +8577,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           locations = RegionAdminServiceCallable.getRegionLocations(connection,
             this.getRegionInfo().getTable(), this.getRegionInfo().getStartKey(), false,
             this.getRegionInfo().getReplicaId());
+          regionReplicator = new RegionReplicaReplicator(this.getRegionInfo(), locations);
         }
       }
     }
