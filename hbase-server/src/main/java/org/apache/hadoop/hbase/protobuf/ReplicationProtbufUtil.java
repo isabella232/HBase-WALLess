@@ -37,6 +37,7 @@ import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.io.SizedCellScanner;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.HBaseRpcControllerImpl;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
@@ -171,7 +172,7 @@ public class ReplicationProtbufUtil {
     return new Pair<>(builder.build(),
       getCellScanner(allCells, size));
   }
-
+/*
   // TODO : Recreating WAL PBs only. For now. We need to change it to Memstore replication PBs
   public static Pair<AdminProtos.ReplicateWALEntryRequest, CellScanner>
       buildReplicateMemstoreEntryRequest(final MemstoreReplicationEntry[] entries, byte[] encodedRegionName,
@@ -218,6 +219,40 @@ public class ReplicationProtbufUtil {
       builder.setSourceHFileArchiveDirPath(sourceHFileArchiveDir.toString());
     }
 
+    return new Pair<>(builder.build(), getCellScanner(allCells, size));
+  }*/
+
+  public static Pair<AdminProtos.ReplicateMemstoreReplicaEntryRequest, CellScanner>
+      buildReplicateMemstoreEntryRequest(final MemstoreReplicationEntry[] entries,
+          byte[] encodedRegionName, String replicationClusterId, Path sourceBaseNamespaceDir,
+          Path sourceHFileArchiveDir) {
+    // Accumulate all the Cells seen in here.
+    List<List<? extends Cell>> allCells = new ArrayList<>(entries.length);
+    int size = 0;
+    AdminProtos.ReplicateMemstoreReplicaEntryRequest.Builder builder =
+        AdminProtos.ReplicateMemstoreReplicaEntryRequest.newBuilder();
+    MemstoreReplicaProtos.MemstoreReplicationKey.Builder keyBuilder =
+        MemstoreReplicaProtos.MemstoreReplicationKey.newBuilder();
+    for (MemstoreReplicationEntry entry : entries) {
+      MemstoreReplicationKey key = entry.getMemstoreReplicationKey();
+      keyBuilder.setEncodedRegionName(UnsafeByteOperations.unsafeWrap(
+        encodedRegionName == null ? key.getEncodedRegionNameInBytes() : encodedRegionName));
+      keyBuilder.setTableName(UnsafeByteOperations.unsafeWrap(key.getTableName().getName()));
+      keyBuilder.setLogSequenceNumber(key.getSequenceId());
+      keyBuilder.setWriteTime(key.getWriteTime());
+
+      MemstoreEdits edit = entry.getMemstoreEdits();
+      List<Cell> cells = edit.getCells();
+      // Add up the size. It is used later serializing out the kvs.
+      for (Cell cell : cells) {
+        size += CellUtil.estimatedSerializedSizeOf(cell);
+      }
+      // Collect up the cells
+      allCells.add(cells);
+    }
+    // Write out how many cells associated with this entry.
+    keyBuilder.setAssociatedCellCount(allCells.size());
+    builder.setReplicationKeyEntry(keyBuilder.build());
     return new Pair<>(builder.build(), getCellScanner(allCells, size));
   }
 

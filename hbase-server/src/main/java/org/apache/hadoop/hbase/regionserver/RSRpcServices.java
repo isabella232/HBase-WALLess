@@ -36,6 +36,7 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -154,6 +155,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.MergeRegion
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest.RegionOpenInfo;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse.RegionOpeningState;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
@@ -198,6 +201,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.ResultOrEx
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.ScanRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.ScanResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.RegionLoad;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.NameBytesPair;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.NameInt64Pair;
@@ -205,6 +209,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier.RegionSpecifierType;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MapReduceProtos.ScanMetrics;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse.TableQuotaSnapshot;
@@ -223,6 +228,7 @@ import org.apache.hadoop.hbase.util.Strings;
 import org.apache.hadoop.hbase.wal.WAL;
 import org.apache.hadoop.hbase.wal.WALKey;
 import org.apache.hadoop.hbase.wal.WALSplitter;
+import org.apache.hadoop.hbase.wal.WALSplitter.MutationReplay;
 import org.apache.hadoop.hbase.zookeeper.ZKSplitLog;
 import org.apache.zookeeper.KeeperException;
 
@@ -2156,6 +2162,126 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
         }
       }
       return ReplicateWALEntryResponse.newBuilder().build();
+    } catch (IOException ie) {
+      throw new ServiceException(ie);
+    } finally {
+      if (regionServer.metricsRegionServer != null) {
+        regionServer.metricsRegionServer.updateReplay(
+          EnvironmentEdgeManager.currentTime() - before);
+      }
+    }
+  }
+
+  @Override
+  public ReplicateMemstoreReplicaEntryResponse memstoreReplay(RpcController controller,
+      ReplicateMemstoreReplicaEntryRequest request) throws ServiceException {
+    long before = EnvironmentEdgeManager.currentTime();
+    CellScanner cells = ((HBaseRpcController) controller).cellScanner();
+    try {
+      checkOpen();
+      MemstoreReplicationKey replicationKeyEntry = request.getReplicationKeyEntry();
+      int count = replicationKeyEntry.getAssociatedCellCount();
+      ByteString regionName = replicationKeyEntry.getEncodedRegionName();
+      Region region = regionServer.getRegionByEncodedName(regionName.toStringUtf8());
+      RegionCoprocessorHost coprocessorHost =
+          ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo())
+              ? region.getCoprocessorHost()
+              : null; // do not invoke coprocessors if this is a secondary region replica
+      List<Pair<WALKey, WALEdit>> walEntries = new ArrayList<>();
+
+      // Skip adding the edits to WAL if this is a secondary region replica
+      boolean isPrimary = RegionReplicaUtil.isDefaultReplica(region.getRegionInfo());
+      Durability durability = isPrimary ? Durability.USE_DEFAULT : Durability.SKIP_WAL;
+
+      if (!regionName.equals(replicationKeyEntry.getEncodedRegionName())) {
+        throw new NotServingRegionException("Replay request contains entries from multiple "
+            + "regions. First region:" + regionName.toStringUtf8() + " , other region:"
+            + replicationKeyEntry.getEncodedRegionName());
+      }
+
+      long replaySeqId = (replicationKeyEntry.hasOrigSequenceNumber())
+          ? replicationKeyEntry.getOrigSequenceNumber()
+          : replicationKeyEntry.getLogSequenceNumber();
+      List<MutationReplay> mutations = new ArrayList<>();
+      Cell previousCell = null;
+      Mutation m = null;
+      WALKey key = null;
+      WALEdit val = null;
+
+      for (int i = 0; i < count; i++) {
+        // Throw index out of bounds if our cell count is off
+        if (!cells.advance()) {
+          throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
+        }
+        Cell cell = cells.current();
+        if (val != null) val.add(cell);
+
+        boolean isNewRowOrType =
+            previousCell == null || previousCell.getTypeByte() != cell.getTypeByte()
+                || !CellUtil.matchingRow(previousCell, cell);
+        if (isNewRowOrType) {
+          // Create new mutation
+          if (CellUtil.isDelete(cell)) {
+            m = new Delete(cell.getRowArray(), cell.getRowOffset(), cell.getRowLength());
+            // Deletes don't have nonces.
+            mutations.add(
+              new MutationReplay(MutationType.DELETE, m, HConstants.NO_NONCE, HConstants.NO_NONCE));
+          } else {
+            m = new Put(cell.getRowArray(), cell.getRowOffset(), cell.getRowLength());
+            // Puts might come from increment or append, thus we need nonces.
+            mutations.add(
+              new MutationReplay(MutationType.PUT, m, HConstants.NO_NONCE, HConstants.NO_NONCE));
+          }
+        }
+        if (CellUtil.isDelete(cell)) {
+          ((Delete) m).addDeleteMarker(cell);
+        } else {
+          ((Put) m).add(cell);
+        }
+        m.setDurability(durability);
+        previousCell = cell;
+      }
+      BatchOperation batchOp = null;
+      if (mutations != null && !mutations.isEmpty()) {
+        // HBASE-17924
+        // sort to improve lock efficiency
+        Collections.sort(mutations);
+        // create one per region
+        // DO this or go with an executor. //TODO : How to shutdown these threads on stop??
+        ReplayCallbackExecutor replayCallbackExecutor =
+            regionCallBackExecutor.get(((HRegion) region).getRegionInfo().getEncodedName());
+        if (replayCallbackExecutor == null) {
+          replayCallbackExecutor = new ReplayCallbackExecutor();
+          replayCallbackExecutor.setDaemon(true);
+          regionCallBackExecutor.put(((HRegion) region).getRegionInfo().getEncodedName(),
+            replayCallbackExecutor);
+          // TODO : Handle interrupted exception
+          replayCallbackExecutor.start();
+        }
+        batchOp = doReplayBatchOp(region, mutations, replaySeqId);
+        if (batchOp.regionAction != null) {
+          try {
+            replayCallbackExecutor.offer(batchOp.regionAction);
+          } catch (InterruptedException e) {
+            // Handle this case
+          }
+        }
+        OperationStatus[] result = batchOp.retCodeDetails;
+        // check if it's a partial success
+        for (int i = 0; result != null && i < result.length; i++) {
+          if (result[i] != OperationStatus.SUCCESS) {
+            throw new IOException(result[i].getExceptionMsg());
+          }
+        }
+      }
+
+      if (coprocessorHost != null) {
+        for (Pair<WALKey, WALEdit> entry : walEntries) {
+          coprocessorHost.postWALRestore(region.getRegionInfo(), entry.getFirst(),
+            entry.getSecond());
+        }
+      }
+      return ReplicateMemstoreReplicaEntryResponse.newBuilder().build();
     } catch (IOException ie) {
       throw new ServiceException(ie);
     } finally {

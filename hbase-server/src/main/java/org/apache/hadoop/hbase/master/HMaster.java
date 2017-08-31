@@ -755,8 +755,8 @@ public class HMaster extends HRegionServer implements MasterServices {
     if (memstoreReplicatorType.equals(DEFAULT)) {
       className = SimpleMemstoreReplicator.class.getName();
       this.memstoreReplicator = ReflectionUtils.instantiateWithCustomCtor(className,
-        new Class[] { Configuration.class, RegionServerServices.class },
-        new Object[] { conf, this });
+        new Class[] { Configuration.class },
+        new Object[] { conf });
     } else {
       className = RingBufferMemstoreReplicator.class.getName();
       this.memstoreReplicator = ReflectionUtils.instantiateWithCustomCtor(className,

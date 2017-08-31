@@ -73,6 +73,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.MergeRegion
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.MergeRegionsResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RollWALWriterRequest;
@@ -746,5 +748,12 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
   @Override
   public MemstoreReplicator getMemstoreReplicator() {
     return new SimpleMemstoreReplicator(this.conf);
+  }
+
+  @Override
+  public ReplicateMemstoreReplicaEntryResponse memstoreReplay(RpcController controller,
+      ReplicateMemstoreReplicaEntryRequest request) throws ServiceException {
+    // TODO Auto-generated method stub
+    return null;
   }
 }

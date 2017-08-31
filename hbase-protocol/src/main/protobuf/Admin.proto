@@ -27,6 +27,7 @@ option optimize_for = SPEED;
 
 import "HBase.proto";
 import "WAL.proto";
+import "MemstoreReplica.proto";
 
 message GetRegionInfoRequest {
   required RegionSpecifier region = 1;
@@ -221,6 +222,12 @@ message ReplicateWALEntryResponse {
 message RollWALWriterRequest {
 }
 
+message ReplicateMemstoreReplicaEntryRequest {
+  required MemstoreReplicationKey replicationKeyEntry = 1;
+}
+
+message ReplicateMemstoreReplicaEntryResponse {
+}
 /*
  * Roll request responses no longer include regions to flush
  * this list will always be empty when talking to a 1.0 server
@@ -291,6 +298,9 @@ service AdminService {
 
   rpc Replay(ReplicateWALEntryRequest)
     returns(ReplicateWALEntryResponse);
+
+ rpc MemstoreReplay(ReplicateMemstoreReplicaEntryRequest)
+    returns(ReplicateMemstoreReplicaEntryResponse);
 
   rpc RollWALWriter(RollWALWriterRequest)
     returns(RollWALWriterResponse);
