@@ -21,11 +21,14 @@ package org.apache.hadoop.hbase.regionserver;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableSet;
 import java.util.SortedSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellComparator;
@@ -43,6 +46,7 @@ import com.google.common.annotations.VisibleForTesting;
  */
 @InterfaceAudience.Private
 public abstract class AbstractMemStore implements MemStore {
+  private static final Log LOG = LogFactory.getLog(AbstractMemStore.class);
 
   private static final long NO_SNAPSHOT_ID = -1;
 
@@ -58,7 +62,7 @@ public abstract class AbstractMemStore implements MemStore {
   private volatile long timeOfOldestEdit;
 
   // Will this grow in size?? TODO : check if CMS also works with this
-  private List<ActionListener> actionListeners = new ArrayList<ActionListener>();
+  private Map<ActionListener, Boolean> actionListeners = new ConcurrentHashMap<ActionListener, Boolean>();
 
   public final static long FIXED_OVERHEAD = ClassSize.OBJECT
           + (4 * ClassSize.REFERENCE)
@@ -91,8 +95,8 @@ public abstract class AbstractMemStore implements MemStore {
   protected void resetActive() {
     // Reset heap to not include any keys
     this.active = SegmentFactory.instance().createMutableSegment(conf, comparator);
-    for (ActionListener actionListener : actionListeners) {
-      actionListener.updateAction();
+    for (ActionListener actionListener : actionListeners.keySet()) {
+    	actionListener.updateAction();
     }
     // remove all the current actionListeners
     actionListeners.clear();
@@ -118,7 +122,7 @@ public abstract class AbstractMemStore implements MemStore {
     // This active could change??
     MemstoreAction action =
         new MemstoreAction(active.getMemStoreLAB() != null, cells.size(), active, memstoreSize);
-    actionListeners.add(action);
+    actionListeners.put(action, true);
     for (Cell cell : cells) {
       add(cell, memstoreSize, action);
     }
@@ -165,7 +169,7 @@ public abstract class AbstractMemStore implements MemStore {
   @Override
   public Action addForMemstoreReplication(Cell cell, MemstoreSize memstoreSize) {
     MemstoreAction action = new MemstoreAction(active.getMemStoreLAB() != null, 1, active, memstoreSize);
-    actionListeners.add(action);
+    actionListeners.put(action, true);
     return add (cell , memstoreSize, action);
   }
 
@@ -331,8 +335,7 @@ public abstract class AbstractMemStore implements MemStore {
     setOldestEditTimeToNow();
     checkActiveSize();
   }
-  
-  
+
   /*
    * Internal version of add() that doesn't clone Cells with the
    * allocator, and doesn't take the lock.
@@ -349,7 +352,7 @@ public abstract class AbstractMemStore implements MemStore {
   }
 
   class MemstoreAction implements Action, ActionListener {
-    private Segment active;
+    private volatile Segment active;
     private MemstoreSize size;
     private boolean mslabUsed;
     private List<Cell> cells;
@@ -382,6 +385,8 @@ public abstract class AbstractMemStore implements MemStore {
           setOldestEditTimeToNow();
           checkActiveSize();
         }
+        // remove the current action as it done
+        actionListeners.remove(this);
       } finally {
         lock.readLock().unlock();
       }
