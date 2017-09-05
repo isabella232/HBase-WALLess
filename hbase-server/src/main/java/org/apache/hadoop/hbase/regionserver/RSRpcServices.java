@@ -1149,11 +1149,11 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
   private static LogDelegate DEFAULT_LOG_DELEGATE = new LogDelegate() {
     @Override
     public void logBatchWarning(int sum, int rowSizeWarnThreshold) {
-      if (LOG.isWarnEnabled()) {
+      /*if (LOG.isWarnEnabled()) {
         LOG.warn("Large batch operation detected (greater than " + rowSizeWarnThreshold
             + ") (HBASE-18023)." + " Requested Number of Rows: " + sum + " Client: "
             + RpcServer.getRequestUserName() + "/" + RpcServer.getRemoteAddress());
-      }
+      }*/
     }
   };
 
