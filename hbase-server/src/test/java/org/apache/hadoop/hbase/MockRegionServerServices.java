@@ -360,6 +360,12 @@ public class MockRegionServerServices implements RegionServerServices {
 
   @Override
   public SimpleMemstoreReplicator getMemstoreReplicator() {
-    return new SimpleMemstoreReplicator(this.conf);
+    return new SimpleMemstoreReplicator(this.conf, this);
+  }
+
+  @Override
+  public boolean reportReplicaRegionHealthChange(HRegionInfo region, boolean good) {
+    // TODO Auto-generated method stub
+    return false;
   }
 }

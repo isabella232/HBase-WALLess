@@ -37,6 +37,7 @@ import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.master.MasterServices;
 import org.apache.hadoop.hbase.master.RegionState;
@@ -55,6 +56,8 @@ import com.google.common.base.Preconditions;
  */
 @InterfaceAudience.Private
 public class RegionStateStore {
+  private static final String HEALTH_QUALIFIER = "health";
+
   private static final Log LOG = LogFactory.getLog(RegionStateStore.class);
 
   /** The delimiter for meta columns for replicaIds &gt; 0 */
@@ -149,6 +152,29 @@ public class RegionStateStore {
         oldState != null ? oldState.getServerName() : null, openSeqNum, pid);
   }
 
+  // TODO new API. Check for method and param names
+  public void updateReplicaRegionHealth(HRegionInfo regionInfo, boolean good) throws IOException {
+    int replicaId = regionInfo.getReplicaId();
+    // Should never get called for def deplica
+    if (RegionReplicaUtil.isDefaultReplica(replicaId)) return;
+    final Put put = new Put(MetaTableAccessor.getMetaKeyForRegion(regionInfo));
+    put.addImmutable(HConstants.CATALOG_FAMILY, getReplicaHealthColumn(replicaId),
+        Bytes.toBytes(good));
+    createMultiHConnection();
+
+    try {
+      multiHConnection.processBatchCallback(Arrays.asList(put), TableName.META_TABLE_NAME, null, null);
+    } catch (IOException e) {
+      // TODO: Revist!!!! Means that if a server is loaded, then we will abort our host!
+      // In tests we abort the Master!
+      String msg = String.format("FAILED persisting Replica Region=%s Good Health=%s",
+          regionInfo.getShortNameToLog(), good);
+      LOG.error(msg, e);
+      master.abort(msg, e);
+      throw e;
+    }
+  }
+
   protected void updateMetaLocation(final HRegionInfo regionInfo, final ServerName serverName)
       throws IOException {
     try {
@@ -197,11 +223,7 @@ public class RegionStateStore {
 
   protected void updateRegionLocation(final HRegionInfo regionInfo, final State state,
       final Put... put) throws IOException {
-    synchronized (this) {
-      if (multiHConnection == null) {
-        multiHConnection = new MultiHConnection(master.getConfiguration(), 1);
-      }
-    }
+    createMultiHConnection();
 
     try {
       multiHConnection.processBatchCallback(Arrays.asList(put), TableName.META_TABLE_NAME, null, null);
@@ -213,6 +235,16 @@ public class RegionStateStore {
       LOG.error(msg, e);
       master.abort(msg, e);
       throw e;
+    }
+  }
+
+  private void createMultiHConnection() throws IOException {
+    if (multiHConnection == null) {
+      synchronized (this) {
+        if (multiHConnection == null) {
+          multiHConnection = new MultiHConnection(master.getConfiguration(), 1);
+        }
+      }
     }
   }
 
@@ -323,5 +355,10 @@ public class RegionStateStore {
         ? HConstants.STATE_QUALIFIER
         : Bytes.toBytes(HConstants.STATE_QUALIFIER_STR + META_REPLICA_ID_DELIMITER
           + String.format(HRegionInfo.REPLICA_ID_FORMAT, replicaId));
+  }
+
+  private static byte[] getReplicaHealthColumn(int replicaId) {
+    return Bytes.toBytes(HEALTH_QUALIFIER + META_REPLICA_ID_DELIMITER
+        + String.format(HRegionInfo.REPLICA_ID_FORMAT, replicaId));
   }
 }

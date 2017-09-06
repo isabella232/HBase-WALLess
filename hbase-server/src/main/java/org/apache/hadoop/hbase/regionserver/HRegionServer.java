@@ -174,6 +174,10 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRSFatalErrorRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.RegionReplicaStatusChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.RegionReplicaStatusChangeRequestOrBuilder;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.ReplicaRegionStatusService;
 import org.apache.hadoop.hbase.trace.SpanReceiverHost;
 import org.apache.hadoop.hbase.util.Addressing;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -361,6 +365,7 @@ public class HRegionServer extends HasThread implements
   // Stub to do region server status calls against the master.
   private volatile RegionServerStatusService.BlockingInterface rssStub;
   private volatile LockService.BlockingInterface lockStub;
+  private volatile ReplicaRegionStatusService.BlockingInterface rrssStub;
   // RPC client. Used to make the stub above that does region server status checking.
   RpcClient rpcClient;
 
@@ -495,6 +500,7 @@ public class HRegionServer extends HasThread implements
   private RegionServerSpaceQuotaManager rsSpaceQuotaManager;
 
   private MemstoreReplicator memstoreReplicator;
+  private Set<HRegionInfo> healthBadRegions = new HashSet<>(); 
 
   /**
    * Nonce manager. Nonces are used to make operations like increment and append idempotent
@@ -682,11 +688,9 @@ public class HRegionServer extends HasThread implements
     // TODO : Add config to instantiate based on what we nee
     String memstoreReplicatorType = this.conf.get(HBASE_REGIONSERVER_MEMSTORE_REPLICATOR_CLASS, DEFAULT);
     String className;
+    // TODO all the impls have to have the constructor signature
     if (memstoreReplicatorType.equals(DEFAULT)) {
-      className = SimpleMemstoreReplicator.class.getName();
-      this.memstoreReplicator = ReflectionUtils.instantiateWithCustomCtor(className,
-        new Class[] { Configuration.class },
-        new Object[] { conf });
+      this.memstoreReplicator = new SimpleMemstoreReplicator(conf, this);
     } else {
       className = RingBufferMemstoreReplicator.class.getName();
       LOG.info("Using ringbuffer memstore replicator");
@@ -1201,6 +1205,9 @@ public class HRegionServer extends HasThread implements
     }
     if (this.lockStub != null) {
       this.lockStub = null;
+    }
+    if (this.rrssStub != null) {
+      this.rrssStub = null;
     }
     if (this.rpcClient != null) {
       this.rpcClient.close();
@@ -2508,6 +2515,7 @@ public class HRegionServer extends HasThread implements
     long previousLogTime = 0;
     RegionServerStatusService.BlockingInterface intRssStub = null;
     LockService.BlockingInterface intLockStub = null;
+    ReplicaRegionStatusService.BlockingInterface intRrssStub = null;
     boolean interrupted = false;
     try {
       while (keepLooping()) {
@@ -2533,6 +2541,7 @@ public class HRegionServer extends HasThread implements
         if (this instanceof HMaster && sn.equals(getServerName())) {
           intRssStub = ((HMaster)this).getMasterRpcServices();
           intLockStub = ((HMaster)this).getMasterRpcServices();
+          intRrssStub = ((HMaster)this).getMasterRpcServices();
           break;
         }
         try {
@@ -2541,6 +2550,7 @@ public class HRegionServer extends HasThread implements
               shortOperationTimeout);
           intRssStub = RegionServerStatusService.newBlockingStub(channel);
           intLockStub = LockService.newBlockingStub(channel);
+          intRrssStub = ReplicaRegionStatusService.newBlockingStub(channel);
           break;
         } catch (IOException e) {
           if (System.currentTimeMillis() > (previousLogTime + 1000)) {
@@ -2565,6 +2575,7 @@ public class HRegionServer extends HasThread implements
     }
     this.rssStub = intRssStub;
     this.lockStub = intLockStub;
+    this.rrssStub = intRrssStub;
     return sn;
   }
 
@@ -3771,5 +3782,26 @@ public class HRegionServer extends HasThread implements
   @Override
   public RegionServerSpaceQuotaManager getRegionServerSpaceQuotaManager() {
     return this.rsSpaceQuotaManager;
+  }
+
+  @Override
+  public boolean reportReplicaRegionHealthChange(HRegionInfo region, boolean good) {
+    if (this.rrssStub == null) return false;
+    synchronized (region) {
+      if (this.healthBadRegions.contains(region)) {
+        RegionReplicaStatusChangeRequest.Builder builder = RegionReplicaStatusChangeRequest
+            .newBuilder();
+        builder.setRegionInfo(HRegionInfo.convert(region));
+        builder.setGoodState(good);
+        try {
+          this.rrssStub.replicaRegionStatusChange(null, builder.build());
+          this.healthBadRegions.add(region);
+        } catch (ServiceException e) {
+          e.printStackTrace();
+          return false;
+        }
+      }
+    }
+    return true;
   }
 }

@@ -747,7 +747,7 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
 
   @Override
   public MemstoreReplicator getMemstoreReplicator() {
-    return new SimpleMemstoreReplicator(this.conf);
+    return new SimpleMemstoreReplicator(this.conf, this);
   }
 
   @Override
@@ -755,5 +755,11 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
       ReplicateMemstoreReplicaEntryRequest request) throws ServiceException {
     // TODO Auto-generated method stub
     return null;
+  }
+
+  @Override
+  public boolean reportReplicaRegionHealthChange(HRegionInfo region, boolean good) {
+    // TODO Auto-generated method stub
+    return false;
   }
 }

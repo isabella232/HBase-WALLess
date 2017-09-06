@@ -129,6 +129,9 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionServerStartupRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionServerStartupResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionServerStatusService;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.RegionReplicaStatusChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.RegionReplicaStatusChangeResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.ReplicaRegionStatusService;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionSpaceUse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionSpaceUseReportRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionSpaceUseReportResponse;
@@ -167,7 +170,7 @@ import org.apache.zookeeper.KeeperException;
 @SuppressWarnings("deprecation")
 public class MasterRpcServices extends RSRpcServices
       implements MasterService.BlockingInterface, RegionServerStatusService.BlockingInterface,
-        LockService.BlockingInterface {
+        LockService.BlockingInterface, ReplicaRegionStatusService.BlockingInterface {
   private static final Log LOG = LogFactory.getLog(MasterRpcServices.class.getName());
 
   private final HMaster master;
@@ -2038,5 +2041,12 @@ public class MasterRpcServices extends RSRpcServices
     } catch (IOException ioe) {
       throw new ServiceException(ioe);
     }
+  }
+
+  @Override
+  public RegionReplicaStatusChangeResponse replicaRegionStatusChange(RpcController controller,
+      RegionReplicaStatusChangeRequest request) throws ServiceException {
+    // TODO Auto-generated method stub
+    return null;
   }
 }

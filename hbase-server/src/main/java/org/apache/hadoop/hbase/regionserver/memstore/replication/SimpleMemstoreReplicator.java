@@ -23,6 +23,7 @@ import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
 import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
+import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.v2.RegionReplicaReplicator;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse;
@@ -39,7 +40,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private final ReplicationThread[] replicationThreads;
   private final long replicationTimeoutNs;
   protected static final int DEFAULT_WAL_SYNC_TIMEOUT_MS = 5 * 60 * 1000;
-  public SimpleMemstoreReplicator(Configuration conf) {
+  protected final RegionServerServices rs;
+  
+  public SimpleMemstoreReplicator(Configuration conf, RegionServerServices rs) {
     // TODO Auto-generated method stub
     this.conf = HBaseConfiguration.create(conf);
     // Adjusting the client retries number. This defaults to 31. (Multiplied by 10?)
@@ -67,6 +70,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       this.replicationThreads[i] = new ReplicationThread();
       this.replicationThreads[i].start();
     }
+    this.rs = rs;
   }
 
   @Override
@@ -140,11 +144,11 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       // The write pipeline for replication will always be R1 -> R2 ->.. Rn
       // When there is a failure for any node, the current replica will try with its next and so on
       // Replica ids are like 0, 1, 2...
-      // TODO : something wrong here. Need to correct logic here
-     // for (int i = 1; i < (replicator.getReplicasCount() - curRegionReplicaId); i++) {
+      // TODO : something wrong here. Need to correct logic here - Corrected the logic
+      for (int i = curRegionReplicaId + 1; i < replicator.getReplicasCount(); i++) {
         // Getting the location of the next Region Replica (in pipeline)
-      HRegionLocation nextRegionLocation = replicator.getRegionLocation(curRegionReplicaId + 1);
-      if (nextRegionLocation != null) {
+        HRegionLocation nextRegionLocation = replicator.getRegionLocation(i);
+        if (nextRegionLocation != null) {
           RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
               rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
               nextRegionLocation.getRegionInfo(), null, entries);
@@ -162,13 +166,16 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
             // to META table. Need add new PB based RPC call.
             // To have a row specific lock here so that only one RPC will go from here to HM. There
             // may be other parallel handlers also trying to write to that replica.
+            // Get all info where all success and where all failed.  Just commented out the call.
+            //rs.reportReplicaRegionHealthChange(nextRegionLocation.getRegionInfo(), false);
             markException(entries, e);
             e.printStackTrace();
           }
         } else {
+          // TODO - This is unexpected situation. Should not mark as success
           markEntriesSuccess(entries);
         }
-     // }
+      }
       return null;
     }
 

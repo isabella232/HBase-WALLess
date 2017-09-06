@@ -282,4 +282,6 @@ public interface RegionServerServices extends OnlineRegions, FavoredNodesForRegi
   void unassign(byte[] regionName) throws IOException;
 
   MemstoreReplicator getMemstoreReplicator();
+  
+  boolean reportReplicaRegionHealthChange(HRegionInfo region, boolean good);
 }
