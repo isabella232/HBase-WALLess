@@ -26,5 +26,10 @@ public interface Action {
    * Performs some action after the response is built in the write path
    */
   public void performAction();
+
+  // Not the right name??
+  public default MemstoreSize getSize() {
+    return null;
+  }
 }
 

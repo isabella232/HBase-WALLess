@@ -3358,12 +3358,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private class ReplayRegionAction implements Action {
 
     // Better to make as a list so that all the callbacks can be handled one by one?
-    private MemstoreAction memstoreAction;
+    private Action memstoreAction;
     // TODO : we may need Coprocessor action etc.
     private MultiVersionConcurrencyControl mvcc;
     private long replayId;
 
-    public ReplayRegionAction(long replayId, MemstoreAction memstoreAction,
+    public ReplayRegionAction(long replayId, Action memstoreAction,
         MultiVersionConcurrencyControl mvcc) {
       this.replayId = replayId;
       this.memstoreAction = memstoreAction;
@@ -3577,7 +3577,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           replay? batchOp.getReplaySequenceId(): writeEntry.getWriteNumber());
         // shall we replicate this way only? But I think doing it like the WALEdit way will ensure
         // we reuse most of the code
-        Action memstoreAction = applyFamilyMapToMemstoreForMemstoreReplication(familyMaps[i], memstoreSize);
+        Action memstoreAction =
+            applyFamilyMapToMemstoreForMemstoreReplication(familyMaps[i], memstoreSize);
         if (memstoreAction != null) {
           if (!replay) {
             // do action immediately here
@@ -3592,7 +3593,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
               LOG.debug("Setting memstoreAction");
             }
             ((ReplayBatch) batchOp).setRegionAction(new ReplayRegionAction(
-                batchOp.getReplaySequenceId(), (MemstoreAction) memstoreAction, mvcc));
+                batchOp.getReplaySequenceId(), memstoreAction, mvcc));
           }
         }
       }
@@ -4555,15 +4556,44 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    */
   private Action applyFamilyMapToMemstoreForMemstoreReplication(Map<byte[], List<Cell>> familyMap,
       MemstoreSize memstoreSize) throws IOException {
+    ActionList actionList = new ActionList();
     for (Map.Entry<byte[], List<Cell>> e : familyMap.entrySet()) {
       byte[] family = e.getKey();
       List<Cell> cells = e.getValue();
       assert cells instanceof RandomAccess;
-      return applyToMemstoreForMemstoreReplication(getStore(family), cells, false, memstoreSize);
+      // This is a bug
+      actionList.addAction(
+        applyToMemstoreForMemstoreReplication(getStore(family), cells, false, memstoreSize));
     }
-    return null;
+    return actionList;
   }
 
+  private static class ActionList implements Action {
+
+    private List<Action> actionList = new ArrayList<Action>();
+
+    public void addAction(Action action) {
+      actionList.add(action);
+    }
+
+    @Override
+    public void performAction() {
+      // TODO Auto-generated method stub
+      for (Action action : actionList) {
+        action.performAction();
+      }
+    }
+
+    @Override
+    public MemstoreSize getSize() {
+      // TODO Auto-generated method stub
+      MemstoreSize size = new MemstoreSize();
+      for (Action action : actionList) {
+        size.incMemstoreSize(action.getSize());
+      }
+      return size;
+    }
+  }
   /*
    * @param delta If we are doing delta changes -- e.g. increment/append -- then this flag will be
    *  set; when set we will run operations that make sense in the increment/append scenario but
