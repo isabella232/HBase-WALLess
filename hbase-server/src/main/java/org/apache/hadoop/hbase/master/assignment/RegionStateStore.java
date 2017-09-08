@@ -153,24 +153,26 @@ public class RegionStateStore {
   }
 
   // TODO new API. Check for method and param names
-  public void updateReplicaRegionHealth(HRegionInfo regionInfo, boolean good) throws IOException {
-    int replicaId = regionInfo.getReplicaId();
-    // Should never get called for def deplica
-    if (RegionReplicaUtil.isDefaultReplica(replicaId)) return;
-    final Put put = new Put(MetaTableAccessor.getMetaKeyForRegion(regionInfo));
-    put.addImmutable(HConstants.CATALOG_FAMILY, getReplicaHealthColumn(replicaId),
-        Bytes.toBytes(good));
+  public void updateReplicaRegionHealth(List<HRegionInfo> regions, boolean good) throws IOException {
+    assert regions.size()>0;
+    Put put = null;
+    for (HRegionInfo region : regions) {
+      int replicaId = region.getReplicaId();
+      // Should never get called for def deplica
+      if (!RegionReplicaUtil.isDefaultReplica(replicaId)) {
+        if (put == null) put = new Put(MetaTableAccessor.getMetaKeyForRegion(region));
+        put.addImmutable(HConstants.CATALOG_FAMILY, getReplicaHealthColumn(replicaId),
+            Bytes.toBytes(good));
+      }
+    }
+    if (put == null) throw new IOException("No replica regions been passed");
     createMultiHConnection();
-
     try {
       multiHConnection.processBatchCallback(Arrays.asList(put), TableName.META_TABLE_NAME, null, null);
     } catch (IOException e) {
-      // TODO: Revist!!!! Means that if a server is loaded, then we will abort our host!
+      // TODO: Revisit!!!! Means that if a server is loaded, then we will abort our host!
       // In tests we abort the Master!
-      String msg = String.format("FAILED persisting Replica Region=%s Good Health=%s",
-          regionInfo.getShortNameToLog(), good);
-      LOG.error(msg, e);
-      master.abort(msg, e);
+      master.abort("FAILED persisting Replica Region Health", e);
       throw e;
     }
   }

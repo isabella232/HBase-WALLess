@@ -20,23 +20,23 @@
 package hbase.pb;
 
 option java_package = "org.apache.hadoop.hbase.shaded.protobuf.generated";
-option java_outer_classname = "ReplicaRegionStatusProtos";
+option java_outer_classname = "ReplicaRegionHealthProtos";
+option java_generic_services = true;
 option java_generate_equals_and_hash = true;
 option optimize_for = SPEED;
 
 import "HBase.proto";
 
-message RegionReplicaStatusChangeRequest {
-  required RegionInfo region_info = 1;
+message RegionReplicaHealthChangeRequest {
+  repeated RegionInfo region_info = 1;
   required bool good_state = 2;
 }
 
-message RegionReplicaStatusChangeResponse {
+message RegionReplicaHealthChangeResponse {
 
 }
 
-service ReplicaRegionStatusService {
-  /** Called when a region server first starts. */
-  rpc ReplicaRegionStatusChange(RegionReplicaStatusChangeRequest)
-    returns(RegionReplicaStatusChangeResponse);
+service ReplicaRegionHealthService {
+  rpc HealthChange(RegionReplicaHealthChangeRequest)
+    returns(RegionReplicaHealthChangeResponse);
 }

@@ -174,10 +174,10 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRSFatalErrorRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionResponse;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.RegionReplicaStatusChangeRequest;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.RegionReplicaStatusChangeRequestOrBuilder;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.ReplicaRegionStatusService;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeRequestOrBuilder;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaRegionHealthService;
 import org.apache.hadoop.hbase.trace.SpanReceiverHost;
 import org.apache.hadoop.hbase.util.Addressing;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -365,7 +365,7 @@ public class HRegionServer extends HasThread implements
   // Stub to do region server status calls against the master.
   private volatile RegionServerStatusService.BlockingInterface rssStub;
   private volatile LockService.BlockingInterface lockStub;
-  private volatile ReplicaRegionStatusService.BlockingInterface rrssStub;
+  private volatile ReplicaRegionHealthService.BlockingInterface rrssStub;
   // RPC client. Used to make the stub above that does region server status checking.
   RpcClient rpcClient;
 
@@ -499,7 +499,7 @@ public class HRegionServer extends HasThread implements
   private RegionServerRpcQuotaManager rsQuotaManager;
   private RegionServerSpaceQuotaManager rsSpaceQuotaManager;
 
-  private MemstoreReplicator memstoreReplicator;
+  protected MemstoreReplicator memstoreReplicator;
   private Set<HRegionInfo> healthBadRegions = new HashSet<>(); 
 
   /**
@@ -2515,7 +2515,7 @@ public class HRegionServer extends HasThread implements
     long previousLogTime = 0;
     RegionServerStatusService.BlockingInterface intRssStub = null;
     LockService.BlockingInterface intLockStub = null;
-    ReplicaRegionStatusService.BlockingInterface intRrssStub = null;
+    ReplicaRegionHealthService.BlockingInterface intRrssStub = null;
     boolean interrupted = false;
     try {
       while (keepLooping()) {
@@ -2550,7 +2550,7 @@ public class HRegionServer extends HasThread implements
               shortOperationTimeout);
           intRssStub = RegionServerStatusService.newBlockingStub(channel);
           intLockStub = LockService.newBlockingStub(channel);
-          intRrssStub = ReplicaRegionStatusService.newBlockingStub(channel);
+          intRrssStub = ReplicaRegionHealthService.newBlockingStub(channel);
           break;
         } catch (IOException e) {
           if (System.currentTimeMillis() > (previousLogTime + 1000)) {
@@ -3785,16 +3785,16 @@ public class HRegionServer extends HasThread implements
   }
 
   @Override
-  public boolean reportReplicaRegionHealthChange(HRegionInfo region, boolean good) {
+  public boolean reportReplicaRegionHealthChange(HRegionInfo region, boolean goodHealth) {
     if (this.rrssStub == null) return false;
     synchronized (region) {
       if (this.healthBadRegions.contains(region)) {
-        RegionReplicaStatusChangeRequest.Builder builder = RegionReplicaStatusChangeRequest
+        RegionReplicaHealthChangeRequest.Builder builder = RegionReplicaHealthChangeRequest
             .newBuilder();
-        builder.setRegionInfo(HRegionInfo.convert(region));
-        builder.setGoodState(good);
+        builder.addRegionInfo(HRegionInfo.convert(region));
+        builder.setGoodState(goodHealth);
         try {
-          this.rrssStub.replicaRegionStatusChange(null, builder.build());
+          this.rrssStub.healthChange(null, builder.build());
           this.healthBadRegions.add(region);
         } catch (ServiceException e) {
           e.printStackTrace();

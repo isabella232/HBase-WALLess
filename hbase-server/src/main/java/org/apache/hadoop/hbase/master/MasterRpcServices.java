@@ -87,6 +87,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.*;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.RegionStoreSequenceIds;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.NameStringPair;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ProcedureDescription;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier.RegionSpecifierType;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.LockServiceProtos.LockHeartbeatRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.LockServiceProtos.LockHeartbeatResponse;
@@ -129,9 +130,9 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionServerStartupRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionServerStartupResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionServerStatusService;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.RegionReplicaStatusChangeRequest;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.RegionReplicaStatusChangeResponse;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionStatusProtos.ReplicaRegionStatusService;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaRegionHealthService;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionSpaceUse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionSpaceUseReportRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionSpaceUseReportResponse;
@@ -170,7 +171,7 @@ import org.apache.zookeeper.KeeperException;
 @SuppressWarnings("deprecation")
 public class MasterRpcServices extends RSRpcServices
       implements MasterService.BlockingInterface, RegionServerStatusService.BlockingInterface,
-        LockService.BlockingInterface, ReplicaRegionStatusService.BlockingInterface {
+        LockService.BlockingInterface, ReplicaRegionHealthService.BlockingInterface {
   private static final Log LOG = LogFactory.getLog(MasterRpcServices.class.getName());
 
   private final HMaster master;
@@ -2044,9 +2045,17 @@ public class MasterRpcServices extends RSRpcServices
   }
 
   @Override
-  public RegionReplicaStatusChangeResponse replicaRegionStatusChange(RpcController controller,
-      RegionReplicaStatusChangeRequest request) throws ServiceException {
-    // TODO Auto-generated method stub
-    return null;
+  public RegionReplicaHealthChangeResponse healthChange(RpcController controller,
+      RegionReplicaHealthChangeRequest request) throws ServiceException {
+    List<RegionInfo> pbRegions = request.getRegionInfoList();
+    List<HRegionInfo> regions = new ArrayList<>(pbRegions.size());
+    pbRegions.forEach((pbRegion) -> regions.add(HRegionInfo.convert(pbRegion)));
+    try {
+      this.master.getAssignmentManager().getRegionStateStore().updateReplicaRegionHealth(regions,
+          request.getGoodState());
+    } catch (IOException ioe) {
+      throw new ServiceException(ioe);
+    }
+    return RegionReplicaHealthChangeResponse.newBuilder().build();
   }
 }
