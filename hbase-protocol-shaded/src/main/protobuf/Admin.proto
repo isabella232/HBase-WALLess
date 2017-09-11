@@ -212,12 +212,15 @@ message ReplicateWALEntryResponse {
 message RollWALWriterRequest {
 }
 
-
 message ReplicateMemstoreReplicaEntryRequest {
-  required MemstoreReplicationKey replicationKeyEntry = 1;
+	required MemstoreReplicationKey replicationKeyEntry = 1;
+	required uint32 currentPipelineIndex = 2;
 }
 
 message ReplicateMemstoreReplicaEntryResponse {
+	repeated bytes failedReplicaServers = 1;
+	optional uint32 updatedReplicaSuccessCount = 2;
+	optional uint32 failedReplicaCount = 3;
 }
 /*
  * Roll request responses no longer include regions to flush

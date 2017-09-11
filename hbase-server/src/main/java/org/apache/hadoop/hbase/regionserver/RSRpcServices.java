@@ -36,7 +36,6 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -155,9 +154,9 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.MergeRegion
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest.RegionOpenInfo;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse.RegionOpeningState;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse.RegionOpeningState;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RollWALWriterRequest;
@@ -201,7 +200,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.ResultOrEx
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.ScanRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.ScanResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.RegionLoad;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.NameBytesPair;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.NameInt64Pair;
@@ -1063,7 +1061,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
    *         exceptionMessage if any
    * @throws IOException
    */
-  private BatchOperation doReplayBatchOp(final Region region,
+  private OperationStatus[] doReplayBatchOp(final Region region,
       final List<WALSplitter.MutationReplay> mutations, long replaySeqId) throws IOException {
     long before = EnvironmentEdgeManager.currentTime();
     boolean batchContainsPuts = false, batchContainsDelete = false;
@@ -1093,7 +1091,84 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
             }
             FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(metaCell);
             if (flushDesc != null && !isDefaultReplica) {
-              hRegion.replayWALFlushMarker(flushDesc, replaySeqId);
+              hRegion.replayWALFlushMarker(flushDesc, replaySeqId, 1);
+              continue;
+            }
+            RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(metaCell);
+            if (regionEvent != null && !isDefaultReplica) {
+              hRegion.replayWALRegionEventMarker(regionEvent);
+              continue;
+            }
+            BulkLoadDescriptor bulkLoadEvent = WALEdit.getBulkLoadDescriptor(metaCell);
+            if (bulkLoadEvent != null) {
+              hRegion.replayWALBulkLoadEventMarker(bulkLoadEvent);
+              continue;
+            }
+          }
+          it.remove();
+        }
+      }
+      requestCount.add(mutations.size());
+      if (!region.getRegionInfo().isMetaTable()) {
+        regionServer.cacheFlusher.reclaimMemStoreMemory();
+      }
+      return region.batchReplay(mutations.toArray(
+        new WALSplitter.MutationReplay[mutations.size()]), replaySeqId);
+    } finally {
+      if (regionServer.metricsRegionServer != null) {
+        long after = EnvironmentEdgeManager.currentTime();
+          if (batchContainsPuts) {
+          regionServer.metricsRegionServer.updatePut(after - before);
+        }
+        if (batchContainsDelete) {
+          regionServer.metricsRegionServer.updateDelete(after - before);
+        }
+      }
+    }
+  }
+
+  /**
+   * Execute a list of Put/Delete mutations. The function returns OperationStatus instead of
+   * constructing MultiResponse to save a possible loop if caller doesn't need MultiResponse.
+   * @param region
+   * @param mutations
+   * @param replaySeqId
+   * @param replicaSuccesCount 
+   * @return an array of OperationStatus which internally contains the OperationStatusCode and the
+   *         exceptionMessage if any
+   * @throws IOException
+   */
+  private BatchOperation doReplayBatchOpForMemstoreReplication(final Region region,
+      final List<WALSplitter.MutationReplay> mutations, long replaySeqId, int replicaSuccesCount) throws IOException {
+    long before = EnvironmentEdgeManager.currentTime();
+    boolean batchContainsPuts = false, batchContainsDelete = false;
+    try {
+      for (Iterator<WALSplitter.MutationReplay> it = mutations.iterator(); it.hasNext();) {
+        WALSplitter.MutationReplay m = it.next();
+
+        if (m.type == MutationType.PUT) {
+          batchContainsPuts = true;
+        } else {
+          batchContainsDelete = true;
+        }
+
+        NavigableMap<byte[], List<Cell>> map = m.mutation.getFamilyCellMap();
+        List<Cell> metaCells = map.get(WALEdit.METAFAMILY);
+        if (metaCells != null && !metaCells.isEmpty()) {
+          for (Cell metaCell : metaCells) {
+            CompactionDescriptor compactionDesc = WALEdit.getCompaction(metaCell);
+            boolean isDefaultReplica = RegionReplicaUtil.isDefaultReplica(region.getRegionInfo());
+            HRegion hRegion = (HRegion)region;
+            if (compactionDesc != null) {
+              // replay the compaction. Remove the files from stores only if we are the primary
+              // region replica (thus own the files)
+              hRegion.replayWALCompactionMarker(compactionDesc, !isDefaultReplica, isDefaultReplica,
+                replaySeqId);
+              continue;
+            }
+            FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(metaCell);
+            if (flushDesc != null && !isDefaultReplica) {
+              hRegion.replayWALFlushMarker(flushDesc, replaySeqId, replicaSuccesCount);
               continue;
             }
             RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(metaCell);
@@ -1115,7 +1190,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
         regionServer.cacheFlusher.reclaimMemStoreMemory();
       }
       return region.batchReplayForMemstoreReplication(mutations.toArray(
-        new WALSplitter.MutationReplay[mutations.size()]), replaySeqId);
+        new WALSplitter.MutationReplay[mutations.size()]), replaySeqId, replicaSuccesCount);
     } finally {
       if (regionServer.metricsRegionServer != null) {
         long after = EnvironmentEdgeManager.currentTime();
@@ -2118,28 +2193,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           Collections.sort(edits);
           long replaySeqId = (entry.getKey().hasOrigSequenceNumber()) ?
             entry.getKey().getOrigSequenceNumber() : entry.getKey().getLogSequenceNumber();
-
-            // create one per region
-            // DO this or go with an executor. //TODO : How to shutdown these threads on stop??
-          ReplayCallbackExecutor replayCallbackExecutor =
-              regionCallBackExecutor.get(((HRegion) region).getRegionInfo().getEncodedName());
-          if (replayCallbackExecutor == null) {
-            replayCallbackExecutor = new ReplayCallbackExecutor();
-            replayCallbackExecutor.setDaemon(true);
-            regionCallBackExecutor
-                .put(((HRegion) region).getRegionInfo().getEncodedName(), replayCallbackExecutor);
-            // TODO : Handle interrupted exception
-            replayCallbackExecutor.start();
-          }
-          batchOp = doReplayBatchOp(region, edits, replaySeqId);
-          if (batchOp.regionAction != null) {
-            try {
-              replayCallbackExecutor.offer(batchOp.regionAction);
-            } catch (InterruptedException e) {
-              // Handle this case
-            }
-          }
-          OperationStatus[] result =batchOp.retCodeDetails;
+          OperationStatus[] result = doReplayBatchOp(region, edits, replaySeqId);
           // check if it's a partial success
           for (int i = 0; result != null && i < result.length; i++) {
             if (result[i] != OperationStatus.SUCCESS) {
@@ -2182,6 +2236,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       MemstoreReplicationKey replicationKeyEntry = request.getReplicationKeyEntry();
       int count = replicationKeyEntry.getAssociatedCellCount();
       ByteString regionName = replicationKeyEntry.getEncodedRegionName();
+      int currentIndex = request.getCurrentPipelineIndex();
       Region region = regionServer.getRegionByEncodedName(regionName.toStringUtf8());
       RegionCoprocessorHost coprocessorHost =
           ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo())
@@ -2258,7 +2313,9 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           // TODO : Handle interrupted exception
           replayCallbackExecutor.start();
         }
-        batchOp = doReplayBatchOp(region, mutations, replaySeqId);
+        batchOp = doReplayBatchOpForMemstoreReplication(region, mutations, replaySeqId, currentIndex);
+        // if there is an error then this action is not going to be performed which means we are not advancing the
+        // mvcc
         if (batchOp.regionAction != null) {
           try {
             replayCallbackExecutor.offer(batchOp.regionAction);
@@ -2281,7 +2338,10 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
             entry.getSecond());
         }
       }
-      return ReplicateMemstoreReplicaEntryResponse.newBuilder().build();
+      if(batchOp.response == null) {
+        return ReplicateMemstoreReplicaEntryResponse.newBuilder().build();
+      }
+      return batchOp.response;
     } catch (IOException ie) {
       throw new ServiceException(ie);
     } finally {
@@ -2309,9 +2369,6 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
         try {
           action = callbackList.take();
         } catch (InterruptedException e) {
-        }
-        if(LOG.isDebugEnabled()) {
-          LOG.debug("Performing action");
         }
         action.performAction();
       }

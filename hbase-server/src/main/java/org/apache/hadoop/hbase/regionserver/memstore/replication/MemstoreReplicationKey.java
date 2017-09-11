@@ -58,7 +58,9 @@ public class MemstoreReplicationKey {
   private long writeTime;
 
   private MultiVersionConcurrencyControl mvcc;
-  
+
+  //Is it right to add here??
+  private final int currentReplicaIndex;
   /**
    * Set in a way visible to multiple threads; e.g. synchronized getter/setters.
    */
@@ -67,26 +69,27 @@ public class MemstoreReplicationKey {
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
   public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
-      TableName tableName, MultiVersionConcurrencyControl mvcc) {
+      TableName tableName, MultiVersionConcurrencyControl mvcc, int currentReplicaIndex) {
     this(encodedRegionNameInBytes, encodedRegionName, tableName, NO_SEQUENCE_ID,
-        HConstants.LATEST_TIMESTAMP, mvcc);
+        HConstants.LATEST_TIMESTAMP, mvcc, currentReplicaIndex);
   }
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
   public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
-      TableName tableName, long now, MultiVersionConcurrencyControl mvcc) {
-    this(encodedRegionNameInBytes, encodedRegionName, tableName, NO_SEQUENCE_ID, now, mvcc);
+      TableName tableName, long now, MultiVersionConcurrencyControl mvcc, int currentReplicaIndex) {
+    this(encodedRegionNameInBytes, encodedRegionName, tableName, NO_SEQUENCE_ID, now, mvcc, currentReplicaIndex);
   }
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
   public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
-      TableName tableName, long sequenceId, long now, MultiVersionConcurrencyControl mvcc) {
+      TableName tableName, long sequenceId, long now, MultiVersionConcurrencyControl mvcc, int currentReplicaIndex) {
     this.encodedRegionNameInBytes = encodedRegionNameInBytes;
     this.encodedRegionName = encodedRegionName;
     this.tablename = tableName;
     this.sequenceId = sequenceId;
     this.writeTime = now;
     this.mvcc = mvcc;
+    this.currentReplicaIndex = currentReplicaIndex;
   }
 
   public byte[] getEncodedRegionNameInBytes() {
@@ -147,5 +150,8 @@ public class MemstoreReplicationKey {
     this.encodedRegionName = encodedRegionName;
   }
 
+  public int getCurrentReplicaIndex() {
+    return this.currentReplicaIndex;
+  }
   // Add proto file for this. PD serDe methods to be added
 }

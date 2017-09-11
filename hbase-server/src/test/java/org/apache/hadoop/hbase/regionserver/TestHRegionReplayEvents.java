@@ -272,7 +272,7 @@ public class TestHRegionReplayEvents {
       if (flushDesc != null) {
         if (flushDesc.getAction() == FlushAction.START_FLUSH) {
           LOG.info("-- Replaying flush start in secondary");
-          secondaryRegion.replayWALFlushStartMarker(flushDesc);
+          secondaryRegion.replayWALFlushStartMarker(flushDesc, 1);
         } else if (flushDesc.getAction() == FlushAction.COMMIT_FLUSH) {
           LOG.info("-- NOT Replaying flush commit in secondary");
         }
@@ -346,7 +346,7 @@ public class TestHRegionReplayEvents {
         long storeSizeUncompressed = store.getStoreSizeUncompressed();
         if (flushDesc.getAction() == FlushAction.START_FLUSH) {
           LOG.info("-- Replaying flush start in secondary");
-          PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(flushDesc);
+          PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(flushDesc, 1);
           assertNull(result.result);
           assertEquals(result.flushOpSeqId, flushDesc.getFlushSequenceNumber());
 
@@ -358,7 +358,7 @@ public class TestHRegionReplayEvents {
 
         } else if (flushDesc.getAction() == FlushAction.COMMIT_FLUSH) {
           LOG.info("-- Replaying flush commit in secondary");
-          secondaryRegion.replayWALFlushCommitMarker(flushDesc);
+          secondaryRegion.replayWALFlushCommitMarker(flushDesc, 1);
 
           // assert that the flush files are picked
           expectedStoreFileCount++;
@@ -445,7 +445,7 @@ public class TestHRegionReplayEvents {
         if (flushDesc.getAction() == FlushAction.START_FLUSH) {
           startFlushDesc = flushDesc;
           LOG.info("-- Replaying flush start in secondary");
-          PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc);
+          PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc, 1);
           assertNull(result.result);
           assertEquals(result.flushOpSeqId, startFlushDesc.getFlushSequenceNumber());
           assertTrue(regionMemstoreSize > 0);
@@ -473,7 +473,7 @@ public class TestHRegionReplayEvents {
 
     // Test case 1: replay the same flush start marker again
     LOG.info("-- Replaying same flush start in secondary again");
-    PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc);
+    PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc, 1);
     assertNull(result); // this should return null. Ignoring the flush start marker
     // assert that we still have prepared flush with the previous setup.
     assertNotNull(secondaryRegion.getPrepareFlushResult());
@@ -486,7 +486,7 @@ public class TestHRegionReplayEvents {
     FlushDescriptor startFlushDescSmallerSeqId
       = clone(startFlushDesc, startFlushDesc.getFlushSequenceNumber() - 50);
     LOG.info("-- Replaying same flush start in secondary again " + startFlushDescSmallerSeqId);
-    result = secondaryRegion.replayWALFlushStartMarker(startFlushDescSmallerSeqId);
+    result = secondaryRegion.replayWALFlushStartMarker(startFlushDescSmallerSeqId, 1);
     assertNull(result); // this should return null. Ignoring the flush start marker
     // assert that we still have prepared flush with the previous setup.
     assertNotNull(secondaryRegion.getPrepareFlushResult());
@@ -499,7 +499,7 @@ public class TestHRegionReplayEvents {
     FlushDescriptor startFlushDescLargerSeqId
       = clone(startFlushDesc, startFlushDesc.getFlushSequenceNumber() + 50);
     LOG.info("-- Replaying same flush start in secondary again " + startFlushDescLargerSeqId);
-    result = secondaryRegion.replayWALFlushStartMarker(startFlushDescLargerSeqId);
+    result = secondaryRegion.replayWALFlushStartMarker(startFlushDescLargerSeqId, 1);
     assertNull(result); // this should return null. Ignoring the flush start marker
     // assert that we still have prepared flush with the previous setup.
     assertNotNull(secondaryRegion.getPrepareFlushResult());
@@ -549,7 +549,7 @@ public class TestHRegionReplayEvents {
           } else {
             LOG.info("-- Replaying flush start in secondary");
             startFlushDesc = flushDesc;
-            PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc);
+            PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc, 1);
             assertNull(result.result);
           }
         } else if (flushDesc.getAction() == FlushAction.COMMIT_FLUSH) {
@@ -582,7 +582,7 @@ public class TestHRegionReplayEvents {
     assertTrue(commitFlushDesc.getFlushSequenceNumber() < startFlushDesc.getFlushSequenceNumber());
 
     LOG.info("-- Replaying flush commit in secondary" + commitFlushDesc);
-    secondaryRegion.replayWALFlushCommitMarker(commitFlushDesc);
+    secondaryRegion.replayWALFlushCommitMarker(commitFlushDesc, 1);
 
     // assert that the flush files are picked
     expectedStoreFileCount++;
@@ -636,7 +636,7 @@ public class TestHRegionReplayEvents {
           if (startFlushDesc == null) {
             LOG.info("-- Replaying flush start in secondary");
             startFlushDesc = flushDesc;
-            PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc);
+            PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc, 1);
             assertNull(result.result);
           }
         } else if (flushDesc.getAction() == FlushAction.COMMIT_FLUSH) {
@@ -672,7 +672,7 @@ public class TestHRegionReplayEvents {
     assertTrue(commitFlushDesc.getFlushSequenceNumber() > startFlushDesc.getFlushSequenceNumber());
 
     LOG.info("-- Replaying flush commit in secondary" + commitFlushDesc);
-    secondaryRegion.replayWALFlushCommitMarker(commitFlushDesc);
+    secondaryRegion.replayWALFlushCommitMarker(commitFlushDesc, 1);
 
     // assert that the flush files are picked
     expectedStoreFileCount++;
@@ -777,7 +777,7 @@ public class TestHRegionReplayEvents {
     }
 
     LOG.info("-- Replaying flush commit in secondary" + commitFlushDesc);
-    secondaryRegion.replayWALFlushCommitMarker(commitFlushDesc);
+    secondaryRegion.replayWALFlushCommitMarker(commitFlushDesc, 1);
 
     // assert that the flush files are picked
     expectedStoreFileCount++;
@@ -923,7 +923,7 @@ public class TestHRegionReplayEvents {
       if (flushDesc != null) {
         // only replay flush start
         if (flushDesc.getAction() == FlushAction.START_FLUSH) {
-          secondaryRegion.replayWALFlushStartMarker(flushDesc);
+          secondaryRegion.replayWALFlushStartMarker(flushDesc, 1);
         }
       } else if (regionEventDesc != null) {
         regionEvents.add(regionEventDesc);
@@ -1057,11 +1057,11 @@ public class TestHRegionReplayEvents {
       if (flushDesc != null) {
         if (flushDesc.getAction() == FlushAction.START_FLUSH) {
           LOG.info("-- Replaying flush start in secondary");
-          secondaryRegion.replayWALFlushStartMarker(flushDesc);
+          secondaryRegion.replayWALFlushStartMarker(flushDesc, 1);
           flushSeqId = flushDesc.getFlushSequenceNumber();
         } else if (flushDesc.getAction() == FlushAction.COMMIT_FLUSH) {
           LOG.info("-- Replaying flush commit in secondary");
-          secondaryRegion.replayWALFlushCommitMarker(flushDesc);
+          secondaryRegion.replayWALFlushCommitMarker(flushDesc, 1);
           assertEquals(flushSeqId, flushDesc.getFlushSequenceNumber());
         }
       }
@@ -1140,7 +1140,7 @@ public class TestHRegionReplayEvents {
           UnsafeByteOperations.unsafeWrap(primaryRegion.getRegionInfo().getEncodedNameAsBytes()))
       .setRegionName(UnsafeByteOperations.unsafeWrap(
           primaryRegion.getRegionInfo().getRegionName()))
-      .build());
+      .build(), 1);
 
     verify(walSecondary, times(0)).append((HRegionInfo)any(),
       (WALKey)any(), (WALEdit)any(), anyBoolean());
@@ -1234,7 +1234,7 @@ public class TestHRegionReplayEvents {
       }
       FlushDescriptor flush = WALEdit.getFlushDescriptor(entry.getEdit().getCells().get(0));
       if (flush != null) {
-        secondaryRegion.replayWALFlushMarker(flush, entry.getKey().getLogSeqNum());
+        secondaryRegion.replayWALFlushMarker(flush, entry.getKey().getLogSeqNum(), 1);
       }
     }
 
@@ -1274,7 +1274,7 @@ public class TestHRegionReplayEvents {
       }
       FlushDescriptor flush = WALEdit.getFlushDescriptor(entry.getEdit().getCells().get(0));
       if (flush != null) {
-        secondaryRegion.replayWALFlushMarker(flush, entry.getKey().getLogSeqNum());
+        secondaryRegion.replayWALFlushMarker(flush, entry.getKey().getLogSeqNum(), 1);
       } else {
         replayEdit(secondaryRegion, entry);
       }
@@ -1308,7 +1308,7 @@ public class TestHRegionReplayEvents {
       }
       FlushDescriptor flush = WALEdit.getFlushDescriptor(entry.getEdit().getCells().get(0));
       if (flush != null) {
-        secondaryRegion.replayWALFlushMarker(flush, entry.getKey().getLogSeqNum());
+        secondaryRegion.replayWALFlushMarker(flush, entry.getKey().getLogSeqNum(), 1);
       }
     }
 
@@ -1553,7 +1553,7 @@ public class TestHRegionReplayEvents {
         .setStoreHomeDir("/store_home_dir")
         .addFlushOutput("/foo/baz/bar")
         .build())
-      .build());
+      .build(), 1);
   }
 
   @Test

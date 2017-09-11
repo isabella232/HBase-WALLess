@@ -44,6 +44,7 @@ import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.regionserver.HRegionServer;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.v2.RegionReplicaReplicator;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse;
 import org.apache.hadoop.hbase.util.HasThread;
 import org.apache.hadoop.hbase.util.IdReadWriteLock;
 import org.apache.hadoop.hbase.util.IdReadWriteLock.ReferenceType;
@@ -296,11 +297,12 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
   }
 
   @Override
-  public void replicate(MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      boolean replay, int replicaId, RegionReplicaReplicator replicator)
+  public ReplicateMemstoreReplicaEntryResponse replicate(
+      MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits, boolean replay,
+      int replicaId, RegionReplicaReplicator replicator)
       throws IOException, InterruptedException, ExecutionException {
     if (replicator.getLocations().isEmpty()) {
-      return;
+      return null;
     }
     long txid = -1;
     CompletedFuture future = null;
@@ -314,7 +316,7 @@ public class RingBufferMemstoreReplicator extends BaseMemstoreReplicator {
       disruptor.getRingBuffer().publish(txid);
     }
     // wait for the result here
-    future.get(replicationTimeoutNs);
+    return future.get(replicationTimeoutNs);
 
     // TODO :Very important. Probably return back if there is no replica here instead of putting
     // them in a pool etc.

@@ -2527,7 +2527,7 @@ public class HRegionServer extends HasThread implements
             return null;
           }
           if (System.currentTimeMillis() > (previousLogTime + 1000)) {
-            LOG.debug("No master found; retry");
+            //LOG.debug("No master found; retry");
             previousLogTime = System.currentTimeMillis();
           }
           refresh = true; // let's try pull it from ZK directly

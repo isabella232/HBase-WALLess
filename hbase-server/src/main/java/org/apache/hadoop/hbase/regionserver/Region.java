@@ -372,11 +372,12 @@ public interface Region extends ConfigurationObserver {
    * Replay a batch of mutations.
    * @param mutations mutations to replay.
    * @param replaySeqId
+   * @param replicaSuccesCount 
    * @return the BatchOperation that contains the status of the operations
    * @throws IOException
    */
-  BatchOperation batchReplayForMemstoreReplication(MutationReplay[] mutations, long replaySeqId)
-      throws IOException;
+  BatchOperation batchReplayForMemstoreReplication(MutationReplay[] mutations, long replaySeqId,
+      int replicaSuccesCount) throws IOException;
 
   /**
    * Atomically checks if a row/family/qualifier value matches the expected value and if it does,

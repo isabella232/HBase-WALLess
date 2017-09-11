@@ -18517,6 +18517,15 @@ public final class AdminProtos {
      * <code>required .hbase.pb.MemstoreReplicationKey replicationKeyEntry = 1;</code>
      */
     org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKeyOrBuilder getReplicationKeyEntryOrBuilder();
+
+    /**
+     * <code>required uint32 currentPipelineIndex = 2;</code>
+     */
+    boolean hasCurrentPipelineIndex();
+    /**
+     * <code>required uint32 currentPipelineIndex = 2;</code>
+     */
+    int getCurrentPipelineIndex();
   }
   /**
    * Protobuf type {@code hbase.pb.ReplicateMemstoreReplicaEntryRequest}
@@ -18530,6 +18539,7 @@ public final class AdminProtos {
       super(builder);
     }
     private ReplicateMemstoreReplicaEntryRequest() {
+      currentPipelineIndex_ = 0;
     }
 
     @java.lang.Override
@@ -18571,6 +18581,11 @@ public final class AdminProtos {
                 replicationKeyEntry_ = subBuilder.buildPartial();
               }
               bitField0_ |= 0x00000001;
+              break;
+            }
+            case 16: {
+              bitField0_ |= 0x00000002;
+              currentPipelineIndex_ = input.readUInt32();
               break;
             }
           }
@@ -18619,6 +18634,21 @@ public final class AdminProtos {
       return replicationKeyEntry_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey.getDefaultInstance() : replicationKeyEntry_;
     }
 
+    public static final int CURRENTPIPELINEINDEX_FIELD_NUMBER = 2;
+    private int currentPipelineIndex_;
+    /**
+     * <code>required uint32 currentPipelineIndex = 2;</code>
+     */
+    public boolean hasCurrentPipelineIndex() {
+      return ((bitField0_ & 0x00000002) == 0x00000002);
+    }
+    /**
+     * <code>required uint32 currentPipelineIndex = 2;</code>
+     */
+    public int getCurrentPipelineIndex() {
+      return currentPipelineIndex_;
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -18626,6 +18656,10 @@ public final class AdminProtos {
       if (isInitialized == 0) return false;
 
       if (!hasReplicationKeyEntry()) {
+        memoizedIsInitialized = 0;
+        return false;
+      }
+      if (!hasCurrentPipelineIndex()) {
         memoizedIsInitialized = 0;
         return false;
       }
@@ -18642,6 +18676,9 @@ public final class AdminProtos {
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         output.writeMessage(1, getReplicationKeyEntry());
       }
+      if (((bitField0_ & 0x00000002) == 0x00000002)) {
+        output.writeUInt32(2, currentPipelineIndex_);
+      }
       unknownFields.writeTo(output);
     }
 
@@ -18653,6 +18690,10 @@ public final class AdminProtos {
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
           .computeMessageSize(1, getReplicationKeyEntry());
+      }
+      if (((bitField0_ & 0x00000002) == 0x00000002)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(2, currentPipelineIndex_);
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -18676,6 +18717,11 @@ public final class AdminProtos {
         result = result && getReplicationKeyEntry()
             .equals(other.getReplicationKeyEntry());
       }
+      result = result && (hasCurrentPipelineIndex() == other.hasCurrentPipelineIndex());
+      if (hasCurrentPipelineIndex()) {
+        result = result && (getCurrentPipelineIndex()
+            == other.getCurrentPipelineIndex());
+      }
       result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
@@ -18690,6 +18736,10 @@ public final class AdminProtos {
       if (hasReplicationKeyEntry()) {
         hash = (37 * hash) + REPLICATIONKEYENTRY_FIELD_NUMBER;
         hash = (53 * hash) + getReplicationKeyEntry().hashCode();
+      }
+      if (hasCurrentPipelineIndex()) {
+        hash = (37 * hash) + CURRENTPIPELINEINDEX_FIELD_NUMBER;
+        hash = (53 * hash) + getCurrentPipelineIndex();
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -18816,6 +18866,8 @@ public final class AdminProtos {
           replicationKeyEntryBuilder_.clear();
         }
         bitField0_ = (bitField0_ & ~0x00000001);
+        currentPipelineIndex_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000002);
         return this;
       }
 
@@ -18848,6 +18900,10 @@ public final class AdminProtos {
         } else {
           result.replicationKeyEntry_ = replicationKeyEntryBuilder_.build();
         }
+        if (((from_bitField0_ & 0x00000002) == 0x00000002)) {
+          to_bitField0_ |= 0x00000002;
+        }
+        result.currentPipelineIndex_ = currentPipelineIndex_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -18893,6 +18949,9 @@ public final class AdminProtos {
         if (other.hasReplicationKeyEntry()) {
           mergeReplicationKeyEntry(other.getReplicationKeyEntry());
         }
+        if (other.hasCurrentPipelineIndex()) {
+          setCurrentPipelineIndex(other.getCurrentPipelineIndex());
+        }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
@@ -18900,6 +18959,9 @@ public final class AdminProtos {
 
       public final boolean isInitialized() {
         if (!hasReplicationKeyEntry()) {
+          return false;
+        }
+        if (!hasCurrentPipelineIndex()) {
           return false;
         }
         if (!getReplicationKeyEntry().isInitialized()) {
@@ -19044,6 +19106,38 @@ public final class AdminProtos {
         }
         return replicationKeyEntryBuilder_;
       }
+
+      private int currentPipelineIndex_ ;
+      /**
+       * <code>required uint32 currentPipelineIndex = 2;</code>
+       */
+      public boolean hasCurrentPipelineIndex() {
+        return ((bitField0_ & 0x00000002) == 0x00000002);
+      }
+      /**
+       * <code>required uint32 currentPipelineIndex = 2;</code>
+       */
+      public int getCurrentPipelineIndex() {
+        return currentPipelineIndex_;
+      }
+      /**
+       * <code>required uint32 currentPipelineIndex = 2;</code>
+       */
+      public Builder setCurrentPipelineIndex(int value) {
+        bitField0_ |= 0x00000002;
+        currentPipelineIndex_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>required uint32 currentPipelineIndex = 2;</code>
+       */
+      public Builder clearCurrentPipelineIndex() {
+        bitField0_ = (bitField0_ & ~0x00000002);
+        currentPipelineIndex_ = 0;
+        onChanged();
+        return this;
+      }
       public final Builder setUnknownFields(
           final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet unknownFields) {
         return super.setUnknownFields(unknownFields);
@@ -19096,6 +19190,37 @@ public final class AdminProtos {
   public interface ReplicateMemstoreReplicaEntryResponseOrBuilder extends
       // @@protoc_insertion_point(interface_extends:hbase.pb.ReplicateMemstoreReplicaEntryResponse)
       org.apache.hadoop.hbase.shaded.com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>repeated bytes failedReplicaServers = 1;</code>
+     */
+    java.util.List<org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString> getFailedReplicaServersList();
+    /**
+     * <code>repeated bytes failedReplicaServers = 1;</code>
+     */
+    int getFailedReplicaServersCount();
+    /**
+     * <code>repeated bytes failedReplicaServers = 1;</code>
+     */
+    org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString getFailedReplicaServers(int index);
+
+    /**
+     * <code>optional uint32 updatedReplicaSuccessCount = 2;</code>
+     */
+    boolean hasUpdatedReplicaSuccessCount();
+    /**
+     * <code>optional uint32 updatedReplicaSuccessCount = 2;</code>
+     */
+    int getUpdatedReplicaSuccessCount();
+
+    /**
+     * <code>optional uint32 failedReplicaCount = 3;</code>
+     */
+    boolean hasFailedReplicaCount();
+    /**
+     * <code>optional uint32 failedReplicaCount = 3;</code>
+     */
+    int getFailedReplicaCount();
   }
   /**
    * Protobuf type {@code hbase.pb.ReplicateMemstoreReplicaEntryResponse}
@@ -19109,6 +19234,9 @@ public final class AdminProtos {
       super(builder);
     }
     private ReplicateMemstoreReplicaEntryResponse() {
+      failedReplicaServers_ = java.util.Collections.emptyList();
+      updatedReplicaSuccessCount_ = 0;
+      failedReplicaCount_ = 0;
     }
 
     @java.lang.Override
@@ -19121,6 +19249,7 @@ public final class AdminProtos {
         org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
       this();
+      int mutable_bitField0_ = 0;
       org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
@@ -19138,6 +19267,24 @@ public final class AdminProtos {
               }
               break;
             }
+            case 10: {
+              if (!((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
+                failedReplicaServers_ = new java.util.ArrayList<org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString>();
+                mutable_bitField0_ |= 0x00000001;
+              }
+              failedReplicaServers_.add(input.readBytes());
+              break;
+            }
+            case 16: {
+              bitField0_ |= 0x00000001;
+              updatedReplicaSuccessCount_ = input.readUInt32();
+              break;
+            }
+            case 24: {
+              bitField0_ |= 0x00000002;
+              failedReplicaCount_ = input.readUInt32();
+              break;
+            }
           }
         }
       } catch (org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException e) {
@@ -19146,6 +19293,9 @@ public final class AdminProtos {
         throw new org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
+          failedReplicaServers_ = java.util.Collections.unmodifiableList(failedReplicaServers_);
+        }
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
@@ -19162,6 +19312,59 @@ public final class AdminProtos {
               org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse.class, org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse.Builder.class);
     }
 
+    private int bitField0_;
+    public static final int FAILEDREPLICASERVERS_FIELD_NUMBER = 1;
+    private java.util.List<org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString> failedReplicaServers_;
+    /**
+     * <code>repeated bytes failedReplicaServers = 1;</code>
+     */
+    public java.util.List<org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString>
+        getFailedReplicaServersList() {
+      return failedReplicaServers_;
+    }
+    /**
+     * <code>repeated bytes failedReplicaServers = 1;</code>
+     */
+    public int getFailedReplicaServersCount() {
+      return failedReplicaServers_.size();
+    }
+    /**
+     * <code>repeated bytes failedReplicaServers = 1;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString getFailedReplicaServers(int index) {
+      return failedReplicaServers_.get(index);
+    }
+
+    public static final int UPDATEDREPLICASUCCESSCOUNT_FIELD_NUMBER = 2;
+    private int updatedReplicaSuccessCount_;
+    /**
+     * <code>optional uint32 updatedReplicaSuccessCount = 2;</code>
+     */
+    public boolean hasUpdatedReplicaSuccessCount() {
+      return ((bitField0_ & 0x00000001) == 0x00000001);
+    }
+    /**
+     * <code>optional uint32 updatedReplicaSuccessCount = 2;</code>
+     */
+    public int getUpdatedReplicaSuccessCount() {
+      return updatedReplicaSuccessCount_;
+    }
+
+    public static final int FAILEDREPLICACOUNT_FIELD_NUMBER = 3;
+    private int failedReplicaCount_;
+    /**
+     * <code>optional uint32 failedReplicaCount = 3;</code>
+     */
+    public boolean hasFailedReplicaCount() {
+      return ((bitField0_ & 0x00000002) == 0x00000002);
+    }
+    /**
+     * <code>optional uint32 failedReplicaCount = 3;</code>
+     */
+    public int getFailedReplicaCount() {
+      return failedReplicaCount_;
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -19174,6 +19377,15 @@ public final class AdminProtos {
 
     public void writeTo(org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      for (int i = 0; i < failedReplicaServers_.size(); i++) {
+        output.writeBytes(1, failedReplicaServers_.get(i));
+      }
+      if (((bitField0_ & 0x00000001) == 0x00000001)) {
+        output.writeUInt32(2, updatedReplicaSuccessCount_);
+      }
+      if (((bitField0_ & 0x00000002) == 0x00000002)) {
+        output.writeUInt32(3, failedReplicaCount_);
+      }
       unknownFields.writeTo(output);
     }
 
@@ -19182,6 +19394,23 @@ public final class AdminProtos {
       if (size != -1) return size;
 
       size = 0;
+      {
+        int dataSize = 0;
+        for (int i = 0; i < failedReplicaServers_.size(); i++) {
+          dataSize += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+            .computeBytesSizeNoTag(failedReplicaServers_.get(i));
+        }
+        size += dataSize;
+        size += 1 * getFailedReplicaServersList().size();
+      }
+      if (((bitField0_ & 0x00000001) == 0x00000001)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(2, updatedReplicaSuccessCount_);
+      }
+      if (((bitField0_ & 0x00000002) == 0x00000002)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(3, failedReplicaCount_);
+      }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
@@ -19199,6 +19428,18 @@ public final class AdminProtos {
       org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse other = (org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse) obj;
 
       boolean result = true;
+      result = result && getFailedReplicaServersList()
+          .equals(other.getFailedReplicaServersList());
+      result = result && (hasUpdatedReplicaSuccessCount() == other.hasUpdatedReplicaSuccessCount());
+      if (hasUpdatedReplicaSuccessCount()) {
+        result = result && (getUpdatedReplicaSuccessCount()
+            == other.getUpdatedReplicaSuccessCount());
+      }
+      result = result && (hasFailedReplicaCount() == other.hasFailedReplicaCount());
+      if (hasFailedReplicaCount()) {
+        result = result && (getFailedReplicaCount()
+            == other.getFailedReplicaCount());
+      }
       result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
@@ -19210,6 +19451,18 @@ public final class AdminProtos {
       }
       int hash = 41;
       hash = (19 * hash) + getDescriptor().hashCode();
+      if (getFailedReplicaServersCount() > 0) {
+        hash = (37 * hash) + FAILEDREPLICASERVERS_FIELD_NUMBER;
+        hash = (53 * hash) + getFailedReplicaServersList().hashCode();
+      }
+      if (hasUpdatedReplicaSuccessCount()) {
+        hash = (37 * hash) + UPDATEDREPLICASUCCESSCOUNT_FIELD_NUMBER;
+        hash = (53 * hash) + getUpdatedReplicaSuccessCount();
+      }
+      if (hasFailedReplicaCount()) {
+        hash = (37 * hash) + FAILEDREPLICACOUNT_FIELD_NUMBER;
+        hash = (53 * hash) + getFailedReplicaCount();
+      }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -19328,6 +19581,12 @@ public final class AdminProtos {
       }
       public Builder clear() {
         super.clear();
+        failedReplicaServers_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000001);
+        updatedReplicaSuccessCount_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000002);
+        failedReplicaCount_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000004);
         return this;
       }
 
@@ -19350,6 +19609,22 @@ public final class AdminProtos {
 
       public org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse buildPartial() {
         org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse result = new org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse(this);
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
+        if (((bitField0_ & 0x00000001) == 0x00000001)) {
+          failedReplicaServers_ = java.util.Collections.unmodifiableList(failedReplicaServers_);
+          bitField0_ = (bitField0_ & ~0x00000001);
+        }
+        result.failedReplicaServers_ = failedReplicaServers_;
+        if (((from_bitField0_ & 0x00000002) == 0x00000002)) {
+          to_bitField0_ |= 0x00000001;
+        }
+        result.updatedReplicaSuccessCount_ = updatedReplicaSuccessCount_;
+        if (((from_bitField0_ & 0x00000004) == 0x00000004)) {
+          to_bitField0_ |= 0x00000002;
+        }
+        result.failedReplicaCount_ = failedReplicaCount_;
+        result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
       }
@@ -19391,6 +19666,22 @@ public final class AdminProtos {
 
       public Builder mergeFrom(org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse other) {
         if (other == org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse.getDefaultInstance()) return this;
+        if (!other.failedReplicaServers_.isEmpty()) {
+          if (failedReplicaServers_.isEmpty()) {
+            failedReplicaServers_ = other.failedReplicaServers_;
+            bitField0_ = (bitField0_ & ~0x00000001);
+          } else {
+            ensureFailedReplicaServersIsMutable();
+            failedReplicaServers_.addAll(other.failedReplicaServers_);
+          }
+          onChanged();
+        }
+        if (other.hasUpdatedReplicaSuccessCount()) {
+          setUpdatedReplicaSuccessCount(other.getUpdatedReplicaSuccessCount());
+        }
+        if (other.hasFailedReplicaCount()) {
+          setFailedReplicaCount(other.getFailedReplicaCount());
+        }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
@@ -19415,6 +19706,143 @@ public final class AdminProtos {
             mergeFrom(parsedMessage);
           }
         }
+        return this;
+      }
+      private int bitField0_;
+
+      private java.util.List<org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString> failedReplicaServers_ = java.util.Collections.emptyList();
+      private void ensureFailedReplicaServersIsMutable() {
+        if (!((bitField0_ & 0x00000001) == 0x00000001)) {
+          failedReplicaServers_ = new java.util.ArrayList<org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString>(failedReplicaServers_);
+          bitField0_ |= 0x00000001;
+         }
+      }
+      /**
+       * <code>repeated bytes failedReplicaServers = 1;</code>
+       */
+      public java.util.List<org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString>
+          getFailedReplicaServersList() {
+        return java.util.Collections.unmodifiableList(failedReplicaServers_);
+      }
+      /**
+       * <code>repeated bytes failedReplicaServers = 1;</code>
+       */
+      public int getFailedReplicaServersCount() {
+        return failedReplicaServers_.size();
+      }
+      /**
+       * <code>repeated bytes failedReplicaServers = 1;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString getFailedReplicaServers(int index) {
+        return failedReplicaServers_.get(index);
+      }
+      /**
+       * <code>repeated bytes failedReplicaServers = 1;</code>
+       */
+      public Builder setFailedReplicaServers(
+          int index, org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  ensureFailedReplicaServersIsMutable();
+        failedReplicaServers_.set(index, value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated bytes failedReplicaServers = 1;</code>
+       */
+      public Builder addFailedReplicaServers(org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  ensureFailedReplicaServersIsMutable();
+        failedReplicaServers_.add(value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated bytes failedReplicaServers = 1;</code>
+       */
+      public Builder addAllFailedReplicaServers(
+          java.lang.Iterable<? extends org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString> values) {
+        ensureFailedReplicaServersIsMutable();
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, failedReplicaServers_);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated bytes failedReplicaServers = 1;</code>
+       */
+      public Builder clearFailedReplicaServers() {
+        failedReplicaServers_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000001);
+        onChanged();
+        return this;
+      }
+
+      private int updatedReplicaSuccessCount_ ;
+      /**
+       * <code>optional uint32 updatedReplicaSuccessCount = 2;</code>
+       */
+      public boolean hasUpdatedReplicaSuccessCount() {
+        return ((bitField0_ & 0x00000002) == 0x00000002);
+      }
+      /**
+       * <code>optional uint32 updatedReplicaSuccessCount = 2;</code>
+       */
+      public int getUpdatedReplicaSuccessCount() {
+        return updatedReplicaSuccessCount_;
+      }
+      /**
+       * <code>optional uint32 updatedReplicaSuccessCount = 2;</code>
+       */
+      public Builder setUpdatedReplicaSuccessCount(int value) {
+        bitField0_ |= 0x00000002;
+        updatedReplicaSuccessCount_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional uint32 updatedReplicaSuccessCount = 2;</code>
+       */
+      public Builder clearUpdatedReplicaSuccessCount() {
+        bitField0_ = (bitField0_ & ~0x00000002);
+        updatedReplicaSuccessCount_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private int failedReplicaCount_ ;
+      /**
+       * <code>optional uint32 failedReplicaCount = 3;</code>
+       */
+      public boolean hasFailedReplicaCount() {
+        return ((bitField0_ & 0x00000004) == 0x00000004);
+      }
+      /**
+       * <code>optional uint32 failedReplicaCount = 3;</code>
+       */
+      public int getFailedReplicaCount() {
+        return failedReplicaCount_;
+      }
+      /**
+       * <code>optional uint32 failedReplicaCount = 3;</code>
+       */
+      public Builder setFailedReplicaCount(int value) {
+        bitField0_ |= 0x00000004;
+        failedReplicaCount_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional uint32 failedReplicaCount = 3;</code>
+       */
+      public Builder clearFailedReplicaCount() {
+        bitField0_ = (bitField0_ & ~0x00000004);
+        failedReplicaCount_ = 0;
+        onChanged();
         return this;
       }
       public final Builder setUnknownFields(
@@ -31328,86 +31756,89 @@ public final class AdminProtos {
       "erId\030\002 \001(\t\022\"\n\032sourceBaseNamespaceDirPath" +
       "\030\003 \001(\t\022!\n\031sourceHFileArchiveDirPath\030\004 \001(" +
       "\t\"\033\n\031ReplicateWALEntryResponse\"\026\n\024RollWA" +
-      "LWriterRequest\"e\n$ReplicateMemstoreRepli" +
-      "caEntryRequest\022=\n\023replicationKeyEntry\030\001 " +
-      "\002(\0132 .hbase.pb.MemstoreReplicationKey\"\'\n" +
-      "%ReplicateMemstoreReplicaEntryResponse\"0" +
-      "\n\025RollWALWriterResponse\022\027\n\017region_to_flu" +
-      "sh\030\001 \003(\014\"#\n\021StopServerRequest\022\016\n\006reason\030" +
-      "\001 \002(\t\"\024\n\022StopServerResponse\"\026\n\024GetServer",
-      "InfoRequest\"K\n\nServerInfo\022)\n\013server_name" +
-      "\030\001 \002(\0132\024.hbase.pb.ServerName\022\022\n\nwebui_po" +
-      "rt\030\002 \001(\r\"B\n\025GetServerInfoResponse\022)\n\013ser" +
-      "ver_info\030\001 \002(\0132\024.hbase.pb.ServerInfo\"\034\n\032" +
-      "UpdateConfigurationRequest\"\035\n\033UpdateConf" +
-      "igurationResponse\"?\n\024GetRegionLoadReques" +
-      "t\022\'\n\ntable_name\030\001 \001(\0132\023.hbase.pb.TableNa" +
-      "me\"C\n\025GetRegionLoadResponse\022*\n\014region_lo" +
-      "ads\030\001 \003(\0132\024.hbase.pb.RegionLoad\"2\n\034Clear" +
-      "CompactionQueuesRequest\022\022\n\nqueue_name\030\001 ",
-      "\003(\t\"\037\n\035ClearCompactionQueuesResponse\"\200\001\n" +
-      "\030ExecuteProceduresRequest\0220\n\013open_region" +
-      "\030\001 \003(\0132\033.hbase.pb.OpenRegionRequest\0222\n\014c" +
-      "lose_region\030\002 \003(\0132\034.hbase.pb.CloseRegion" +
-      "Request\"\203\001\n\031ExecuteProceduresResponse\0221\n" +
-      "\013open_region\030\001 \003(\0132\034.hbase.pb.OpenRegion" +
-      "Response\0223\n\014close_region\030\002 \003(\0132\035.hbase.p" +
-      "b.CloseRegionResponse\"\244\001\n\023MergeRegionsRe" +
-      "quest\022+\n\010region_a\030\001 \002(\0132\031.hbase.pb.Regio" +
-      "nSpecifier\022+\n\010region_b\030\002 \002(\0132\031.hbase.pb.",
-      "RegionSpecifier\022\027\n\010forcible\030\003 \001(\010:\005false" +
-      "\022\032\n\022master_system_time\030\004 \001(\004\"\026\n\024MergeReg" +
-      "ionsResponse2\201\017\n\014AdminService\022P\n\rGetRegi" +
-      "onInfo\022\036.hbase.pb.GetRegionInfoRequest\032\037" +
-      ".hbase.pb.GetRegionInfoResponse\022M\n\014GetSt" +
-      "oreFile\022\035.hbase.pb.GetStoreFileRequest\032\036" +
-      ".hbase.pb.GetStoreFileResponse\022V\n\017GetOnl" +
-      "ineRegion\022 .hbase.pb.GetOnlineRegionRequ" +
-      "est\032!.hbase.pb.GetOnlineRegionResponse\022G" +
-      "\n\nOpenRegion\022\033.hbase.pb.OpenRegionReques",
-      "t\032\034.hbase.pb.OpenRegionResponse\022M\n\014Warmu" +
-      "pRegion\022\035.hbase.pb.WarmupRegionRequest\032\036" +
-      ".hbase.pb.WarmupRegionResponse\022J\n\013CloseR" +
-      "egion\022\034.hbase.pb.CloseRegionRequest\032\035.hb" +
-      "ase.pb.CloseRegionResponse\022J\n\013FlushRegio" +
-      "n\022\034.hbase.pb.FlushRegionRequest\032\035.hbase." +
-      "pb.FlushRegionResponse\022J\n\013SplitRegion\022\034." +
-      "hbase.pb.SplitRegionRequest\032\035.hbase.pb.S" +
-      "plitRegionResponse\022P\n\rCompactRegion\022\036.hb" +
-      "ase.pb.CompactRegionRequest\032\037.hbase.pb.C",
-      "ompactRegionResponse\022\\\n\021ReplicateWALEntr" +
-      "y\022\".hbase.pb.ReplicateWALEntryRequest\032#." +
-      "hbase.pb.ReplicateWALEntryResponse\022Q\n\006Re" +
-      "play\022\".hbase.pb.ReplicateWALEntryRequest" +
-      "\032#.hbase.pb.ReplicateWALEntryResponse\022q\n" +
-      "\016MemstoreReplay\022..hbase.pb.ReplicateMems" +
-      "toreReplicaEntryRequest\032/.hbase.pb.Repli" +
-      "cateMemstoreReplicaEntryResponse\022P\n\rRoll" +
-      "WALWriter\022\036.hbase.pb.RollWALWriterReques" +
-      "t\032\037.hbase.pb.RollWALWriterResponse\022P\n\rGe",
-      "tServerInfo\022\036.hbase.pb.GetServerInfoRequ" +
-      "est\032\037.hbase.pb.GetServerInfoResponse\022G\n\n" +
-      "StopServer\022\033.hbase.pb.StopServerRequest\032" +
-      "\034.hbase.pb.StopServerResponse\022_\n\022UpdateF" +
-      "avoredNodes\022#.hbase.pb.UpdateFavoredNode" +
-      "sRequest\032$.hbase.pb.UpdateFavoredNodesRe" +
-      "sponse\022b\n\023UpdateConfiguration\022$.hbase.pb" +
-      ".UpdateConfigurationRequest\032%.hbase.pb.U" +
-      "pdateConfigurationResponse\022P\n\rGetRegionL" +
-      "oad\022\036.hbase.pb.GetRegionLoadRequest\032\037.hb",
-      "ase.pb.GetRegionLoadResponse\022h\n\025ClearCom" +
-      "pactionQueues\022&.hbase.pb.ClearCompaction" +
-      "QueuesRequest\032\'.hbase.pb.ClearCompaction" +
-      "QueuesResponse\022k\n\026GetSpaceQuotaSnapshots" +
-      "\022\'.hbase.pb.GetSpaceQuotaSnapshotsReques" +
-      "t\032(.hbase.pb.GetSpaceQuotaSnapshotsRespo" +
-      "nse\022\\\n\021ExecuteProcedures\022\".hbase.pb.Exec" +
-      "uteProceduresRequest\032#.hbase.pb.ExecuteP" +
-      "roceduresResponse\022M\n\014MergeRegions\022\035.hbas" +
-      "e.pb.MergeRegionsRequest\032\036.hbase.pb.Merg",
-      "eRegionsResponseBH\n1org.apache.hadoop.hb" +
-      "ase.shaded.protobuf.generatedB\013AdminProt" +
-      "osH\001\210\001\001\240\001\001"
+      "LWriterRequest\"\203\001\n$ReplicateMemstoreRepl" +
+      "icaEntryRequest\022=\n\023replicationKeyEntry\030\001" +
+      " \002(\0132 .hbase.pb.MemstoreReplicationKey\022\034" +
+      "\n\024currentPipelineIndex\030\002 \002(\r\"\205\001\n%Replica" +
+      "teMemstoreReplicaEntryResponse\022\034\n\024failed" +
+      "ReplicaServers\030\001 \003(\014\022\"\n\032updatedReplicaSu" +
+      "ccessCount\030\002 \001(\r\022\032\n\022failedReplicaCount\030\003",
+      " \001(\r\"0\n\025RollWALWriterResponse\022\027\n\017region_" +
+      "to_flush\030\001 \003(\014\"#\n\021StopServerRequest\022\016\n\006r" +
+      "eason\030\001 \002(\t\"\024\n\022StopServerResponse\"\026\n\024Get" +
+      "ServerInfoRequest\"K\n\nServerInfo\022)\n\013serve" +
+      "r_name\030\001 \002(\0132\024.hbase.pb.ServerName\022\022\n\nwe" +
+      "bui_port\030\002 \001(\r\"B\n\025GetServerInfoResponse\022" +
+      ")\n\013server_info\030\001 \002(\0132\024.hbase.pb.ServerIn" +
+      "fo\"\034\n\032UpdateConfigurationRequest\"\035\n\033Upda" +
+      "teConfigurationResponse\"?\n\024GetRegionLoad" +
+      "Request\022\'\n\ntable_name\030\001 \001(\0132\023.hbase.pb.T",
+      "ableName\"C\n\025GetRegionLoadResponse\022*\n\014reg" +
+      "ion_loads\030\001 \003(\0132\024.hbase.pb.RegionLoad\"2\n" +
+      "\034ClearCompactionQueuesRequest\022\022\n\nqueue_n" +
+      "ame\030\001 \003(\t\"\037\n\035ClearCompactionQueuesRespon" +
+      "se\"\200\001\n\030ExecuteProceduresRequest\0220\n\013open_" +
+      "region\030\001 \003(\0132\033.hbase.pb.OpenRegionReques" +
+      "t\0222\n\014close_region\030\002 \003(\0132\034.hbase.pb.Close" +
+      "RegionRequest\"\203\001\n\031ExecuteProceduresRespo" +
+      "nse\0221\n\013open_region\030\001 \003(\0132\034.hbase.pb.Open" +
+      "RegionResponse\0223\n\014close_region\030\002 \003(\0132\035.h",
+      "base.pb.CloseRegionResponse\"\244\001\n\023MergeReg" +
+      "ionsRequest\022+\n\010region_a\030\001 \002(\0132\031.hbase.pb" +
+      ".RegionSpecifier\022+\n\010region_b\030\002 \002(\0132\031.hba" +
+      "se.pb.RegionSpecifier\022\027\n\010forcible\030\003 \001(\010:" +
+      "\005false\022\032\n\022master_system_time\030\004 \001(\004\"\026\n\024Me" +
+      "rgeRegionsResponse2\201\017\n\014AdminService\022P\n\rG" +
+      "etRegionInfo\022\036.hbase.pb.GetRegionInfoReq" +
+      "uest\032\037.hbase.pb.GetRegionInfoResponse\022M\n" +
+      "\014GetStoreFile\022\035.hbase.pb.GetStoreFileReq" +
+      "uest\032\036.hbase.pb.GetStoreFileResponse\022V\n\017",
+      "GetOnlineRegion\022 .hbase.pb.GetOnlineRegi" +
+      "onRequest\032!.hbase.pb.GetOnlineRegionResp" +
+      "onse\022G\n\nOpenRegion\022\033.hbase.pb.OpenRegion" +
+      "Request\032\034.hbase.pb.OpenRegionResponse\022M\n" +
+      "\014WarmupRegion\022\035.hbase.pb.WarmupRegionReq" +
+      "uest\032\036.hbase.pb.WarmupRegionResponse\022J\n\013" +
+      "CloseRegion\022\034.hbase.pb.CloseRegionReques" +
+      "t\032\035.hbase.pb.CloseRegionResponse\022J\n\013Flus" +
+      "hRegion\022\034.hbase.pb.FlushRegionRequest\032\035." +
+      "hbase.pb.FlushRegionResponse\022J\n\013SplitReg",
+      "ion\022\034.hbase.pb.SplitRegionRequest\032\035.hbas" +
+      "e.pb.SplitRegionResponse\022P\n\rCompactRegio" +
+      "n\022\036.hbase.pb.CompactRegionRequest\032\037.hbas" +
+      "e.pb.CompactRegionResponse\022\\\n\021ReplicateW" +
+      "ALEntry\022\".hbase.pb.ReplicateWALEntryRequ" +
+      "est\032#.hbase.pb.ReplicateWALEntryResponse" +
+      "\022Q\n\006Replay\022\".hbase.pb.ReplicateWALEntryR" +
+      "equest\032#.hbase.pb.ReplicateWALEntryRespo" +
+      "nse\022q\n\016MemstoreReplay\022..hbase.pb.Replica" +
+      "teMemstoreReplicaEntryRequest\032/.hbase.pb",
+      ".ReplicateMemstoreReplicaEntryResponse\022P" +
+      "\n\rRollWALWriter\022\036.hbase.pb.RollWALWriter" +
+      "Request\032\037.hbase.pb.RollWALWriterResponse" +
+      "\022P\n\rGetServerInfo\022\036.hbase.pb.GetServerIn" +
+      "foRequest\032\037.hbase.pb.GetServerInfoRespon" +
+      "se\022G\n\nStopServer\022\033.hbase.pb.StopServerRe" +
+      "quest\032\034.hbase.pb.StopServerResponse\022_\n\022U" +
+      "pdateFavoredNodes\022#.hbase.pb.UpdateFavor" +
+      "edNodesRequest\032$.hbase.pb.UpdateFavoredN" +
+      "odesResponse\022b\n\023UpdateConfiguration\022$.hb",
+      "ase.pb.UpdateConfigurationRequest\032%.hbas" +
+      "e.pb.UpdateConfigurationResponse\022P\n\rGetR" +
+      "egionLoad\022\036.hbase.pb.GetRegionLoadReques" +
+      "t\032\037.hbase.pb.GetRegionLoadResponse\022h\n\025Cl" +
+      "earCompactionQueues\022&.hbase.pb.ClearComp" +
+      "actionQueuesRequest\032\'.hbase.pb.ClearComp" +
+      "actionQueuesResponse\022k\n\026GetSpaceQuotaSna" +
+      "pshots\022\'.hbase.pb.GetSpaceQuotaSnapshots" +
+      "Request\032(.hbase.pb.GetSpaceQuotaSnapshot" +
+      "sResponse\022\\\n\021ExecuteProcedures\022\".hbase.p",
+      "b.ExecuteProceduresRequest\032#.hbase.pb.Ex" +
+      "ecuteProceduresResponse\022M\n\014MergeRegions\022" +
+      "\035.hbase.pb.MergeRegionsRequest\032\036.hbase.p" +
+      "b.MergeRegionsResponseBH\n1org.apache.had" +
+      "oop.hbase.shaded.protobuf.generatedB\013Adm" +
+      "inProtosH\001\210\001\001\240\001\001"
     };
     org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -31587,13 +32018,13 @@ public final class AdminProtos {
     internal_static_hbase_pb_ReplicateMemstoreReplicaEntryRequest_fieldAccessorTable = new
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_hbase_pb_ReplicateMemstoreReplicaEntryRequest_descriptor,
-        new java.lang.String[] { "ReplicationKeyEntry", });
+        new java.lang.String[] { "ReplicationKeyEntry", "CurrentPipelineIndex", });
     internal_static_hbase_pb_ReplicateMemstoreReplicaEntryResponse_descriptor =
       getDescriptor().getMessageTypes().get(25);
     internal_static_hbase_pb_ReplicateMemstoreReplicaEntryResponse_fieldAccessorTable = new
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_hbase_pb_ReplicateMemstoreReplicaEntryResponse_descriptor,
-        new java.lang.String[] { });
+        new java.lang.String[] { "FailedReplicaServers", "UpdatedReplicaSuccessCount", "FailedReplicaCount", });
     internal_static_hbase_pb_RollWALWriterResponse_descriptor =
       getDescriptor().getMessageTypes().get(26);
     internal_static_hbase_pb_RollWALWriterResponse_fieldAccessorTable = new
