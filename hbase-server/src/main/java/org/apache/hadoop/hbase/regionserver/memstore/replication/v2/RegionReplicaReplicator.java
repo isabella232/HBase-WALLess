@@ -46,7 +46,7 @@ public class RegionReplicaReplicator {
    *          and processed by some one else), we will return null.
    */
   public synchronized List<MemstoreReplicationEntry> pullEntries(long minSeq) {
-    // TODO : some problem here
+    // TODO : some problem here.  Fix !!
 /*    if (this.curMaxConsumedSeq >= minSeq) {
       return null;
     }*/

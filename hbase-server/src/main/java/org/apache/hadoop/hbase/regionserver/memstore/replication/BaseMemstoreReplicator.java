@@ -41,7 +41,6 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.CellScanner;
-import org.apache.hadoop.hbase.HBaseIOException;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.RegionLocations;
@@ -58,11 +57,8 @@ import org.apache.hadoop.hbase.io.HeapSize;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
 import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.BaseMemstoreReplicator.PipelineController;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.BaseMemstoreReplicator.RegionEntryBuffer;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.CancelableProgressable;
 import org.apache.hadoop.hbase.util.ClassSize;
@@ -555,7 +551,7 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
         return;
       }
 
-      ArrayList<Future<ReplicateMemstoreReplicaEntryResponse>> tasks = new ArrayList<>(locations.size() - 1);
+      ArrayList<Future<ReplicateMemstoreResponse>> tasks = new ArrayList<>(locations.size() - 1);
 
       // All passed entries should belong to one region because it is coming from the EntryBuffers
       // split per region. But the regions might split and merge (unlike log recovery case).
@@ -576,7 +572,7 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
             RegionReplicaReplayCallable callable =
                 new RegionReplicaReplayCallable(connection, rpcControllerFactory, tableName,
                     location, regionInfo, row, entries, sink.getSkippedEditsCounter());
-            Future<ReplicateMemstoreReplicaEntryResponse> task = pool.submit(
+            Future<ReplicateMemstoreResponse> task = pool.submit(
               new RetryingRpcCallable<>(rpcRetryingCallerFactory, callable, operationTimeout));
             tasks.add(task);
           }
@@ -588,7 +584,7 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
         return;
       }
       boolean tasksCancelled = false;
-      for (Future<ReplicateMemstoreReplicaEntryResponse> task : tasks) {
+      for (Future<ReplicateMemstoreResponse> task : tasks) {
         try {
           task.get();
           markDone(futures);
@@ -655,7 +651,7 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
    * the entry if the region boundaries have changed or the region is gone.
    */
   static class RegionReplicaReplayCallable
-      extends RegionAdminServiceCallable<ReplicateMemstoreReplicaEntryResponse> {
+      extends RegionAdminServiceCallable<ReplicateMemstoreResponse> {
     private final List<MemstoreReplicationEntry> entries;
     private final byte[] initialEncodedRegionName;
     private final AtomicLong skippedEntries;
@@ -670,8 +666,7 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
       this.initialEncodedRegionName = regionInfo.getEncodedNameAsBytes();
     }
 
-    public ReplicateMemstoreReplicaEntryResponse
-        call(HBaseRpcController controller) throws Exception {
+    public ReplicateMemstoreResponse call(HBaseRpcController controller) throws Exception {
       // Check whether we should still replay this entry. If the regions are changed, or the
       // entry is not coming form the primary region, filter it out because we do not need it.
       // Regions can change because of (1) region split (2) region merge (3) table recreated
@@ -685,11 +680,11 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
         entriesArray = this.entries.toArray(entriesArray);
 
         // set the region name for the target region replica
-        Pair<AdminProtos.ReplicateMemstoreReplicaEntryRequest, CellScanner> p =
+        Pair<ReplicateMemstoreRequest, CellScanner> p =
             ReplicationProtbufUtil.buildReplicateMemstoreEntryRequest(entriesArray,
               location.getRegionInfo().getEncodedNameAsBytes(), null, null, null);
         controller.setCellScanner(p.getSecond());
-        return stub.memstoreReplay(controller, p.getFirst());
+        return stub.replicateMemstore(controller, p.getFirst());
       }
 
       if (skip) {
@@ -704,7 +699,7 @@ public abstract class BaseMemstoreReplicator implements MemstoreReplicator {
         }
         skippedEntries.addAndGet(entries.size());
       }
-      return ReplicateMemstoreReplicaEntryResponse.newBuilder().build();
+      return ReplicateMemstoreResponse.newBuilder().build();
 
     }
   }

@@ -23,10 +23,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
-import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
-import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl;
 import org.apache.hadoop.hbase.util.Bytes;
 
 /**
@@ -49,47 +47,24 @@ public class MemstoreReplicationKey {
    */
   private long sequenceId;
 
-  /**
-   * Used during WAL replay; the sequenceId of the edit when it came into the system.
-   */
-  private long origLogSeqNum = 0;
-
-  /** Time at which this edit was written. */
-  private long writeTime;
-
-  private MultiVersionConcurrencyControl mvcc;
-
   //Is it right to add here??
-  private final int currentReplicaIndex;
-  /**
-   * Set in a way visible to multiple threads; e.g. synchronized getter/setters.
-   */
-  private MultiVersionConcurrencyControl.WriteEntry writeEntry;
+  private final int replicasOffered;
   public static final List<UUID> EMPTY_UUIDS = Collections.unmodifiableList(new ArrayList<UUID>());
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
   public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
-      TableName tableName, MultiVersionConcurrencyControl mvcc, int currentReplicaIndex) {
-    this(encodedRegionNameInBytes, encodedRegionName, tableName, NO_SEQUENCE_ID,
-        HConstants.LATEST_TIMESTAMP, mvcc, currentReplicaIndex);
+      TableName tableName, int replicasOffered) {
+    this(encodedRegionNameInBytes, encodedRegionName, tableName, NO_SEQUENCE_ID, replicasOffered);
   }
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
   public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
-      TableName tableName, long now, MultiVersionConcurrencyControl mvcc, int currentReplicaIndex) {
-    this(encodedRegionNameInBytes, encodedRegionName, tableName, NO_SEQUENCE_ID, now, mvcc, currentReplicaIndex);
-  }
-
-  // TODO : Support compression, nonceGroup and nonces, inter cluster replication
-  public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
-      TableName tableName, long sequenceId, long now, MultiVersionConcurrencyControl mvcc, int currentReplicaIndex) {
+      TableName tableName, long sequenceId, int replicasOffered) {
     this.encodedRegionNameInBytes = encodedRegionNameInBytes;
     this.encodedRegionName = encodedRegionName;
     this.tablename = tableName;
     this.sequenceId = sequenceId;
-    this.writeTime = now;
-    this.mvcc = mvcc;
-    this.currentReplicaIndex = currentReplicaIndex;
+    this.replicasOffered = replicasOffered;
   }
 
   public byte[] getEncodedRegionNameInBytes() {
@@ -100,14 +75,6 @@ public class MemstoreReplicationKey {
     return this.tablename;
   }
 
-  public long getWriteTime() {
-    return this.writeTime;
-  }
-
-  public MultiVersionConcurrencyControl getMvcc() {
-    return this.mvcc;
-  }
-  
   /**
    * Drop this instance's tablename byte array and instead
    * hold a reference to the provided tablename. This is not
@@ -150,8 +117,8 @@ public class MemstoreReplicationKey {
     this.encodedRegionName = encodedRegionName;
   }
 
-  public int getCurrentReplicaIndex() {
-    return this.currentReplicaIndex;
+  public int getReplicasOffered() {
+    return this.replicasOffered;
   }
   // Add proto file for this. PD serDe methods to be added
 }

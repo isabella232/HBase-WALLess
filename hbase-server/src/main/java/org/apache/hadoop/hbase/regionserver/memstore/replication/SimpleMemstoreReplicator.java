@@ -28,7 +28,8 @@ import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.v2.RegionReplicaReplicator;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.UnsafeByteOperations;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.HasThread;
 import org.apache.hadoop.hbase.util.Pair;
@@ -76,9 +77,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   }
 
   @Override
-  public ReplicateMemstoreReplicaEntryResponse replicate(
-      MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits, boolean replay,
-      int replicaId, RegionReplicaReplicator regionReplicator)
+  public ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
+      MemstoreEdits memstoreEdits, boolean replay, int replicaId,
+      RegionReplicaReplicator regionReplicator)
       throws IOException, InterruptedException, ExecutionException {
     MemstoreReplicationEntry entry =
         new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay, replicaId);
@@ -125,8 +126,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       while (!this.closed) {
         try {
           Entry entry = regionQueue.take();// TODO Check whether this call
-                                                                  // will make the thread under wait
-                                                                  // or whether consume CPU
+                                           // will make the thread under wait
+                                           // or whether consume CPU
           replicate(entry);
         } catch (InterruptedException e) {
           e.printStackTrace();
@@ -140,15 +141,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       if (entries == null || entries.isEmpty()) {
         return;
       }
-      int replicaSuccessCount = entries.get(0).getMemstoreReplicationKey().getCurrentReplicaIndex();
-      List<HRegionLocation> failedRegionLocations =
-          new ArrayList<HRegionLocation>(replicator.getReplicasCount());
-      // TODO we need a new ReplicateWALEntryResponse from where which we can know how many
-      // success replicas are there.
-      AdminProtos.ReplicateMemstoreReplicaEntryResponse.Builder builder =
-          ReplicateMemstoreReplicaEntryResponse.newBuilder();
-      ReplicateMemstoreReplicaEntryResponse finalResponse = null;
       int curRegionReplicaId = replicator.getCurRegionReplicaId();
+      ReplicateMemstoreResponse.Builder builder = ReplicateMemstoreResponse.newBuilder();
+      builder.setReplicasCommitted(1);
       try {
         // The write pipeline for replication will always be R1 -> R2 ->.. Rn
         // When there is a failure for any node, the current replica will try with its next and so on
@@ -161,14 +156,12 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
                 rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
                 nextRegionLocation.getRegionInfo(), null, entries);
             try {
-              ReplicateMemstoreReplicaEntryResponse response =
-                  rpcRetryingCallerFactory.<ReplicateMemstoreReplicaEntryResponse> newCaller()
+              ReplicateMemstoreResponse response =
+                  rpcRetryingCallerFactory.<ReplicateMemstoreResponse> newCaller()
                       .callWithRetries(callable, operationTimeout);
               // we need this because we may have a success after some failures.
-              builder.setFailedReplicaCount(failedRegionLocations.size());
-              builder.setUpdatedReplicaSuccessCount(response.getUpdatedReplicaSuccessCount() + 1);
-              finalResponse = builder.build();
-              return;
+              // TODO is this the correct place to create Response?  After all we are not setting it any where.
+              builder.setReplicasCommitted(response.getReplicasCommitted() + 1);// Adding this write itelf as success.
             } catch (IOException | RuntimeException e) {
               // TODO
               // This data was not replicated to given replica means it is in bad state. We have to
@@ -178,27 +171,23 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
               // may be other parallel handlers also trying to write to that replica.
               // Get all info where all success and where all failed. Just commented out the call.
               // rs.reportReplicaRegionHealthChange(nextRegionLocation.getRegionInfo(), false);
-              failedRegionLocations.add(nextRegionLocation);
-              builder.addFailedReplicaServers(UnsafeByteOperations
-                  .unsafeWrap(nextRegionLocation.getServerName().getVersionedBytes()));
+              builder.addFailedReplicas(i);
               // We should mark the future with exception only after retrying with the other Replicas
               // so that the write is successful??
             }
           } else {
             // TODO - This is unexpected situation. Should not mark as success
             // markEntriesSuccess(entries);
+            builder.addFailedReplicas(i);
           }
         }
-        builder.setFailedReplicaCount(failedRegionLocations.size());
-        // we came here means we have a failure only.
-        finalResponse = builder.build();
       } finally {
-        markResponse(entries, finalResponse);
+        markResponse(entries, builder.build());
       }
     }
 
     private void markResponse(List<MemstoreReplicationEntry> entries,
-        ReplicateMemstoreReplicaEntryResponse response) {
+        ReplicateMemstoreResponse response) {
       for (MemstoreReplicationEntry entry : entries) {
         // directly marking on the future
         entry.getFuture().markResponse(response);
@@ -212,7 +201,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   }
 
   private static class RegionReplicaReplayCallable
-      extends RegionAdminServiceCallable<ReplicateMemstoreReplicaEntryResponse> {
+      extends RegionAdminServiceCallable<ReplicateMemstoreResponse> {
     private final List<MemstoreReplicationEntry> entries;
     private final byte[] initialEncodedRegionName;
 
@@ -225,7 +214,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     }
 
     @Override
-    public ReplicateMemstoreReplicaEntryResponse call(HBaseRpcController controller) throws Exception {
+    public ReplicateMemstoreResponse call(HBaseRpcController controller) throws Exception {
       // Check whether we should still replay this entry. If the regions are changed, or the
       // entry is not coming form the primary region, filter it out because we do not need it.
       // Regions can change because of (1) region split (2) region merge (3) table recreated
@@ -238,13 +227,13 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         MemstoreReplicationEntry[] entriesArray = new MemstoreReplicationEntry[this.entries.size()];
         entriesArray = this.entries.toArray(entriesArray);
         // set the region name for the target region replica
-        Pair<AdminProtos.ReplicateMemstoreReplicaEntryRequest, CellScanner> p =
-            ReplicationProtbufUtil.buildReplicateMemstoreEntryRequest(entriesArray,
-              location.getRegionInfo().getEncodedNameAsBytes(), null, null, null);
+        Pair<ReplicateMemstoreRequest, CellScanner> p = ReplicationProtbufUtil
+            .buildReplicateMemstoreEntryRequest(entriesArray,
+                location.getRegionInfo().getEncodedNameAsBytes(), null, null, null);
         controller.setCellScanner(p.getSecond());
-        return stub.memstoreReplay(controller, p.getFirst());
+        return stub.replicateMemstore(controller, p.getFirst());
       }
-      return ReplicateMemstoreReplicaEntryResponse.newBuilder().build();
+      return ReplicateMemstoreResponse.newBuilder().build();
     }
   }
 }

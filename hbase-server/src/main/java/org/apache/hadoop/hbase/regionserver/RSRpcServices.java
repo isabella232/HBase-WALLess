@@ -155,8 +155,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionR
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest.RegionOpenInfo;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse.RegionOpeningState;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryRequest;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RollWALWriterRequest;
@@ -207,7 +205,9 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier.RegionSpecifierType;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MapReduceProtos.ScanMetrics;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse.TableQuotaSnapshot;
@@ -1006,8 +1006,8 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       // sort to improve lock efficiency
       Arrays.sort(mArray);
 
-      OperationStatus[] codes = region.batchMutateForMemstoreReplication(mArray,
-        HConstants.NO_NONCE, HConstants.NO_NONCE).retCodeDetails;
+      OperationStatus[] codes = region.batchMutate(mArray, HConstants.NO_NONCE,
+          HConstants.NO_NONCE);
       for (i = 0; i < codes.length; i++) {
         Mutation currentMutation = mArray[i];
         ClientProtos.Action currentAction = mutationActionMap.get(currentMutation);
@@ -1132,28 +1132,21 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
    * constructing MultiResponse to save a possible loop if caller doesn't need MultiResponse.
    * @param region
    * @param mutations
-   * @param replaySeqId
-   * @param replicaSuccesCount 
+   * @param replicasOffered 
    * @return an array of OperationStatus which internally contains the OperationStatusCode and the
    *         exceptionMessage if any
    * @throws IOException
    */
   private BatchOperation doReplayBatchOpForMemstoreReplication(final Region region,
-      final List<WALSplitter.MutationReplay> mutations, long replaySeqId, int replicaSuccesCount) throws IOException {
-    long before = EnvironmentEdgeManager.currentTime();
-    boolean batchContainsPuts = false, batchContainsDelete = false;
+      final List<WALSplitter.MutationReplay> mutations, int replicasOffered) throws IOException {
     try {
       for (Iterator<WALSplitter.MutationReplay> it = mutations.iterator(); it.hasNext();) {
         WALSplitter.MutationReplay m = it.next();
 
-        if (m.type == MutationType.PUT) {
-          batchContainsPuts = true;
-        } else {
-          batchContainsDelete = true;
-        }
-
         NavigableMap<byte[], List<Cell>> map = m.mutation.getFamilyCellMap();
         List<Cell> metaCells = map.get(WALEdit.METAFAMILY);
+        // TODO are we writing these META cells to Memstore replay list?  WAL any way not in pic now?
+        // How we will handle the cases like the flush/compaction now? That to tell abt it to replica regions
         if (metaCells != null && !metaCells.isEmpty()) {
           for (Cell metaCell : metaCells) {
             CompactionDescriptor compactionDesc = WALEdit.getCompaction(metaCell);
@@ -1163,12 +1156,12 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
               // replay the compaction. Remove the files from stores only if we are the primary
               // region replica (thus own the files)
               hRegion.replayWALCompactionMarker(compactionDesc, !isDefaultReplica, isDefaultReplica,
-                replaySeqId);
+                  metaCell.getSequenceId());
               continue;
             }
             FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(metaCell);
             if (flushDesc != null && !isDefaultReplica) {
-              hRegion.replayWALFlushMarker(flushDesc, replaySeqId, replicaSuccesCount);
+              hRegion.replayWALFlushMarker(flushDesc, metaCell.getSequenceId(), replicasOffered);
               continue;
             }
             RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(metaCell);
@@ -1185,22 +1178,14 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           it.remove();
         }
       }
-      requestCount.add(mutations.size());
+      requestCount.add(mutations.size());// TODO may be need another counter
       if (!region.getRegionInfo().isMetaTable()) {
         regionServer.cacheFlusher.reclaimMemStoreMemory();
       }
-      return region.batchReplayForMemstoreReplication(mutations.toArray(
-        new WALSplitter.MutationReplay[mutations.size()]), replaySeqId, replicaSuccesCount);
+      return region.batchReplayForMemstoreReplication(
+          mutations.toArray(new WALSplitter.MutationReplay[mutations.size()]), replicasOffered);
     } finally {
-      if (regionServer.metricsRegionServer != null) {
-        long after = EnvironmentEdgeManager.currentTime();
-          if (batchContainsPuts) {
-          regionServer.metricsRegionServer.updatePut(after - before);
-        }
-        if (batchContainsDelete) {
-          regionServer.metricsRegionServer.updateDelete(after - before);
-        }
-      }
+      // metrics should be updated but need a new one.. Should not directly affect the normal put/delete metrics.
     }
   }
 
@@ -2227,81 +2212,65 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
   }
 
   @Override
-  public ReplicateMemstoreReplicaEntryResponse memstoreReplay(RpcController controller,
-      ReplicateMemstoreReplicaEntryRequest request) throws ServiceException {
-    long before = EnvironmentEdgeManager.currentTime();
+  public ReplicateMemstoreResponse replicateMemstore(RpcController controller,
+      ReplicateMemstoreRequest request) throws ServiceException {
     CellScanner cells = ((HBaseRpcController) controller).cellScanner();
     try {
       checkOpen();
-      MemstoreReplicationKey replicationKeyEntry = request.getReplicationKeyEntry();
-      int count = replicationKeyEntry.getAssociatedCellCount();
-      ByteString regionName = replicationKeyEntry.getEncodedRegionName();
-      int currentIndex = request.getCurrentPipelineIndex();
+      ByteString regionName = request.getEncodedRegionName();;
+      int replicasOffered = request.getReplicasOffered();
       Region region = regionServer.getRegionByEncodedName(regionName.toStringUtf8());
-      RegionCoprocessorHost coprocessorHost =
-          ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo())
-              ? region.getCoprocessorHost()
-              : null; // do not invoke coprocessors if this is a secondary region replica
-      List<Pair<WALKey, WALEdit>> walEntries = new ArrayList<>();
+      assert !(ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo()));
 
-      // Skip adding the edits to WAL if this is a secondary region replica
-      boolean isPrimary = RegionReplicaUtil.isDefaultReplica(region.getRegionInfo());
-      Durability durability = isPrimary ? Durability.USE_DEFAULT : Durability.SKIP_WAL;
-
-      if (!regionName.equals(replicationKeyEntry.getEncodedRegionName())) {
-        throw new NotServingRegionException("Replay request contains entries from multiple "
-            + "regions. First region:" + regionName.toStringUtf8() + " , other region:"
-            + replicationKeyEntry.getEncodedRegionName());
-      }
-
-      long replaySeqId = (replicationKeyEntry.hasOrigSequenceNumber())
-          ? replicationKeyEntry.getOrigSequenceNumber()
-          : replicationKeyEntry.getLogSequenceNumber();
       List<MutationReplay> mutations = new ArrayList<>();
-      Cell previousCell = null;
-      Mutation m = null;
-      WALKey key = null;
-      WALEdit val = null;
-
-      for (int i = 0; i < count; i++) {
-        // Throw index out of bounds if our cell count is off
-        if (!cells.advance()) {
-          throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
-        }
-        Cell cell = cells.current();
-        if (val != null) val.add(cell);
-
-        boolean isNewRowOrType =
-            previousCell == null || previousCell.getTypeByte() != cell.getTypeByte()
-                || !CellUtil.matchingRow(previousCell, cell);
-        if (isNewRowOrType) {
-          // Create new mutation
-          if (CellUtil.isDelete(cell)) {
-            m = new Delete(cell.getRowArray(), cell.getRowOffset(), cell.getRowLength());
-            // Deletes don't have nonces.
-            mutations.add(
-              new MutationReplay(MutationType.DELETE, m, HConstants.NO_NONCE, HConstants.NO_NONCE));
-          } else {
-            m = new Put(cell.getRowArray(), cell.getRowOffset(), cell.getRowLength());
-            // Puts might come from increment or append, thus we need nonces.
-            mutations.add(
-              new MutationReplay(MutationType.PUT, m, HConstants.NO_NONCE, HConstants.NO_NONCE));
+      List<MemstoreReplicationEntry> entries = request.getEntryList();
+      for (MemstoreReplicationEntry entry : entries) {
+        int count = entry.getAssociatedCellCount();
+        int sequenceId = entry.getSequenceId();// TODO make this as long?
+        // TODO Avoid MutationReplay. Make it as Mutations itself. If possible avoid making
+        // Mutations itself. Do we really need them? We dont have CPs in this flow. The next use of
+        // Mutation is for getting RK and get row lock. Even for that Cells are enough. But do we
+        // really need row locks? Already the row is locked at primary. Will it be possible that 2
+        // diff replicas write to same another replica on same row?
+        Cell previousCell = null;
+        Mutation m = null;
+        for (int i = 0; i < count; i++) {
+          // Throw index out of bounds if our cell count is off
+          if (!cells.advance()) {
+            throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
           }
+          Cell cell = cells.current();
+          CellUtil.setSequenceId(cell, sequenceId);
+          boolean isNewRowOrType = previousCell == null
+              || previousCell.getTypeByte() != cell.getTypeByte()
+              || !CellUtil.matchingRow(previousCell, cell);
+          if (isNewRowOrType) {
+            // Create new mutation
+            if (CellUtil.isDelete(cell)) {
+              m = new Delete(cell.getRowArray(), cell.getRowOffset(), cell.getRowLength());
+              // Deletes don't have nonces.
+              mutations.add(new MutationReplay(MutationType.DELETE, m, HConstants.NO_NONCE,
+                  HConstants.NO_NONCE));
+            } else {
+              m = new Put(cell.getRowArray(), cell.getRowOffset(), cell.getRowLength());
+              // Puts might come from increment or append, thus we need nonces.
+              mutations.add(new MutationReplay(MutationType.PUT, m, HConstants.NO_NONCE,
+                  HConstants.NO_NONCE));
+            }
+          }
+          if (CellUtil.isDelete(cell)) {
+            ((Delete) m).addDeleteMarker(cell);
+          } else {
+            ((Put) m).add(cell);
+          }
+          previousCell = cell;
         }
-        if (CellUtil.isDelete(cell)) {
-          ((Delete) m).addDeleteMarker(cell);
-        } else {
-          ((Put) m).add(cell);
-        }
-        m.setDurability(durability);
-        previousCell = cell;
       }
       BatchOperation batchOp = null;
       if (mutations != null && !mutations.isEmpty()) {
-        // HBASE-17924
-        // sort to improve lock efficiency
-        Collections.sort(mutations);
-        // create one per region
+        // Already the mutations will be sorted at primary region. And we get those in same order
+        // here. So no need for extra sort.
+        // create one per region  -  Anoop : Will be too much? May be ok.
         // DO this or go with an executor. //TODO : How to shutdown these threads on stop??
         ReplayCallbackExecutor replayCallbackExecutor =
             regionCallBackExecutor.get(((HRegion) region).getRegionInfo().getEncodedName());
@@ -2313,7 +2282,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           // TODO : Handle interrupted exception
           replayCallbackExecutor.start();
         }
-        batchOp = doReplayBatchOpForMemstoreReplication(region, mutations, replaySeqId, currentIndex);
+        batchOp = doReplayBatchOpForMemstoreReplication(region, mutations, replicasOffered);
         // if there is an error then this action is not going to be performed which means we are not advancing the
         // mvcc
         if (batchOp.regionAction != null) {
@@ -2331,24 +2300,12 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           }
         }
       }
-
-      if (coprocessorHost != null) {
-        for (Pair<WALKey, WALEdit> entry : walEntries) {
-          coprocessorHost.postWALRestore(region.getRegionInfo(), entry.getFirst(),
-            entry.getSecond());
-        }
-      }
       if(batchOp.response == null) {
-        return ReplicateMemstoreReplicaEntryResponse.newBuilder().build();
+        return ReplicateMemstoreResponse.newBuilder().build();
       }
       return batchOp.response;
     } catch (IOException ie) {
       throw new ServiceException(ie);
-    } finally {
-      if (regionServer.metricsRegionServer != null) {
-        regionServer.metricsRegionServer.updateReplay(
-          EnvironmentEdgeManager.currentTime() - before);
-      }
     }
   }
 

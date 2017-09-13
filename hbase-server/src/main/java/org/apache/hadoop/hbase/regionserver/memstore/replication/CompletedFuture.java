@@ -23,20 +23,20 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.exceptions.TimeoutIOException;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 
 @InterfaceAudience.Private
 public class CompletedFuture {
   volatile boolean completed = false;
   // TODO : currently not marking for exception. We may need this inside the response only
   volatile Throwable throwable = null;
-  volatile ReplicateMemstoreReplicaEntryResponse response = null;
+  volatile ReplicateMemstoreResponse response = null;
 
   public synchronized boolean isDone() {
     return this.completed;
   }
 
-  public synchronized ReplicateMemstoreReplicaEntryResponse get(long timeoutNs)
+  public synchronized ReplicateMemstoreResponse get(long timeoutNs)
       throws InterruptedException, TimeoutIOException, ExecutionException {
     final long done = System.nanoTime() + timeoutNs;
     while (!isDone()) {
@@ -63,7 +63,7 @@ public class CompletedFuture {
     notify();
   }
 
-  public synchronized void markResponse(ReplicateMemstoreReplicaEntryResponse response) {
+  public synchronized void markResponse(ReplicateMemstoreResponse response) {
     this.response = response;
     this.completed = true;
     notify();

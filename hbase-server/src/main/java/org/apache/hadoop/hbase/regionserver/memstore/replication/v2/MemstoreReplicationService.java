@@ -19,8 +19,8 @@ import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
 import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateMemstoreReplicaEntryResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.HasThread;
 import org.apache.hadoop.hbase.util.Pair;
@@ -108,13 +108,13 @@ public class MemstoreReplicationService {
       }
     }
 
-    private ReplicateMemstoreReplicaEntryResponse replicate(Entry entry) {
+    private ReplicateMemstoreResponse replicate(Entry entry) {
       RegionReplicaReplicator replicator = entry.replicator;
       List<MemstoreReplicationEntry> entries = replicator.pullEntries(entry.seq);
       if (entries == null || entries.isEmpty()) return null;
       // TODO we need a new ReplicateWALEntryResponse from where which we can know how many
       // success replicas are there.
-      ReplicateMemstoreReplicaEntryResponse response = null;
+      ReplicateMemstoreResponse response = null;
       int curRegionReplicaId = replicator.getCurRegionReplicaId();
       // The write pipeline for replication will always be R1 -> R2 ->.. Rn
       // When there is a failure for any node, the current replica will try with its next and so on
@@ -129,7 +129,7 @@ public class MemstoreReplicationService {
           // Passing row as null is ok as we already know the region location. This row wont be used
           // at all.
           try {
-            response = rpcRetryingCallerFactory.<ReplicateMemstoreReplicaEntryResponse>newCaller()
+            response = rpcRetryingCallerFactory.<ReplicateMemstoreResponse>newCaller()
                 .callWithRetries(callable, operationTimeout);
             markEntriesSuccess(entries);
             return response;// Break the loop. The successful next replica will write to its next
@@ -160,7 +160,7 @@ public class MemstoreReplicationService {
   }
 
   private static class RegionReplicaReplayCallable
-      extends RegionAdminServiceCallable<ReplicateMemstoreReplicaEntryResponse> {
+      extends RegionAdminServiceCallable<ReplicateMemstoreResponse> {
     private final List<MemstoreReplicationEntry> entries;
     private final byte[] initialEncodedRegionName;
 
@@ -172,7 +172,7 @@ public class MemstoreReplicationService {
       this.initialEncodedRegionName = regionInfo.getEncodedNameAsBytes();
     }
 
-    public ReplicateMemstoreReplicaEntryResponse call(HBaseRpcController controller) throws Exception {
+    public ReplicateMemstoreResponse call(HBaseRpcController controller) throws Exception {
       // Check whether we should still replay this entry. If the regions are changed, or the
       // entry is not coming form the primary region, filter it out because we do not need it.
       // Regions can change because of (1) region split (2) region merge (3) table recreated
@@ -185,13 +185,13 @@ public class MemstoreReplicationService {
         MemstoreReplicationEntry[] entriesArray = new MemstoreReplicationEntry[this.entries.size()];
         entriesArray = this.entries.toArray(entriesArray);
         // set the region name for the target region replica
-        Pair<AdminProtos.ReplicateMemstoreReplicaEntryRequest, CellScanner> p = ReplicationProtbufUtil
+        Pair<ReplicateMemstoreRequest, CellScanner> p = ReplicationProtbufUtil
             .buildReplicateMemstoreEntryRequest(entriesArray,
                 location.getRegionInfo().getEncodedNameAsBytes(), null, null, null);
         controller.setCellScanner(p.getSecond());
-        return stub.memstoreReplay(controller, p.getFirst());
+        return stub.replicateMemstore(controller, p.getFirst());
       }
-      return ReplicateMemstoreReplicaEntryResponse.newBuilder().build();
+      return ReplicateMemstoreResponse.newBuilder().build();
     }
   }
 }

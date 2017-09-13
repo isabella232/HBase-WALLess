@@ -346,19 +346,6 @@ public interface Region extends ConfigurationObserver {
       throws IOException;
 
   /**
-   * Perform a batch of mutations.
-   * <p>
-   * Note this supports only Put and Delete mutations and will ignore other types passed.
-   * @param mutations the list of mutations
-   * @param nonceGroup
-   * @param nonce
-   * @return the BatchOperation which includes the status of the operations
-   * @throws IOException
-   */
-  BatchOperation batchMutateForMemstoreReplication(Mutation[] mutations, long nonceGroup, long nonce)
-      throws IOException;
-
-  /**
    * Replay a batch of mutations.
    * @param mutations mutations to replay.
    * @param replaySeqId
@@ -371,13 +358,12 @@ public interface Region extends ConfigurationObserver {
   /**
    * Replay a batch of mutations.
    * @param mutations mutations to replay.
-   * @param replaySeqId
-   * @param replicaSuccesCount 
+   * @param replicasOffered 
    * @return the BatchOperation that contains the status of the operations
    * @throws IOException
    */
-  BatchOperation batchReplayForMemstoreReplication(MutationReplay[] mutations, long replaySeqId,
-      int replicaSuccesCount) throws IOException;
+  BatchOperation batchReplayForMemstoreReplication(MutationReplay[] mutations, int replicasOffered)
+      throws IOException;
 
   /**
    * Atomically checks if a row/family/qualifier value matches the expected value and if it does,

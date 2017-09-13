@@ -14,92 +14,50 @@ public final class MemstoreReplicaProtos {
     registerAllExtensions(
         (org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite) registry);
   }
-  public interface MemstoreReplicationKeyOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:hbase.pb.MemstoreReplicationKey)
+  public interface MemstoreReplicationEntryOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:hbase.pb.MemstoreReplicationEntry)
       org.apache.hadoop.hbase.shaded.com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>required bytes encoded_region_name = 1;</code>
-     */
-    boolean hasEncodedRegionName();
-    /**
-     * <code>required bytes encoded_region_name = 1;</code>
-     */
-    org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString getEncodedRegionName();
-
-    /**
-     * <code>required bytes table_name = 2;</code>
-     */
-    boolean hasTableName();
-    /**
-     * <code>required bytes table_name = 2;</code>
-     */
-    org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString getTableName();
-
-    /**
-     * <code>required uint64 log_sequence_number = 3;</code>
-     */
-    boolean hasLogSequenceNumber();
-    /**
-     * <code>required uint64 log_sequence_number = 3;</code>
-     */
-    long getLogSequenceNumber();
-
-    /**
-     * <code>required uint64 write_time = 4;</code>
-     */
-    boolean hasWriteTime();
-    /**
-     * <code>required uint64 write_time = 4;</code>
-     */
-    long getWriteTime();
-
-    /**
-     * <code>optional uint32 following_kv_count = 5;</code>
-     */
-    boolean hasFollowingKvCount();
-    /**
-     * <code>optional uint32 following_kv_count = 5;</code>
-     */
-    int getFollowingKvCount();
-
-    /**
-     * <code>optional uint64 orig_sequence_number = 6;</code>
-     */
-    boolean hasOrigSequenceNumber();
-    /**
-     * <code>optional uint64 orig_sequence_number = 6;</code>
-     */
-    long getOrigSequenceNumber();
-
-    /**
-     * <code>optional int32 associated_cell_count = 7;</code>
+     * <pre>
+     * TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
+     * </pre>
+     *
+     * <code>required uint32 associated_cell_count = 1;</code>
      */
     boolean hasAssociatedCellCount();
     /**
-     * <code>optional int32 associated_cell_count = 7;</code>
+     * <pre>
+     * TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
+     * </pre>
+     *
+     * <code>required uint32 associated_cell_count = 1;</code>
      */
     int getAssociatedCellCount();
+
+    /**
+     * <code>required uint32 sequence_id = 2;</code>
+     */
+    boolean hasSequenceId();
+    /**
+     * <code>required uint32 sequence_id = 2;</code>
+     */
+    int getSequenceId();
   }
   /**
-   * Protobuf type {@code hbase.pb.MemstoreReplicationKey}
+   * Protobuf type {@code hbase.pb.MemstoreReplicationEntry}
    */
-  public  static final class MemstoreReplicationKey extends
+  public  static final class MemstoreReplicationEntry extends
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3 implements
-      // @@protoc_insertion_point(message_implements:hbase.pb.MemstoreReplicationKey)
-      MemstoreReplicationKeyOrBuilder {
-    // Use MemstoreReplicationKey.newBuilder() to construct.
-    private MemstoreReplicationKey(org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      // @@protoc_insertion_point(message_implements:hbase.pb.MemstoreReplicationEntry)
+      MemstoreReplicationEntryOrBuilder {
+    // Use MemstoreReplicationEntry.newBuilder() to construct.
+    private MemstoreReplicationEntry(org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
-    private MemstoreReplicationKey() {
-      encodedRegionName_ = org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString.EMPTY;
-      tableName_ = org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString.EMPTY;
-      logSequenceNumber_ = 0L;
-      writeTime_ = 0L;
-      followingKvCount_ = 0;
-      origSequenceNumber_ = 0L;
+    private MemstoreReplicationEntry() {
       associatedCellCount_ = 0;
+      sequenceId_ = 0;
     }
 
     @java.lang.Override
@@ -107,7 +65,7 @@ public final class MemstoreReplicaProtos {
     getUnknownFields() {
       return this.unknownFields;
     }
-    private MemstoreReplicationKey(
+    private MemstoreReplicationEntry(
         org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
         org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
@@ -130,39 +88,14 @@ public final class MemstoreReplicaProtos {
               }
               break;
             }
-            case 10: {
+            case 8: {
               bitField0_ |= 0x00000001;
-              encodedRegionName_ = input.readBytes();
+              associatedCellCount_ = input.readUInt32();
               break;
             }
-            case 18: {
+            case 16: {
               bitField0_ |= 0x00000002;
-              tableName_ = input.readBytes();
-              break;
-            }
-            case 24: {
-              bitField0_ |= 0x00000004;
-              logSequenceNumber_ = input.readUInt64();
-              break;
-            }
-            case 32: {
-              bitField0_ |= 0x00000008;
-              writeTime_ = input.readUInt64();
-              break;
-            }
-            case 40: {
-              bitField0_ |= 0x00000010;
-              followingKvCount_ = input.readUInt32();
-              break;
-            }
-            case 48: {
-              bitField0_ |= 0x00000020;
-              origSequenceNumber_ = input.readUInt64();
-              break;
-            }
-            case 56: {
-              bitField0_ |= 0x00000040;
-              associatedCellCount_ = input.readInt32();
+              sequenceId_ = input.readUInt32();
               break;
             }
           }
@@ -179,120 +112,53 @@ public final class MemstoreReplicaProtos {
     }
     public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_MemstoreReplicationKey_descriptor;
+      return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_MemstoreReplicationEntry_descriptor;
     }
 
     protected org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_MemstoreReplicationKey_fieldAccessorTable
+      return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_MemstoreReplicationEntry_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey.class, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey.Builder.class);
+              org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.class, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder.class);
     }
 
     private int bitField0_;
-    public static final int ENCODED_REGION_NAME_FIELD_NUMBER = 1;
-    private org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString encodedRegionName_;
+    public static final int ASSOCIATED_CELL_COUNT_FIELD_NUMBER = 1;
+    private int associatedCellCount_;
     /**
-     * <code>required bytes encoded_region_name = 1;</code>
+     * <pre>
+     * TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
+     * </pre>
+     *
+     * <code>required uint32 associated_cell_count = 1;</code>
      */
-    public boolean hasEncodedRegionName() {
+    public boolean hasAssociatedCellCount() {
       return ((bitField0_ & 0x00000001) == 0x00000001);
     }
     /**
-     * <code>required bytes encoded_region_name = 1;</code>
-     */
-    public org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString getEncodedRegionName() {
-      return encodedRegionName_;
-    }
-
-    public static final int TABLE_NAME_FIELD_NUMBER = 2;
-    private org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString tableName_;
-    /**
-     * <code>required bytes table_name = 2;</code>
-     */
-    public boolean hasTableName() {
-      return ((bitField0_ & 0x00000002) == 0x00000002);
-    }
-    /**
-     * <code>required bytes table_name = 2;</code>
-     */
-    public org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString getTableName() {
-      return tableName_;
-    }
-
-    public static final int LOG_SEQUENCE_NUMBER_FIELD_NUMBER = 3;
-    private long logSequenceNumber_;
-    /**
-     * <code>required uint64 log_sequence_number = 3;</code>
-     */
-    public boolean hasLogSequenceNumber() {
-      return ((bitField0_ & 0x00000004) == 0x00000004);
-    }
-    /**
-     * <code>required uint64 log_sequence_number = 3;</code>
-     */
-    public long getLogSequenceNumber() {
-      return logSequenceNumber_;
-    }
-
-    public static final int WRITE_TIME_FIELD_NUMBER = 4;
-    private long writeTime_;
-    /**
-     * <code>required uint64 write_time = 4;</code>
-     */
-    public boolean hasWriteTime() {
-      return ((bitField0_ & 0x00000008) == 0x00000008);
-    }
-    /**
-     * <code>required uint64 write_time = 4;</code>
-     */
-    public long getWriteTime() {
-      return writeTime_;
-    }
-
-    public static final int FOLLOWING_KV_COUNT_FIELD_NUMBER = 5;
-    private int followingKvCount_;
-    /**
-     * <code>optional uint32 following_kv_count = 5;</code>
-     */
-    public boolean hasFollowingKvCount() {
-      return ((bitField0_ & 0x00000010) == 0x00000010);
-    }
-    /**
-     * <code>optional uint32 following_kv_count = 5;</code>
-     */
-    public int getFollowingKvCount() {
-      return followingKvCount_;
-    }
-
-    public static final int ORIG_SEQUENCE_NUMBER_FIELD_NUMBER = 6;
-    private long origSequenceNumber_;
-    /**
-     * <code>optional uint64 orig_sequence_number = 6;</code>
-     */
-    public boolean hasOrigSequenceNumber() {
-      return ((bitField0_ & 0x00000020) == 0x00000020);
-    }
-    /**
-     * <code>optional uint64 orig_sequence_number = 6;</code>
-     */
-    public long getOrigSequenceNumber() {
-      return origSequenceNumber_;
-    }
-
-    public static final int ASSOCIATED_CELL_COUNT_FIELD_NUMBER = 7;
-    private int associatedCellCount_;
-    /**
-     * <code>optional int32 associated_cell_count = 7;</code>
-     */
-    public boolean hasAssociatedCellCount() {
-      return ((bitField0_ & 0x00000040) == 0x00000040);
-    }
-    /**
-     * <code>optional int32 associated_cell_count = 7;</code>
+     * <pre>
+     * TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
+     * </pre>
+     *
+     * <code>required uint32 associated_cell_count = 1;</code>
      */
     public int getAssociatedCellCount() {
       return associatedCellCount_;
+    }
+
+    public static final int SEQUENCE_ID_FIELD_NUMBER = 2;
+    private int sequenceId_;
+    /**
+     * <code>required uint32 sequence_id = 2;</code>
+     */
+    public boolean hasSequenceId() {
+      return ((bitField0_ & 0x00000002) == 0x00000002);
+    }
+    /**
+     * <code>required uint32 sequence_id = 2;</code>
+     */
+    public int getSequenceId() {
+      return sequenceId_;
     }
 
     private byte memoizedIsInitialized = -1;
@@ -301,19 +167,11 @@ public final class MemstoreReplicaProtos {
       if (isInitialized == 1) return true;
       if (isInitialized == 0) return false;
 
-      if (!hasEncodedRegionName()) {
+      if (!hasAssociatedCellCount()) {
         memoizedIsInitialized = 0;
         return false;
       }
-      if (!hasTableName()) {
-        memoizedIsInitialized = 0;
-        return false;
-      }
-      if (!hasLogSequenceNumber()) {
-        memoizedIsInitialized = 0;
-        return false;
-      }
-      if (!hasWriteTime()) {
+      if (!hasSequenceId()) {
         memoizedIsInitialized = 0;
         return false;
       }
@@ -324,25 +182,10 @@ public final class MemstoreReplicaProtos {
     public void writeTo(org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
-        output.writeBytes(1, encodedRegionName_);
+        output.writeUInt32(1, associatedCellCount_);
       }
       if (((bitField0_ & 0x00000002) == 0x00000002)) {
-        output.writeBytes(2, tableName_);
-      }
-      if (((bitField0_ & 0x00000004) == 0x00000004)) {
-        output.writeUInt64(3, logSequenceNumber_);
-      }
-      if (((bitField0_ & 0x00000008) == 0x00000008)) {
-        output.writeUInt64(4, writeTime_);
-      }
-      if (((bitField0_ & 0x00000010) == 0x00000010)) {
-        output.writeUInt32(5, followingKvCount_);
-      }
-      if (((bitField0_ & 0x00000020) == 0x00000020)) {
-        output.writeUInt64(6, origSequenceNumber_);
-      }
-      if (((bitField0_ & 0x00000040) == 0x00000040)) {
-        output.writeInt32(7, associatedCellCount_);
+        output.writeUInt32(2, sequenceId_);
       }
       unknownFields.writeTo(output);
     }
@@ -354,31 +197,11 @@ public final class MemstoreReplicaProtos {
       size = 0;
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
-          .computeBytesSize(1, encodedRegionName_);
+          .computeUInt32Size(1, associatedCellCount_);
       }
       if (((bitField0_ & 0x00000002) == 0x00000002)) {
         size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
-          .computeBytesSize(2, tableName_);
-      }
-      if (((bitField0_ & 0x00000004) == 0x00000004)) {
-        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
-          .computeUInt64Size(3, logSequenceNumber_);
-      }
-      if (((bitField0_ & 0x00000008) == 0x00000008)) {
-        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
-          .computeUInt64Size(4, writeTime_);
-      }
-      if (((bitField0_ & 0x00000010) == 0x00000010)) {
-        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
-          .computeUInt32Size(5, followingKvCount_);
-      }
-      if (((bitField0_ & 0x00000020) == 0x00000020)) {
-        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
-          .computeUInt64Size(6, origSequenceNumber_);
-      }
-      if (((bitField0_ & 0x00000040) == 0x00000040)) {
-        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
-          .computeInt32Size(7, associatedCellCount_);
+          .computeUInt32Size(2, sequenceId_);
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -391,46 +214,21 @@ public final class MemstoreReplicaProtos {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey)) {
+      if (!(obj instanceof org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry)) {
         return super.equals(obj);
       }
-      org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey other = (org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey) obj;
+      org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry other = (org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry) obj;
 
       boolean result = true;
-      result = result && (hasEncodedRegionName() == other.hasEncodedRegionName());
-      if (hasEncodedRegionName()) {
-        result = result && getEncodedRegionName()
-            .equals(other.getEncodedRegionName());
-      }
-      result = result && (hasTableName() == other.hasTableName());
-      if (hasTableName()) {
-        result = result && getTableName()
-            .equals(other.getTableName());
-      }
-      result = result && (hasLogSequenceNumber() == other.hasLogSequenceNumber());
-      if (hasLogSequenceNumber()) {
-        result = result && (getLogSequenceNumber()
-            == other.getLogSequenceNumber());
-      }
-      result = result && (hasWriteTime() == other.hasWriteTime());
-      if (hasWriteTime()) {
-        result = result && (getWriteTime()
-            == other.getWriteTime());
-      }
-      result = result && (hasFollowingKvCount() == other.hasFollowingKvCount());
-      if (hasFollowingKvCount()) {
-        result = result && (getFollowingKvCount()
-            == other.getFollowingKvCount());
-      }
-      result = result && (hasOrigSequenceNumber() == other.hasOrigSequenceNumber());
-      if (hasOrigSequenceNumber()) {
-        result = result && (getOrigSequenceNumber()
-            == other.getOrigSequenceNumber());
-      }
       result = result && (hasAssociatedCellCount() == other.hasAssociatedCellCount());
       if (hasAssociatedCellCount()) {
         result = result && (getAssociatedCellCount()
             == other.getAssociatedCellCount());
+      }
+      result = result && (hasSequenceId() == other.hasSequenceId());
+      if (hasSequenceId()) {
+        result = result && (getSequenceId()
+            == other.getSequenceId());
       }
       result = result && unknownFields.equals(other.unknownFields);
       return result;
@@ -443,94 +241,71 @@ public final class MemstoreReplicaProtos {
       }
       int hash = 41;
       hash = (19 * hash) + getDescriptor().hashCode();
-      if (hasEncodedRegionName()) {
-        hash = (37 * hash) + ENCODED_REGION_NAME_FIELD_NUMBER;
-        hash = (53 * hash) + getEncodedRegionName().hashCode();
-      }
-      if (hasTableName()) {
-        hash = (37 * hash) + TABLE_NAME_FIELD_NUMBER;
-        hash = (53 * hash) + getTableName().hashCode();
-      }
-      if (hasLogSequenceNumber()) {
-        hash = (37 * hash) + LOG_SEQUENCE_NUMBER_FIELD_NUMBER;
-        hash = (53 * hash) + org.apache.hadoop.hbase.shaded.com.google.protobuf.Internal.hashLong(
-            getLogSequenceNumber());
-      }
-      if (hasWriteTime()) {
-        hash = (37 * hash) + WRITE_TIME_FIELD_NUMBER;
-        hash = (53 * hash) + org.apache.hadoop.hbase.shaded.com.google.protobuf.Internal.hashLong(
-            getWriteTime());
-      }
-      if (hasFollowingKvCount()) {
-        hash = (37 * hash) + FOLLOWING_KV_COUNT_FIELD_NUMBER;
-        hash = (53 * hash) + getFollowingKvCount();
-      }
-      if (hasOrigSequenceNumber()) {
-        hash = (37 * hash) + ORIG_SEQUENCE_NUMBER_FIELD_NUMBER;
-        hash = (53 * hash) + org.apache.hadoop.hbase.shaded.com.google.protobuf.Internal.hashLong(
-            getOrigSequenceNumber());
-      }
       if (hasAssociatedCellCount()) {
         hash = (37 * hash) + ASSOCIATED_CELL_COUNT_FIELD_NUMBER;
         hash = (53 * hash) + getAssociatedCellCount();
+      }
+      if (hasSequenceId()) {
+        hash = (37 * hash) + SEQUENCE_ID_FIELD_NUMBER;
+        hash = (53 * hash) + getSequenceId();
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
     }
 
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parseFrom(
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parseFrom(
         org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString data)
         throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parseFrom(
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parseFrom(
         org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString data,
         org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parseFrom(byte[] data)
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parseFrom(byte[] data)
         throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parseFrom(
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parseFrom(
         byte[] data,
         org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parseFrom(java.io.InputStream input)
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parseFrom(
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parseFrom(
         java.io.InputStream input,
         org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parseDelimitedFrom(java.io.InputStream input)
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parseDelimitedFrom(
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parseDelimitedFrom(
         java.io.InputStream input,
         org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parseFrom(
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parseFrom(
         org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parseFrom(
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parseFrom(
         org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
         org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -542,7 +317,7 @@ public final class MemstoreReplicaProtos {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey prototype) {
+    public static Builder newBuilder(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -557,25 +332,25 @@ public final class MemstoreReplicaProtos {
       return builder;
     }
     /**
-     * Protobuf type {@code hbase.pb.MemstoreReplicationKey}
+     * Protobuf type {@code hbase.pb.MemstoreReplicationEntry}
      */
     public static final class Builder extends
         org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:hbase.pb.MemstoreReplicationKey)
-        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKeyOrBuilder {
+        // @@protoc_insertion_point(builder_implements:hbase.pb.MemstoreReplicationEntry)
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder {
       public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_MemstoreReplicationKey_descriptor;
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_MemstoreReplicationEntry_descriptor;
       }
 
       protected org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_MemstoreReplicationKey_fieldAccessorTable
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_MemstoreReplicationEntry_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey.class, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey.Builder.class);
+                org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.class, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder.class);
       }
 
-      // Construct using org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey.newBuilder()
+      // Construct using org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.newBuilder()
       private Builder() {
         maybeForceBuilderInitialization();
       }
@@ -592,72 +367,42 @@ public final class MemstoreReplicaProtos {
       }
       public Builder clear() {
         super.clear();
-        encodedRegionName_ = org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString.EMPTY;
-        bitField0_ = (bitField0_ & ~0x00000001);
-        tableName_ = org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString.EMPTY;
-        bitField0_ = (bitField0_ & ~0x00000002);
-        logSequenceNumber_ = 0L;
-        bitField0_ = (bitField0_ & ~0x00000004);
-        writeTime_ = 0L;
-        bitField0_ = (bitField0_ & ~0x00000008);
-        followingKvCount_ = 0;
-        bitField0_ = (bitField0_ & ~0x00000010);
-        origSequenceNumber_ = 0L;
-        bitField0_ = (bitField0_ & ~0x00000020);
         associatedCellCount_ = 0;
-        bitField0_ = (bitField0_ & ~0x00000040);
+        bitField0_ = (bitField0_ & ~0x00000001);
+        sequenceId_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000002);
         return this;
       }
 
       public org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_MemstoreReplicationKey_descriptor;
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_MemstoreReplicationEntry_descriptor;
       }
 
-      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey getDefaultInstanceForType() {
-        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey.getDefaultInstance();
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry getDefaultInstanceForType() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.getDefaultInstance();
       }
 
-      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey build() {
-        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey result = buildPartial();
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry build() {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey buildPartial() {
-        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey result = new org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey(this);
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry buildPartial() {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry result = new org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry(this);
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) == 0x00000001)) {
           to_bitField0_ |= 0x00000001;
         }
-        result.encodedRegionName_ = encodedRegionName_;
+        result.associatedCellCount_ = associatedCellCount_;
         if (((from_bitField0_ & 0x00000002) == 0x00000002)) {
           to_bitField0_ |= 0x00000002;
         }
-        result.tableName_ = tableName_;
-        if (((from_bitField0_ & 0x00000004) == 0x00000004)) {
-          to_bitField0_ |= 0x00000004;
-        }
-        result.logSequenceNumber_ = logSequenceNumber_;
-        if (((from_bitField0_ & 0x00000008) == 0x00000008)) {
-          to_bitField0_ |= 0x00000008;
-        }
-        result.writeTime_ = writeTime_;
-        if (((from_bitField0_ & 0x00000010) == 0x00000010)) {
-          to_bitField0_ |= 0x00000010;
-        }
-        result.followingKvCount_ = followingKvCount_;
-        if (((from_bitField0_ & 0x00000020) == 0x00000020)) {
-          to_bitField0_ |= 0x00000020;
-        }
-        result.origSequenceNumber_ = origSequenceNumber_;
-        if (((from_bitField0_ & 0x00000040) == 0x00000040)) {
-          to_bitField0_ |= 0x00000040;
-        }
-        result.associatedCellCount_ = associatedCellCount_;
+        result.sequenceId_ = sequenceId_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -690,36 +435,737 @@ public final class MemstoreReplicaProtos {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(org.apache.hadoop.hbase.shaded.com.google.protobuf.Message other) {
-        if (other instanceof org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey) {
-          return mergeFrom((org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey)other);
+        if (other instanceof org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry) {
+          return mergeFrom((org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey other) {
-        if (other == org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey.getDefaultInstance()) return this;
+      public Builder mergeFrom(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry other) {
+        if (other == org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.getDefaultInstance()) return this;
+        if (other.hasAssociatedCellCount()) {
+          setAssociatedCellCount(other.getAssociatedCellCount());
+        }
+        if (other.hasSequenceId()) {
+          setSequenceId(other.getSequenceId());
+        }
+        this.mergeUnknownFields(other.unknownFields);
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        if (!hasAssociatedCellCount()) {
+          return false;
+        }
+        if (!hasSequenceId()) {
+          return false;
+        }
+        return true;
+      }
+
+      public Builder mergeFrom(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+      private int bitField0_;
+
+      private int associatedCellCount_ ;
+      /**
+       * <pre>
+       * TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
+       * </pre>
+       *
+       * <code>required uint32 associated_cell_count = 1;</code>
+       */
+      public boolean hasAssociatedCellCount() {
+        return ((bitField0_ & 0x00000001) == 0x00000001);
+      }
+      /**
+       * <pre>
+       * TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
+       * </pre>
+       *
+       * <code>required uint32 associated_cell_count = 1;</code>
+       */
+      public int getAssociatedCellCount() {
+        return associatedCellCount_;
+      }
+      /**
+       * <pre>
+       * TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
+       * </pre>
+       *
+       * <code>required uint32 associated_cell_count = 1;</code>
+       */
+      public Builder setAssociatedCellCount(int value) {
+        bitField0_ |= 0x00000001;
+        associatedCellCount_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
+       * </pre>
+       *
+       * <code>required uint32 associated_cell_count = 1;</code>
+       */
+      public Builder clearAssociatedCellCount() {
+        bitField0_ = (bitField0_ & ~0x00000001);
+        associatedCellCount_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private int sequenceId_ ;
+      /**
+       * <code>required uint32 sequence_id = 2;</code>
+       */
+      public boolean hasSequenceId() {
+        return ((bitField0_ & 0x00000002) == 0x00000002);
+      }
+      /**
+       * <code>required uint32 sequence_id = 2;</code>
+       */
+      public int getSequenceId() {
+        return sequenceId_;
+      }
+      /**
+       * <code>required uint32 sequence_id = 2;</code>
+       */
+      public Builder setSequenceId(int value) {
+        bitField0_ |= 0x00000002;
+        sequenceId_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>required uint32 sequence_id = 2;</code>
+       */
+      public Builder clearSequenceId() {
+        bitField0_ = (bitField0_ & ~0x00000002);
+        sequenceId_ = 0;
+        onChanged();
+        return this;
+      }
+      public final Builder setUnknownFields(
+          final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet unknownFields) {
+        return super.setUnknownFields(unknownFields);
+      }
+
+      public final Builder mergeUnknownFields(
+          final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet unknownFields) {
+        return super.mergeUnknownFields(unknownFields);
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:hbase.pb.MemstoreReplicationEntry)
+    }
+
+    // @@protoc_insertion_point(class_scope:hbase.pb.MemstoreReplicationEntry)
+    private static final org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry();
+    }
+
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    @java.lang.Deprecated public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<MemstoreReplicationEntry>
+        PARSER = new org.apache.hadoop.hbase.shaded.com.google.protobuf.AbstractParser<MemstoreReplicationEntry>() {
+      public MemstoreReplicationEntry parsePartialFrom(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+          return new MemstoreReplicationEntry(input, extensionRegistry);
+      }
+    };
+
+    public static org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<MemstoreReplicationEntry> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<MemstoreReplicationEntry> getParserForType() {
+      return PARSER;
+    }
+
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
+  public interface ReplicateMemstoreRequestOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:hbase.pb.ReplicateMemstoreRequest)
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>required bytes encoded_region_name = 1;</code>
+     */
+    boolean hasEncodedRegionName();
+    /**
+     * <code>required bytes encoded_region_name = 1;</code>
+     */
+    org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString getEncodedRegionName();
+
+    /**
+     * <code>required uint32 replicas_offered = 2;</code>
+     */
+    boolean hasReplicasOffered();
+    /**
+     * <code>required uint32 replicas_offered = 2;</code>
+     */
+    int getReplicasOffered();
+
+    /**
+     * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+     */
+    java.util.List<org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry> 
+        getEntryList();
+    /**
+     * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+     */
+    org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry getEntry(int index);
+    /**
+     * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+     */
+    int getEntryCount();
+    /**
+     * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+     */
+    java.util.List<? extends org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder> 
+        getEntryOrBuilderList();
+    /**
+     * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+     */
+    org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder getEntryOrBuilder(
+        int index);
+  }
+  /**
+   * Protobuf type {@code hbase.pb.ReplicateMemstoreRequest}
+   */
+  public  static final class ReplicateMemstoreRequest extends
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:hbase.pb.ReplicateMemstoreRequest)
+      ReplicateMemstoreRequestOrBuilder {
+    // Use ReplicateMemstoreRequest.newBuilder() to construct.
+    private ReplicateMemstoreRequest(org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private ReplicateMemstoreRequest() {
+      encodedRegionName_ = org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString.EMPTY;
+      replicasOffered_ = 0;
+      entry_ = java.util.Collections.emptyList();
+    }
+
+    @java.lang.Override
+    public final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return this.unknownFields;
+    }
+    private ReplicateMemstoreRequest(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet.newBuilder();
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!parseUnknownField(input, unknownFields,
+                                     extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 10: {
+              bitField0_ |= 0x00000001;
+              encodedRegionName_ = input.readBytes();
+              break;
+            }
+            case 16: {
+              bitField0_ |= 0x00000002;
+              replicasOffered_ = input.readUInt32();
+              break;
+            }
+            case 26: {
+              if (!((mutable_bitField0_ & 0x00000004) == 0x00000004)) {
+                entry_ = new java.util.ArrayList<org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry>();
+                mutable_bitField0_ |= 0x00000004;
+              }
+              entry_.add(
+                  input.readMessage(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.PARSER, extensionRegistry));
+              break;
+            }
+          }
+        }
+      } catch (org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        if (((mutable_bitField0_ & 0x00000004) == 0x00000004)) {
+          entry_ = java.util.Collections.unmodifiableList(entry_);
+        }
+        this.unknownFields = unknownFields.build();
+        makeExtensionsImmutable();
+      }
+    }
+    public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_ReplicateMemstoreRequest_descriptor;
+    }
+
+    protected org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_ReplicateMemstoreRequest_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest.class, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest.Builder.class);
+    }
+
+    private int bitField0_;
+    public static final int ENCODED_REGION_NAME_FIELD_NUMBER = 1;
+    private org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString encodedRegionName_;
+    /**
+     * <code>required bytes encoded_region_name = 1;</code>
+     */
+    public boolean hasEncodedRegionName() {
+      return ((bitField0_ & 0x00000001) == 0x00000001);
+    }
+    /**
+     * <code>required bytes encoded_region_name = 1;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString getEncodedRegionName() {
+      return encodedRegionName_;
+    }
+
+    public static final int REPLICAS_OFFERED_FIELD_NUMBER = 2;
+    private int replicasOffered_;
+    /**
+     * <code>required uint32 replicas_offered = 2;</code>
+     */
+    public boolean hasReplicasOffered() {
+      return ((bitField0_ & 0x00000002) == 0x00000002);
+    }
+    /**
+     * <code>required uint32 replicas_offered = 2;</code>
+     */
+    public int getReplicasOffered() {
+      return replicasOffered_;
+    }
+
+    public static final int ENTRY_FIELD_NUMBER = 3;
+    private java.util.List<org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry> entry_;
+    /**
+     * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+     */
+    public java.util.List<org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry> getEntryList() {
+      return entry_;
+    }
+    /**
+     * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+     */
+    public java.util.List<? extends org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder> 
+        getEntryOrBuilderList() {
+      return entry_;
+    }
+    /**
+     * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+     */
+    public int getEntryCount() {
+      return entry_.size();
+    }
+    /**
+     * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry getEntry(int index) {
+      return entry_.get(index);
+    }
+    /**
+     * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder getEntryOrBuilder(
+        int index) {
+      return entry_.get(index);
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      if (!hasEncodedRegionName()) {
+        memoizedIsInitialized = 0;
+        return false;
+      }
+      if (!hasReplicasOffered()) {
+        memoizedIsInitialized = 0;
+        return false;
+      }
+      for (int i = 0; i < getEntryCount(); i++) {
+        if (!getEntry(i).isInitialized()) {
+          memoizedIsInitialized = 0;
+          return false;
+        }
+      }
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (((bitField0_ & 0x00000001) == 0x00000001)) {
+        output.writeBytes(1, encodedRegionName_);
+      }
+      if (((bitField0_ & 0x00000002) == 0x00000002)) {
+        output.writeUInt32(2, replicasOffered_);
+      }
+      for (int i = 0; i < entry_.size(); i++) {
+        output.writeMessage(3, entry_.get(i));
+      }
+      unknownFields.writeTo(output);
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (((bitField0_ & 0x00000001) == 0x00000001)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeBytesSize(1, encodedRegionName_);
+      }
+      if (((bitField0_ & 0x00000002) == 0x00000002)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(2, replicasOffered_);
+      }
+      for (int i = 0; i < entry_.size(); i++) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeMessageSize(3, entry_.get(i));
+      }
+      size += unknownFields.getSerializedSize();
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest)) {
+        return super.equals(obj);
+      }
+      org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest other = (org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest) obj;
+
+      boolean result = true;
+      result = result && (hasEncodedRegionName() == other.hasEncodedRegionName());
+      if (hasEncodedRegionName()) {
+        result = result && getEncodedRegionName()
+            .equals(other.getEncodedRegionName());
+      }
+      result = result && (hasReplicasOffered() == other.hasReplicasOffered());
+      if (hasReplicasOffered()) {
+        result = result && (getReplicasOffered()
+            == other.getReplicasOffered());
+      }
+      result = result && getEntryList()
+          .equals(other.getEntryList());
+      result = result && unknownFields.equals(other.unknownFields);
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      if (hasEncodedRegionName()) {
+        hash = (37 * hash) + ENCODED_REGION_NAME_FIELD_NUMBER;
+        hash = (53 * hash) + getEncodedRegionName().hashCode();
+      }
+      if (hasReplicasOffered()) {
+        hash = (37 * hash) + REPLICAS_OFFERED_FIELD_NUMBER;
+        hash = (53 * hash) + getReplicasOffered();
+      }
+      if (getEntryCount() > 0) {
+        hash = (37 * hash) + ENTRY_FIELD_NUMBER;
+        hash = (53 * hash) + getEntryList().hashCode();
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString data)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString data,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parseFrom(byte[] data)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parseFrom(
+        byte[] data,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parseFrom(
+        java.io.InputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parseDelimitedFrom(
+        java.io.InputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code hbase.pb.ReplicateMemstoreRequest}
+     */
+    public static final class Builder extends
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:hbase.pb.ReplicateMemstoreRequest)
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequestOrBuilder {
+      public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_ReplicateMemstoreRequest_descriptor;
+      }
+
+      protected org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_ReplicateMemstoreRequest_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest.class, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest.Builder.class);
+      }
+
+      // Construct using org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+          getEntryFieldBuilder();
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        encodedRegionName_ = org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString.EMPTY;
+        bitField0_ = (bitField0_ & ~0x00000001);
+        replicasOffered_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000002);
+        if (entryBuilder_ == null) {
+          entry_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000004);
+        } else {
+          entryBuilder_.clear();
+        }
+        return this;
+      }
+
+      public org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_ReplicateMemstoreRequest_descriptor;
+      }
+
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest getDefaultInstanceForType() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest.getDefaultInstance();
+      }
+
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest build() {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest buildPartial() {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest result = new org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest(this);
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
+        if (((from_bitField0_ & 0x00000001) == 0x00000001)) {
+          to_bitField0_ |= 0x00000001;
+        }
+        result.encodedRegionName_ = encodedRegionName_;
+        if (((from_bitField0_ & 0x00000002) == 0x00000002)) {
+          to_bitField0_ |= 0x00000002;
+        }
+        result.replicasOffered_ = replicasOffered_;
+        if (entryBuilder_ == null) {
+          if (((bitField0_ & 0x00000004) == 0x00000004)) {
+            entry_ = java.util.Collections.unmodifiableList(entry_);
+            bitField0_ = (bitField0_ & ~0x00000004);
+          }
+          result.entry_ = entry_;
+        } else {
+          result.entry_ = entryBuilder_.build();
+        }
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(org.apache.hadoop.hbase.shaded.com.google.protobuf.Message other) {
+        if (other instanceof org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest) {
+          return mergeFrom((org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest other) {
+        if (other == org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest.getDefaultInstance()) return this;
         if (other.hasEncodedRegionName()) {
           setEncodedRegionName(other.getEncodedRegionName());
         }
-        if (other.hasTableName()) {
-          setTableName(other.getTableName());
+        if (other.hasReplicasOffered()) {
+          setReplicasOffered(other.getReplicasOffered());
         }
-        if (other.hasLogSequenceNumber()) {
-          setLogSequenceNumber(other.getLogSequenceNumber());
-        }
-        if (other.hasWriteTime()) {
-          setWriteTime(other.getWriteTime());
-        }
-        if (other.hasFollowingKvCount()) {
-          setFollowingKvCount(other.getFollowingKvCount());
-        }
-        if (other.hasOrigSequenceNumber()) {
-          setOrigSequenceNumber(other.getOrigSequenceNumber());
-        }
-        if (other.hasAssociatedCellCount()) {
-          setAssociatedCellCount(other.getAssociatedCellCount());
+        if (entryBuilder_ == null) {
+          if (!other.entry_.isEmpty()) {
+            if (entry_.isEmpty()) {
+              entry_ = other.entry_;
+              bitField0_ = (bitField0_ & ~0x00000004);
+            } else {
+              ensureEntryIsMutable();
+              entry_.addAll(other.entry_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.entry_.isEmpty()) {
+            if (entryBuilder_.isEmpty()) {
+              entryBuilder_.dispose();
+              entryBuilder_ = null;
+              entry_ = other.entry_;
+              bitField0_ = (bitField0_ & ~0x00000004);
+              entryBuilder_ = 
+                org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
+                   getEntryFieldBuilder() : null;
+            } else {
+              entryBuilder_.addAllMessages(other.entry_);
+            }
+          }
         }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
@@ -730,14 +1176,13 @@ public final class MemstoreReplicaProtos {
         if (!hasEncodedRegionName()) {
           return false;
         }
-        if (!hasTableName()) {
+        if (!hasReplicasOffered()) {
           return false;
         }
-        if (!hasLogSequenceNumber()) {
-          return false;
-        }
-        if (!hasWriteTime()) {
-          return false;
+        for (int i = 0; i < getEntryCount(); i++) {
+          if (!getEntry(i).isInitialized()) {
+            return false;
+          }
         }
         return true;
       }
@@ -746,11 +1191,11 @@ public final class MemstoreReplicaProtos {
           org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
           org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey parsedMessage = null;
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey) e.getUnfinishedMessage();
+          parsedMessage = (org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -796,197 +1241,908 @@ public final class MemstoreReplicaProtos {
         return this;
       }
 
-      private org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString tableName_ = org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString.EMPTY;
+      private int replicasOffered_ ;
       /**
-       * <code>required bytes table_name = 2;</code>
+       * <code>required uint32 replicas_offered = 2;</code>
        */
-      public boolean hasTableName() {
+      public boolean hasReplicasOffered() {
         return ((bitField0_ & 0x00000002) == 0x00000002);
       }
       /**
-       * <code>required bytes table_name = 2;</code>
+       * <code>required uint32 replicas_offered = 2;</code>
        */
-      public org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString getTableName() {
-        return tableName_;
+      public int getReplicasOffered() {
+        return replicasOffered_;
       }
       /**
-       * <code>required bytes table_name = 2;</code>
+       * <code>required uint32 replicas_offered = 2;</code>
        */
-      public Builder setTableName(org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString value) {
-        if (value == null) {
-    throw new NullPointerException();
-  }
-  bitField0_ |= 0x00000002;
-        tableName_ = value;
+      public Builder setReplicasOffered(int value) {
+        bitField0_ |= 0x00000002;
+        replicasOffered_ = value;
         onChanged();
         return this;
       }
       /**
-       * <code>required bytes table_name = 2;</code>
+       * <code>required uint32 replicas_offered = 2;</code>
        */
-      public Builder clearTableName() {
+      public Builder clearReplicasOffered() {
         bitField0_ = (bitField0_ & ~0x00000002);
-        tableName_ = getDefaultInstance().getTableName();
+        replicasOffered_ = 0;
         onChanged();
         return this;
       }
 
-      private long logSequenceNumber_ ;
+      private java.util.List<org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry> entry_ =
+        java.util.Collections.emptyList();
+      private void ensureEntryIsMutable() {
+        if (!((bitField0_ & 0x00000004) == 0x00000004)) {
+          entry_ = new java.util.ArrayList<org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry>(entry_);
+          bitField0_ |= 0x00000004;
+         }
+      }
+
+      private org.apache.hadoop.hbase.shaded.com.google.protobuf.RepeatedFieldBuilderV3<
+          org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder> entryBuilder_;
+
       /**
-       * <code>required uint64 log_sequence_number = 3;</code>
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
        */
-      public boolean hasLogSequenceNumber() {
-        return ((bitField0_ & 0x00000004) == 0x00000004);
+      public java.util.List<org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry> getEntryList() {
+        if (entryBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(entry_);
+        } else {
+          return entryBuilder_.getMessageList();
+        }
       }
       /**
-       * <code>required uint64 log_sequence_number = 3;</code>
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
        */
-      public long getLogSequenceNumber() {
-        return logSequenceNumber_;
+      public int getEntryCount() {
+        if (entryBuilder_ == null) {
+          return entry_.size();
+        } else {
+          return entryBuilder_.getCount();
+        }
       }
       /**
-       * <code>required uint64 log_sequence_number = 3;</code>
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
        */
-      public Builder setLogSequenceNumber(long value) {
-        bitField0_ |= 0x00000004;
-        logSequenceNumber_ = value;
-        onChanged();
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry getEntry(int index) {
+        if (entryBuilder_ == null) {
+          return entry_.get(index);
+        } else {
+          return entryBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public Builder setEntry(
+          int index, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry value) {
+        if (entryBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureEntryIsMutable();
+          entry_.set(index, value);
+          onChanged();
+        } else {
+          entryBuilder_.setMessage(index, value);
+        }
         return this;
       }
       /**
-       * <code>required uint64 log_sequence_number = 3;</code>
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
        */
-      public Builder clearLogSequenceNumber() {
-        bitField0_ = (bitField0_ & ~0x00000004);
-        logSequenceNumber_ = 0L;
+      public Builder setEntry(
+          int index, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder builderForValue) {
+        if (entryBuilder_ == null) {
+          ensureEntryIsMutable();
+          entry_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          entryBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public Builder addEntry(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry value) {
+        if (entryBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureEntryIsMutable();
+          entry_.add(value);
+          onChanged();
+        } else {
+          entryBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public Builder addEntry(
+          int index, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry value) {
+        if (entryBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureEntryIsMutable();
+          entry_.add(index, value);
+          onChanged();
+        } else {
+          entryBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public Builder addEntry(
+          org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder builderForValue) {
+        if (entryBuilder_ == null) {
+          ensureEntryIsMutable();
+          entry_.add(builderForValue.build());
+          onChanged();
+        } else {
+          entryBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public Builder addEntry(
+          int index, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder builderForValue) {
+        if (entryBuilder_ == null) {
+          ensureEntryIsMutable();
+          entry_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          entryBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public Builder addAllEntry(
+          java.lang.Iterable<? extends org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry> values) {
+        if (entryBuilder_ == null) {
+          ensureEntryIsMutable();
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, entry_);
+          onChanged();
+        } else {
+          entryBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public Builder clearEntry() {
+        if (entryBuilder_ == null) {
+          entry_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000004);
+          onChanged();
+        } else {
+          entryBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public Builder removeEntry(int index) {
+        if (entryBuilder_ == null) {
+          ensureEntryIsMutable();
+          entry_.remove(index);
+          onChanged();
+        } else {
+          entryBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder getEntryBuilder(
+          int index) {
+        return getEntryFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder getEntryOrBuilder(
+          int index) {
+        if (entryBuilder_ == null) {
+          return entry_.get(index);  } else {
+          return entryBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public java.util.List<? extends org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder> 
+           getEntryOrBuilderList() {
+        if (entryBuilder_ != null) {
+          return entryBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(entry_);
+        }
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder addEntryBuilder() {
+        return getEntryFieldBuilder().addBuilder(
+            org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder addEntryBuilder(
+          int index) {
+        return getEntryFieldBuilder().addBuilder(
+            index, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .hbase.pb.MemstoreReplicationEntry entry = 3;</code>
+       */
+      public java.util.List<org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder> 
+           getEntryBuilderList() {
+        return getEntryFieldBuilder().getBuilderList();
+      }
+      private org.apache.hadoop.hbase.shaded.com.google.protobuf.RepeatedFieldBuilderV3<
+          org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder> 
+          getEntryFieldBuilder() {
+        if (entryBuilder_ == null) {
+          entryBuilder_ = new org.apache.hadoop.hbase.shaded.com.google.protobuf.RepeatedFieldBuilderV3<
+              org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder>(
+                  entry_,
+                  ((bitField0_ & 0x00000004) == 0x00000004),
+                  getParentForChildren(),
+                  isClean());
+          entry_ = null;
+        }
+        return entryBuilder_;
+      }
+      public final Builder setUnknownFields(
+          final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet unknownFields) {
+        return super.setUnknownFields(unknownFields);
+      }
+
+      public final Builder mergeUnknownFields(
+          final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet unknownFields) {
+        return super.mergeUnknownFields(unknownFields);
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:hbase.pb.ReplicateMemstoreRequest)
+    }
+
+    // @@protoc_insertion_point(class_scope:hbase.pb.ReplicateMemstoreRequest)
+    private static final org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest();
+    }
+
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    @java.lang.Deprecated public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<ReplicateMemstoreRequest>
+        PARSER = new org.apache.hadoop.hbase.shaded.com.google.protobuf.AbstractParser<ReplicateMemstoreRequest>() {
+      public ReplicateMemstoreRequest parsePartialFrom(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+          return new ReplicateMemstoreRequest(input, extensionRegistry);
+      }
+    };
+
+    public static org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<ReplicateMemstoreRequest> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<ReplicateMemstoreRequest> getParserForType() {
+      return PARSER;
+    }
+
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
+  public interface ReplicateMemstoreResponseOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:hbase.pb.ReplicateMemstoreResponse)
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>repeated uint32 failed_replicas = 1;</code>
+     */
+    java.util.List<java.lang.Integer> getFailedReplicasList();
+    /**
+     * <code>repeated uint32 failed_replicas = 1;</code>
+     */
+    int getFailedReplicasCount();
+    /**
+     * <code>repeated uint32 failed_replicas = 1;</code>
+     */
+    int getFailedReplicas(int index);
+
+    /**
+     * <code>required uint32 replicas_committed = 2;</code>
+     */
+    boolean hasReplicasCommitted();
+    /**
+     * <code>required uint32 replicas_committed = 2;</code>
+     */
+    int getReplicasCommitted();
+  }
+  /**
+   * Protobuf type {@code hbase.pb.ReplicateMemstoreResponse}
+   */
+  public  static final class ReplicateMemstoreResponse extends
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:hbase.pb.ReplicateMemstoreResponse)
+      ReplicateMemstoreResponseOrBuilder {
+    // Use ReplicateMemstoreResponse.newBuilder() to construct.
+    private ReplicateMemstoreResponse(org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private ReplicateMemstoreResponse() {
+      failedReplicas_ = java.util.Collections.emptyList();
+      replicasCommitted_ = 0;
+    }
+
+    @java.lang.Override
+    public final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return this.unknownFields;
+    }
+    private ReplicateMemstoreResponse(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet.newBuilder();
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!parseUnknownField(input, unknownFields,
+                                     extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 8: {
+              if (!((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
+                failedReplicas_ = new java.util.ArrayList<java.lang.Integer>();
+                mutable_bitField0_ |= 0x00000001;
+              }
+              failedReplicas_.add(input.readUInt32());
+              break;
+            }
+            case 10: {
+              int length = input.readRawVarint32();
+              int limit = input.pushLimit(length);
+              if (!((mutable_bitField0_ & 0x00000001) == 0x00000001) && input.getBytesUntilLimit() > 0) {
+                failedReplicas_ = new java.util.ArrayList<java.lang.Integer>();
+                mutable_bitField0_ |= 0x00000001;
+              }
+              while (input.getBytesUntilLimit() > 0) {
+                failedReplicas_.add(input.readUInt32());
+              }
+              input.popLimit(limit);
+              break;
+            }
+            case 16: {
+              bitField0_ |= 0x00000001;
+              replicasCommitted_ = input.readUInt32();
+              break;
+            }
+          }
+        }
+      } catch (org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
+          failedReplicas_ = java.util.Collections.unmodifiableList(failedReplicas_);
+        }
+        this.unknownFields = unknownFields.build();
+        makeExtensionsImmutable();
+      }
+    }
+    public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_ReplicateMemstoreResponse_descriptor;
+    }
+
+    protected org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_ReplicateMemstoreResponse_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse.class, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse.Builder.class);
+    }
+
+    private int bitField0_;
+    public static final int FAILED_REPLICAS_FIELD_NUMBER = 1;
+    private java.util.List<java.lang.Integer> failedReplicas_;
+    /**
+     * <code>repeated uint32 failed_replicas = 1;</code>
+     */
+    public java.util.List<java.lang.Integer>
+        getFailedReplicasList() {
+      return failedReplicas_;
+    }
+    /**
+     * <code>repeated uint32 failed_replicas = 1;</code>
+     */
+    public int getFailedReplicasCount() {
+      return failedReplicas_.size();
+    }
+    /**
+     * <code>repeated uint32 failed_replicas = 1;</code>
+     */
+    public int getFailedReplicas(int index) {
+      return failedReplicas_.get(index);
+    }
+
+    public static final int REPLICAS_COMMITTED_FIELD_NUMBER = 2;
+    private int replicasCommitted_;
+    /**
+     * <code>required uint32 replicas_committed = 2;</code>
+     */
+    public boolean hasReplicasCommitted() {
+      return ((bitField0_ & 0x00000001) == 0x00000001);
+    }
+    /**
+     * <code>required uint32 replicas_committed = 2;</code>
+     */
+    public int getReplicasCommitted() {
+      return replicasCommitted_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      if (!hasReplicasCommitted()) {
+        memoizedIsInitialized = 0;
+        return false;
+      }
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      for (int i = 0; i < failedReplicas_.size(); i++) {
+        output.writeUInt32(1, failedReplicas_.get(i));
+      }
+      if (((bitField0_ & 0x00000001) == 0x00000001)) {
+        output.writeUInt32(2, replicasCommitted_);
+      }
+      unknownFields.writeTo(output);
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      {
+        int dataSize = 0;
+        for (int i = 0; i < failedReplicas_.size(); i++) {
+          dataSize += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+            .computeUInt32SizeNoTag(failedReplicas_.get(i));
+        }
+        size += dataSize;
+        size += 1 * getFailedReplicasList().size();
+      }
+      if (((bitField0_ & 0x00000001) == 0x00000001)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(2, replicasCommitted_);
+      }
+      size += unknownFields.getSerializedSize();
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse)) {
+        return super.equals(obj);
+      }
+      org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse other = (org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse) obj;
+
+      boolean result = true;
+      result = result && getFailedReplicasList()
+          .equals(other.getFailedReplicasList());
+      result = result && (hasReplicasCommitted() == other.hasReplicasCommitted());
+      if (hasReplicasCommitted()) {
+        result = result && (getReplicasCommitted()
+            == other.getReplicasCommitted());
+      }
+      result = result && unknownFields.equals(other.unknownFields);
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      if (getFailedReplicasCount() > 0) {
+        hash = (37 * hash) + FAILED_REPLICAS_FIELD_NUMBER;
+        hash = (53 * hash) + getFailedReplicasList().hashCode();
+      }
+      if (hasReplicasCommitted()) {
+        hash = (37 * hash) + REPLICAS_COMMITTED_FIELD_NUMBER;
+        hash = (53 * hash) + getReplicasCommitted();
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString data)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString data,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parseFrom(byte[] data)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parseFrom(
+        byte[] data,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parseFrom(
+        java.io.InputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parseDelimitedFrom(
+        java.io.InputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code hbase.pb.ReplicateMemstoreResponse}
+     */
+    public static final class Builder extends
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:hbase.pb.ReplicateMemstoreResponse)
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponseOrBuilder {
+      public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_ReplicateMemstoreResponse_descriptor;
+      }
+
+      protected org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_ReplicateMemstoreResponse_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse.class, org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse.Builder.class);
+      }
+
+      // Construct using org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        failedReplicas_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000001);
+        replicasCommitted_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000002);
+        return this;
+      }
+
+      public org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.internal_static_hbase_pb_ReplicateMemstoreResponse_descriptor;
+      }
+
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse getDefaultInstanceForType() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse.getDefaultInstance();
+      }
+
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse build() {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse buildPartial() {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse result = new org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse(this);
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
+        if (((bitField0_ & 0x00000001) == 0x00000001)) {
+          failedReplicas_ = java.util.Collections.unmodifiableList(failedReplicas_);
+          bitField0_ = (bitField0_ & ~0x00000001);
+        }
+        result.failedReplicas_ = failedReplicas_;
+        if (((from_bitField0_ & 0x00000002) == 0x00000002)) {
+          to_bitField0_ |= 0x00000001;
+        }
+        result.replicasCommitted_ = replicasCommitted_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(org.apache.hadoop.hbase.shaded.com.google.protobuf.Message other) {
+        if (other instanceof org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse) {
+          return mergeFrom((org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse other) {
+        if (other == org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse.getDefaultInstance()) return this;
+        if (!other.failedReplicas_.isEmpty()) {
+          if (failedReplicas_.isEmpty()) {
+            failedReplicas_ = other.failedReplicas_;
+            bitField0_ = (bitField0_ & ~0x00000001);
+          } else {
+            ensureFailedReplicasIsMutable();
+            failedReplicas_.addAll(other.failedReplicas_);
+          }
+          onChanged();
+        }
+        if (other.hasReplicasCommitted()) {
+          setReplicasCommitted(other.getReplicasCommitted());
+        }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
 
-      private long writeTime_ ;
-      /**
-       * <code>required uint64 write_time = 4;</code>
-       */
-      public boolean hasWriteTime() {
-        return ((bitField0_ & 0x00000008) == 0x00000008);
+      public final boolean isInitialized() {
+        if (!hasReplicasCommitted()) {
+          return false;
+        }
+        return true;
+      }
+
+      public Builder mergeFrom(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+      private int bitField0_;
+
+      private java.util.List<java.lang.Integer> failedReplicas_ = java.util.Collections.emptyList();
+      private void ensureFailedReplicasIsMutable() {
+        if (!((bitField0_ & 0x00000001) == 0x00000001)) {
+          failedReplicas_ = new java.util.ArrayList<java.lang.Integer>(failedReplicas_);
+          bitField0_ |= 0x00000001;
+         }
       }
       /**
-       * <code>required uint64 write_time = 4;</code>
+       * <code>repeated uint32 failed_replicas = 1;</code>
        */
-      public long getWriteTime() {
-        return writeTime_;
+      public java.util.List<java.lang.Integer>
+          getFailedReplicasList() {
+        return java.util.Collections.unmodifiableList(failedReplicas_);
       }
       /**
-       * <code>required uint64 write_time = 4;</code>
+       * <code>repeated uint32 failed_replicas = 1;</code>
        */
-      public Builder setWriteTime(long value) {
-        bitField0_ |= 0x00000008;
-        writeTime_ = value;
+      public int getFailedReplicasCount() {
+        return failedReplicas_.size();
+      }
+      /**
+       * <code>repeated uint32 failed_replicas = 1;</code>
+       */
+      public int getFailedReplicas(int index) {
+        return failedReplicas_.get(index);
+      }
+      /**
+       * <code>repeated uint32 failed_replicas = 1;</code>
+       */
+      public Builder setFailedReplicas(
+          int index, int value) {
+        ensureFailedReplicasIsMutable();
+        failedReplicas_.set(index, value);
         onChanged();
         return this;
       }
       /**
-       * <code>required uint64 write_time = 4;</code>
+       * <code>repeated uint32 failed_replicas = 1;</code>
        */
-      public Builder clearWriteTime() {
-        bitField0_ = (bitField0_ & ~0x00000008);
-        writeTime_ = 0L;
+      public Builder addFailedReplicas(int value) {
+        ensureFailedReplicasIsMutable();
+        failedReplicas_.add(value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated uint32 failed_replicas = 1;</code>
+       */
+      public Builder addAllFailedReplicas(
+          java.lang.Iterable<? extends java.lang.Integer> values) {
+        ensureFailedReplicasIsMutable();
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, failedReplicas_);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated uint32 failed_replicas = 1;</code>
+       */
+      public Builder clearFailedReplicas() {
+        failedReplicas_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000001);
         onChanged();
         return this;
       }
 
-      private int followingKvCount_ ;
+      private int replicasCommitted_ ;
       /**
-       * <code>optional uint32 following_kv_count = 5;</code>
+       * <code>required uint32 replicas_committed = 2;</code>
        */
-      public boolean hasFollowingKvCount() {
-        return ((bitField0_ & 0x00000010) == 0x00000010);
+      public boolean hasReplicasCommitted() {
+        return ((bitField0_ & 0x00000002) == 0x00000002);
       }
       /**
-       * <code>optional uint32 following_kv_count = 5;</code>
+       * <code>required uint32 replicas_committed = 2;</code>
        */
-      public int getFollowingKvCount() {
-        return followingKvCount_;
+      public int getReplicasCommitted() {
+        return replicasCommitted_;
       }
       /**
-       * <code>optional uint32 following_kv_count = 5;</code>
+       * <code>required uint32 replicas_committed = 2;</code>
        */
-      public Builder setFollowingKvCount(int value) {
-        bitField0_ |= 0x00000010;
-        followingKvCount_ = value;
+      public Builder setReplicasCommitted(int value) {
+        bitField0_ |= 0x00000002;
+        replicasCommitted_ = value;
         onChanged();
         return this;
       }
       /**
-       * <code>optional uint32 following_kv_count = 5;</code>
+       * <code>required uint32 replicas_committed = 2;</code>
        */
-      public Builder clearFollowingKvCount() {
-        bitField0_ = (bitField0_ & ~0x00000010);
-        followingKvCount_ = 0;
-        onChanged();
-        return this;
-      }
-
-      private long origSequenceNumber_ ;
-      /**
-       * <code>optional uint64 orig_sequence_number = 6;</code>
-       */
-      public boolean hasOrigSequenceNumber() {
-        return ((bitField0_ & 0x00000020) == 0x00000020);
-      }
-      /**
-       * <code>optional uint64 orig_sequence_number = 6;</code>
-       */
-      public long getOrigSequenceNumber() {
-        return origSequenceNumber_;
-      }
-      /**
-       * <code>optional uint64 orig_sequence_number = 6;</code>
-       */
-      public Builder setOrigSequenceNumber(long value) {
-        bitField0_ |= 0x00000020;
-        origSequenceNumber_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>optional uint64 orig_sequence_number = 6;</code>
-       */
-      public Builder clearOrigSequenceNumber() {
-        bitField0_ = (bitField0_ & ~0x00000020);
-        origSequenceNumber_ = 0L;
-        onChanged();
-        return this;
-      }
-
-      private int associatedCellCount_ ;
-      /**
-       * <code>optional int32 associated_cell_count = 7;</code>
-       */
-      public boolean hasAssociatedCellCount() {
-        return ((bitField0_ & 0x00000040) == 0x00000040);
-      }
-      /**
-       * <code>optional int32 associated_cell_count = 7;</code>
-       */
-      public int getAssociatedCellCount() {
-        return associatedCellCount_;
-      }
-      /**
-       * <code>optional int32 associated_cell_count = 7;</code>
-       */
-      public Builder setAssociatedCellCount(int value) {
-        bitField0_ |= 0x00000040;
-        associatedCellCount_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>optional int32 associated_cell_count = 7;</code>
-       */
-      public Builder clearAssociatedCellCount() {
-        bitField0_ = (bitField0_ & ~0x00000040);
-        associatedCellCount_ = 0;
+      public Builder clearReplicasCommitted() {
+        bitField0_ = (bitField0_ & ~0x00000002);
+        replicasCommitted_ = 0;
         onChanged();
         return this;
       }
@@ -1001,49 +2157,59 @@ public final class MemstoreReplicaProtos {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:hbase.pb.MemstoreReplicationKey)
+      // @@protoc_insertion_point(builder_scope:hbase.pb.ReplicateMemstoreResponse)
     }
 
-    // @@protoc_insertion_point(class_scope:hbase.pb.MemstoreReplicationKey)
-    private static final org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey DEFAULT_INSTANCE;
+    // @@protoc_insertion_point(class_scope:hbase.pb.ReplicateMemstoreResponse)
+    private static final org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey();
+      DEFAULT_INSTANCE = new org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse();
     }
 
-    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey getDefaultInstance() {
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
-    @java.lang.Deprecated public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<MemstoreReplicationKey>
-        PARSER = new org.apache.hadoop.hbase.shaded.com.google.protobuf.AbstractParser<MemstoreReplicationKey>() {
-      public MemstoreReplicationKey parsePartialFrom(
+    @java.lang.Deprecated public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<ReplicateMemstoreResponse>
+        PARSER = new org.apache.hadoop.hbase.shaded.com.google.protobuf.AbstractParser<ReplicateMemstoreResponse>() {
+      public ReplicateMemstoreResponse parsePartialFrom(
           org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
           org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
-          return new MemstoreReplicationKey(input, extensionRegistry);
+          return new ReplicateMemstoreResponse(input, extensionRegistry);
       }
     };
 
-    public static org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<MemstoreReplicationKey> parser() {
+    public static org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<ReplicateMemstoreResponse> parser() {
       return PARSER;
     }
 
     @java.lang.Override
-    public org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<MemstoreReplicationKey> getParserForType() {
+    public org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<ReplicateMemstoreResponse> getParserForType() {
       return PARSER;
     }
 
-    public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationKey getDefaultInstanceForType() {
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
   }
 
   private static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
-    internal_static_hbase_pb_MemstoreReplicationKey_descriptor;
+    internal_static_hbase_pb_MemstoreReplicationEntry_descriptor;
   private static final 
     org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-      internal_static_hbase_pb_MemstoreReplicationKey_fieldAccessorTable;
+      internal_static_hbase_pb_MemstoreReplicationEntry_fieldAccessorTable;
+  private static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+    internal_static_hbase_pb_ReplicateMemstoreRequest_descriptor;
+  private static final 
+    org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_hbase_pb_ReplicateMemstoreRequest_fieldAccessorTable;
+  private static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+    internal_static_hbase_pb_ReplicateMemstoreResponse_descriptor;
+  private static final 
+    org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_hbase_pb_ReplicateMemstoreResponse_fieldAccessorTable;
 
   public static org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -1053,15 +2219,17 @@ public final class MemstoreReplicaProtos {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025MemstoreReplica.proto\022\010hbase.pb\"\323\001\n\026Me" +
-      "mstoreReplicationKey\022\033\n\023encoded_region_n" +
-      "ame\030\001 \002(\014\022\022\n\ntable_name\030\002 \002(\014\022\033\n\023log_seq" +
-      "uence_number\030\003 \002(\004\022\022\n\nwrite_time\030\004 \002(\004\022\032" +
-      "\n\022following_kv_count\030\005 \001(\r\022\034\n\024orig_seque" +
-      "nce_number\030\006 \001(\004\022\035\n\025associated_cell_coun" +
-      "t\030\007 \001(\005BR\n1org.apache.hadoop.hbase.shade" +
-      "d.protobuf.generatedB\025MemstoreReplicaPro" +
-      "tosH\001\210\001\000\240\001\001"
+      "\n\025MemstoreReplica.proto\022\010hbase.pb\"N\n\030Mem" +
+      "storeReplicationEntry\022\035\n\025associated_cell" +
+      "_count\030\001 \002(\r\022\023\n\013sequence_id\030\002 \002(\r\"\204\001\n\030Re" +
+      "plicateMemstoreRequest\022\033\n\023encoded_region" +
+      "_name\030\001 \002(\014\022\030\n\020replicas_offered\030\002 \002(\r\0221\n" +
+      "\005entry\030\003 \003(\0132\".hbase.pb.MemstoreReplicat" +
+      "ionEntry\"P\n\031ReplicateMemstoreResponse\022\027\n" +
+      "\017failed_replicas\030\001 \003(\r\022\032\n\022replicas_commi" +
+      "tted\030\002 \002(\rBR\n1org.apache.hadoop.hbase.sh" +
+      "aded.protobuf.generatedB\025MemstoreReplica",
+      "ProtosH\001\210\001\000\240\001\001"
     };
     org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -1075,12 +2243,24 @@ public final class MemstoreReplicaProtos {
       .internalBuildGeneratedFileFrom(descriptorData,
         new org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor[] {
         }, assigner);
-    internal_static_hbase_pb_MemstoreReplicationKey_descriptor =
+    internal_static_hbase_pb_MemstoreReplicationEntry_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_hbase_pb_MemstoreReplicationKey_fieldAccessorTable = new
+    internal_static_hbase_pb_MemstoreReplicationEntry_fieldAccessorTable = new
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_hbase_pb_MemstoreReplicationKey_descriptor,
-        new java.lang.String[] { "EncodedRegionName", "TableName", "LogSequenceNumber", "WriteTime", "FollowingKvCount", "OrigSequenceNumber", "AssociatedCellCount", });
+        internal_static_hbase_pb_MemstoreReplicationEntry_descriptor,
+        new java.lang.String[] { "AssociatedCellCount", "SequenceId", });
+    internal_static_hbase_pb_ReplicateMemstoreRequest_descriptor =
+      getDescriptor().getMessageTypes().get(1);
+    internal_static_hbase_pb_ReplicateMemstoreRequest_fieldAccessorTable = new
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_hbase_pb_ReplicateMemstoreRequest_descriptor,
+        new java.lang.String[] { "EncodedRegionName", "ReplicasOffered", "Entry", });
+    internal_static_hbase_pb_ReplicateMemstoreResponse_descriptor =
+      getDescriptor().getMessageTypes().get(2);
+    internal_static_hbase_pb_ReplicateMemstoreResponse_fieldAccessorTable = new
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_hbase_pb_ReplicateMemstoreResponse_descriptor,
+        new java.lang.String[] { "FailedReplicas", "ReplicasCommitted", });
   }
 
   // @@protoc_insertion_point(outer_class_scope)

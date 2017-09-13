@@ -32,8 +32,9 @@ import org.apache.hadoop.hbase.Waiter;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.ipc.RpcServer;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.AdminService.BlockingInterface;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.*;
@@ -412,8 +413,8 @@ public class TestReplicator extends TestReplicationBase {
       }
 
       @Override
-      public ReplicateMemstoreReplicaEntryResponse memstoreReplay(RpcController controller,
-          ReplicateMemstoreReplicaEntryRequest request) throws ServiceException {
+      public ReplicateMemstoreResponse replicateMemstore(RpcController controller,
+          ReplicateMemstoreRequest request) throws ServiceException {
         // TODO Auto-generated method stub
         return null;
       }

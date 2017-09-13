@@ -173,45 +173,32 @@ public class ReplicationProtbufUtil {
       getCellScanner(allCells, size));
   }
 
-  public static Pair<AdminProtos.ReplicateMemstoreReplicaEntryRequest, CellScanner>
+  public static Pair<MemstoreReplicaProtos.ReplicateMemstoreRequest, CellScanner>
       buildReplicateMemstoreEntryRequest(final MemstoreReplicationEntry[] entries,
           byte[] encodedRegionName, String replicationClusterId, Path sourceBaseNamespaceDir,
           Path sourceHFileArchiveDir) {
     // Accumulate all the Cells seen in here.
     List<List<? extends Cell>> allCells = new ArrayList<>(entries.length);
     int size = 0;
-    AdminProtos.ReplicateMemstoreReplicaEntryRequest.Builder builder =
-        AdminProtos.ReplicateMemstoreReplicaEntryRequest.newBuilder();
-    MemstoreReplicaProtos.MemstoreReplicationKey.Builder keyBuilder =
-        MemstoreReplicaProtos.MemstoreReplicationKey.newBuilder();
-    int currentReplicaIndex = 0;
+    MemstoreReplicaProtos.ReplicateMemstoreRequest.Builder reqBuilder =
+        MemstoreReplicaProtos.ReplicateMemstoreRequest.newBuilder();
+    int replicasOffsered = 0;
     for (MemstoreReplicationEntry entry : entries) {
       MemstoreReplicationKey key = entry.getMemstoreReplicationKey();
-      if (key.getCurrentReplicaIndex() > currentReplicaIndex) {
-        // TODO : REvisit : May be it is just enough to assign the index from the first key??
-        currentReplicaIndex = key.getCurrentReplicaIndex();
-      }
-      keyBuilder.setEncodedRegionName(UnsafeByteOperations.unsafeWrap(
-        encodedRegionName == null ? key.getEncodedRegionNameInBytes() : encodedRegionName));
-      keyBuilder.setTableName(UnsafeByteOperations.unsafeWrap(key.getTableName().getName()));
-      keyBuilder.setLogSequenceNumber(key.getSequenceId());
-      keyBuilder.setWriteTime(key.getWriteTime());
-
       MemstoreEdits edit = entry.getMemstoreEdits();
       List<Cell> cells = edit.getCells();
-      // Add up the size. It is used later serializing out the kvs.
-      for (Cell cell : cells) {
-        size += CellUtil.estimatedSerializedSizeOf(cell);
-      }
       // Collect up the cells
       allCells.add(cells);
+      MemstoreReplicaProtos.MemstoreReplicationEntry.Builder entryBuilder =
+          MemstoreReplicaProtos.MemstoreReplicationEntry.newBuilder();
+      entryBuilder.setAssociatedCellCount(cells.size());
+      entryBuilder.setSequenceId((int) key.getSequenceId());// TODO
+      reqBuilder.addEntry(entryBuilder.build());
+      replicasOffsered = key.getReplicasOffered();// Its ok to overwrite. Write comments.. Handle. TODO
     }
-    // Write out how many cells associated with this entry.
-    keyBuilder.setAssociatedCellCount(allCells.size());
-    builder.setReplicationKeyEntry(keyBuilder.build());
-    // Set the pipeline index to which the request is being sent
-    builder.setCurrentPipelineIndex(currentReplicaIndex + 1);
-    return new Pair<>(builder.build(), getCellScanner(allCells, size));
+    reqBuilder.setEncodedRegionName(UnsafeByteOperations.unsafeWrap(encodedRegionName));
+    reqBuilder.setReplicasOffered(replicasOffsered);
+    return new Pair<>(reqBuilder.build(), getCellScanner(allCells, size));
   }
 
   
