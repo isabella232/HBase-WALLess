@@ -131,7 +131,6 @@ import org.apache.hadoop.hbase.regionserver.handler.CloseMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RegionReplicaFlushHandler;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.RingBufferMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.FlushThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
@@ -691,12 +690,6 @@ public class HRegionServer extends HasThread implements
     // TODO all the impls have to have the constructor signature
     if (memstoreReplicatorType.equals(DEFAULT)) {
       this.memstoreReplicator = new SimpleMemstoreReplicator(conf, this);
-    } else {
-      className = RingBufferMemstoreReplicator.class.getName();
-      LOG.info("Using ringbuffer memstore replicator");
-      this.memstoreReplicator = ReflectionUtils.instantiateWithCustomCtor(className,
-        new Class[] { Configuration.class, RegionServerServices.class },
-        new Object[] { conf, this });
     }
   }
 
