@@ -162,6 +162,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
               // we need this because we may have a success after some failures.
               // TODO is this the correct place to create Response?  After all we are not setting it any where.
               builder.setReplicasCommitted(response.getReplicasCommitted() + 1);// Adding this write itelf as success.
+              return;
             } catch (IOException | RuntimeException e) {
               // TODO
               // This data was not replicated to given replica means it is in bad state. We have to

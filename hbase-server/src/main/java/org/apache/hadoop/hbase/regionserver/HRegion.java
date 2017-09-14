@@ -3365,7 +3365,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     try {
       int i = 0;
       for (WALSplitter.MutationReplay m : batchOp.operations) {
-        familyMaps[i++] = m.mutation.getFamilyCellMap();
+        familyMaps[i] = m.mutation.getFamilyCellMap();
         for (List<Cell> cells : familyMaps[i++].values()) {
           cellCount += cells.size();
         }

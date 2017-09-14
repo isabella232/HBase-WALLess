@@ -253,6 +253,7 @@ public class TestRegionReplicasWith3Replicas {
     }
   }
 
+  // TODO : This test some times fails after the recent commit - check
   @Test(timeout = 300000)
   public void testRefreshStoreFiles() throws Exception {
     // enable store file refreshing

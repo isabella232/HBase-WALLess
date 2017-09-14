@@ -208,6 +208,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.MapReduceProtos.ScanMet
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse.Builder;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse.TableQuotaSnapshot;
@@ -2301,7 +2302,10 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
         }
       }
       if(batchOp.response == null) {
-        return ReplicateMemstoreResponse.newBuilder().build();
+        ReplicateMemstoreResponse.Builder newBuilder = ReplicateMemstoreResponse.newBuilder();
+        // revisist this
+        newBuilder.setReplicasCommitted(1);
+        return newBuilder.build();
       }
       return batchOp.response;
     } catch (IOException ie) {
