@@ -1,7 +1,6 @@
 package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
@@ -26,8 +25,6 @@ import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
 import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.v2.RegionReplicaReplicator;
-import org.apache.hadoop.hbase.shaded.com.google.protobuf.UnsafeByteOperations;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -37,6 +34,8 @@ import org.apache.hadoop.hbase.util.Pair;
 public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private static final Log LOG = LogFactory.getLog(SimpleMemstoreReplicator.class);
   private final Configuration conf;
+  // TODO this is a global level Q for all the ReplicationThreads? Should we have individual Qs for
+  // each of the Threads. Discuss pros and cons and arrive
   private final BlockingQueue<Entry> regionQueue = new LinkedBlockingQueue<>();
   private ClusterConnection connection;
   private final int operationTimeout;
@@ -162,7 +161,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
               // we need this because we may have a success after some failures.
               // TODO is this the correct place to create Response?  After all we are not setting it any where.
               builder.setReplicasCommitted(response.getReplicasCommitted() + 1);// Adding this write itelf as success.
-              return;
+              break;// Break the inner for loop
             } catch (IOException | RuntimeException e) {
               // TODO
               // This data was not replicated to given replica means it is in bad state. We have to

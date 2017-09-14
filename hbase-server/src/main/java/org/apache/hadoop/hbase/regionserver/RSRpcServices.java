@@ -2227,7 +2227,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       List<MemstoreReplicationEntry> entries = request.getEntryList();
       for (MemstoreReplicationEntry entry : entries) {
         int count = entry.getAssociatedCellCount();
-        int sequenceId = entry.getSequenceId();// TODO make this as long?
+        long sequenceId = entry.getSequenceId();
         // TODO Avoid MutationReplay. Make it as Mutations itself. If possible avoid making
         // Mutations itself. Do we really need them? We dont have CPs in this flow. The next use of
         // Mutation is for getting RK and get row lock. Even for that Cells are enough. But do we

@@ -26,7 +26,7 @@ option optimize_for = SPEED;
 message MemstoreReplicationEntry {
   // TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
   required uint32 associated_cell_count = 1;
-  required uint32 sequence_id = 2;
+  required uint64 sequence_id = 2;
 }
 
 message ReplicateMemstoreRequest {

@@ -18,12 +18,6 @@
  */
 package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
-
-import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.util.Bytes;
 
@@ -36,11 +30,8 @@ public class MemstoreReplicationKey {
   /**
    */
   public static final long NO_SEQUENCE_ID = -1;
-  private byte [] encodedRegionNameInBytes;
+  private byte [] encodedRegionName;
 
-  private String encodedRegionName;
-
-  private TableName tablename;
   /**
    * SequenceId for this edit. Set post-construction at write-to-WAL time. Until then it is
    * NO_SEQUENCE_ID. Change it so multiple threads can read it -- e.g. access is synchronized.
@@ -49,45 +40,23 @@ public class MemstoreReplicationKey {
 
   //Is it right to add here??
   private final int replicasOffered;
-  public static final List<UUID> EMPTY_UUIDS = Collections.unmodifiableList(new ArrayList<UUID>());
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
-  public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
-      TableName tableName, int replicasOffered) {
-    this(encodedRegionNameInBytes, encodedRegionName, tableName, NO_SEQUENCE_ID, replicasOffered);
+  public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, int replicasOffered) {
+    this(encodedRegionNameInBytes, NO_SEQUENCE_ID, replicasOffered);
   }
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
-  public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, String encodedRegionName,
-      TableName tableName, long sequenceId, int replicasOffered) {
-    this.encodedRegionNameInBytes = encodedRegionNameInBytes;
+  public MemstoreReplicationKey(byte[] encodedRegionName, long sequenceId, int replicasOffered) {
     this.encodedRegionName = encodedRegionName;
-    this.tablename = tableName;
     this.sequenceId = sequenceId;
     this.replicasOffered = replicasOffered;
   }
 
-  public byte[] getEncodedRegionNameInBytes() {
-    return this.encodedRegionNameInBytes;
+  public byte[] getEncodedRegionName() {
+    return this.encodedRegionName;
   }
 
-  public TableName getTableName() {
-    return this.tablename;
-  }
-
-  /**
-   * Drop this instance's tablename byte array and instead
-   * hold a reference to the provided tablename. This is not
-   * meant to be a general purpose setter - it's only used
-   * to collapse references to conserve memory.
-   */
-  void internTableName(TableName tablename) {
-    // We should not use this as a setter - only to swap
-    // in a new reference to the same table name.
-    assert tablename.equals(this.tablename);
-    this.tablename = tablename;
-  }
-  
   public void setSequenceId(long seqId) {
     this.sequenceId = seqId;
   }
@@ -96,9 +65,6 @@ public class MemstoreReplicationKey {
     return this.sequenceId;
   }
 
-  public String encodedRegionName() {
-    return this.encodedRegionName;
-  }
   /**
    * Drop this instance's region name byte array and instead
    * hold a reference to the provided region name. This is not
@@ -108,15 +74,10 @@ public class MemstoreReplicationKey {
   void internEncodedRegionName(byte []encodedRegionName) {
     // We should not use this as a setter - only to swap
     // in a new reference to the same table name.
-    assert Bytes.equals(this.encodedRegionNameInBytes, encodedRegionName);
-    this.encodedRegionNameInBytes = encodedRegionName;
-  }
-  
-  void internEncodedRegionName(String encodedRegionName) {
-    assert this.encodedRegionName.equals(encodedRegionName);
+    assert Bytes.equals(this.encodedRegionName, encodedRegionName);
     this.encodedRegionName = encodedRegionName;
   }
-
+  
   public int getReplicasOffered() {
     return this.replicasOffered;
   }

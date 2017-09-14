@@ -2561,8 +2561,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
       // this is always from Primary
       MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
-          this.getRegionInfo().getEncodedNameAsBytes(), this.getRegionInfo().getEncodedName(),
-          this.htableDescriptor.getTableName(), currentReplicaIndex);
+          this.getRegionInfo().getEncodedNameAsBytes(), currentReplicaIndex);
       MemstoreEdits memstoreEdits = new MemstoreEdits();
       memstoreEdits.add(kv);
       // replicate this
@@ -2590,8 +2589,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       KeyValue kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
           WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
       MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
-          this.getRegionInfo().getEncodedNameAsBytes(), this.getRegionInfo().getEncodedName(),
-          this.htableDescriptor.getTableName(), currentReplicaIndex);
+          this.getRegionInfo().getEncodedNameAsBytes(), currentReplicaIndex);
       MemstoreEdits memstoreEdits = new MemstoreEdits();
       memstoreEdits.add(kv);
       // replicate this
@@ -3366,9 +3364,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       int i = 0;
       for (WALSplitter.MutationReplay m : batchOp.operations) {
         familyMaps[i] = m.mutation.getFamilyCellMap();
-        for (List<Cell> cells : familyMaps[i++].values()) {
+        for (List<Cell> cells : familyMaps[i].values()) {
           cellCount += cells.size();
         }
+        i++;
       }
       lock(this.updatesLock.readLock(), batchOp.operations.length);
       locked = true;
@@ -3384,8 +3383,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       MemstoreReplicationKey memstoreReplicationKey = null;
       if (!memstoreEdits.isEmpty()) {
         memstoreReplicationKey = new MemstoreReplicationKey(
-            this.getRegionInfo().getEncodedNameAsBytes(), this.getRegionInfo().getEncodedName(),
-            this.htableDescriptor.getTableName(), replicasOffered + 1);
+            this.getRegionInfo().getEncodedNameAsBytes(), replicasOffered + 1);
         // replicasOffered is +1ed considering this region write will be success now.
         memstoreReplicationKey.setSequenceId(batchOp.getReplaySequenceId());
         try {
@@ -3690,8 +3688,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // TODO replicate system table.
         if (!memstoreEdits.isEmpty() && !this.getRegionInfo().isSystemTable()) {
           MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
-              this.getRegionInfo().getEncodedNameAsBytes(), this.getRegionInfo().getEncodedName(),
-              this.htableDescriptor.getTableName(), 1);
+              this.getRegionInfo().getEncodedNameAsBytes(), 1);
           // This is the 1st replica and so replicasTillNow is passed as 1 considering this primary
           // region will be success.
           memstoreReplicationKey.setSequenceId(batchOp.getReplaySequenceId());

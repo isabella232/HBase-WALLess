@@ -192,7 +192,7 @@ public class ReplicationProtbufUtil {
       MemstoreReplicaProtos.MemstoreReplicationEntry.Builder entryBuilder =
           MemstoreReplicaProtos.MemstoreReplicationEntry.newBuilder();
       entryBuilder.setAssociatedCellCount(cells.size());
-      entryBuilder.setSequenceId((int) key.getSequenceId());// TODO
+      entryBuilder.setSequenceId(key.getSequenceId());
       reqBuilder.addEntry(entryBuilder.build());
       replicasOffsered = key.getReplicasOffered();// Its ok to overwrite. Write comments.. Handle. TODO
     }

@@ -36,13 +36,13 @@ public final class MemstoreReplicaProtos {
     int getAssociatedCellCount();
 
     /**
-     * <code>required uint32 sequence_id = 2;</code>
+     * <code>required uint64 sequence_id = 2;</code>
      */
     boolean hasSequenceId();
     /**
-     * <code>required uint32 sequence_id = 2;</code>
+     * <code>required uint64 sequence_id = 2;</code>
      */
-    int getSequenceId();
+    long getSequenceId();
   }
   /**
    * Protobuf type {@code hbase.pb.MemstoreReplicationEntry}
@@ -57,7 +57,7 @@ public final class MemstoreReplicaProtos {
     }
     private MemstoreReplicationEntry() {
       associatedCellCount_ = 0;
-      sequenceId_ = 0;
+      sequenceId_ = 0L;
     }
 
     @java.lang.Override
@@ -95,7 +95,7 @@ public final class MemstoreReplicaProtos {
             }
             case 16: {
               bitField0_ |= 0x00000002;
-              sequenceId_ = input.readUInt32();
+              sequenceId_ = input.readUInt64();
               break;
             }
           }
@@ -147,17 +147,17 @@ public final class MemstoreReplicaProtos {
     }
 
     public static final int SEQUENCE_ID_FIELD_NUMBER = 2;
-    private int sequenceId_;
+    private long sequenceId_;
     /**
-     * <code>required uint32 sequence_id = 2;</code>
+     * <code>required uint64 sequence_id = 2;</code>
      */
     public boolean hasSequenceId() {
       return ((bitField0_ & 0x00000002) == 0x00000002);
     }
     /**
-     * <code>required uint32 sequence_id = 2;</code>
+     * <code>required uint64 sequence_id = 2;</code>
      */
-    public int getSequenceId() {
+    public long getSequenceId() {
       return sequenceId_;
     }
 
@@ -185,7 +185,7 @@ public final class MemstoreReplicaProtos {
         output.writeUInt32(1, associatedCellCount_);
       }
       if (((bitField0_ & 0x00000002) == 0x00000002)) {
-        output.writeUInt32(2, sequenceId_);
+        output.writeUInt64(2, sequenceId_);
       }
       unknownFields.writeTo(output);
     }
@@ -201,7 +201,7 @@ public final class MemstoreReplicaProtos {
       }
       if (((bitField0_ & 0x00000002) == 0x00000002)) {
         size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
-          .computeUInt32Size(2, sequenceId_);
+          .computeUInt64Size(2, sequenceId_);
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -247,7 +247,8 @@ public final class MemstoreReplicaProtos {
       }
       if (hasSequenceId()) {
         hash = (37 * hash) + SEQUENCE_ID_FIELD_NUMBER;
-        hash = (53 * hash) + getSequenceId();
+        hash = (53 * hash) + org.apache.hadoop.hbase.shaded.com.google.protobuf.Internal.hashLong(
+            getSequenceId());
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -369,7 +370,7 @@ public final class MemstoreReplicaProtos {
         super.clear();
         associatedCellCount_ = 0;
         bitField0_ = (bitField0_ & ~0x00000001);
-        sequenceId_ = 0;
+        sequenceId_ = 0L;
         bitField0_ = (bitField0_ & ~0x00000002);
         return this;
       }
@@ -533,34 +534,34 @@ public final class MemstoreReplicaProtos {
         return this;
       }
 
-      private int sequenceId_ ;
+      private long sequenceId_ ;
       /**
-       * <code>required uint32 sequence_id = 2;</code>
+       * <code>required uint64 sequence_id = 2;</code>
        */
       public boolean hasSequenceId() {
         return ((bitField0_ & 0x00000002) == 0x00000002);
       }
       /**
-       * <code>required uint32 sequence_id = 2;</code>
+       * <code>required uint64 sequence_id = 2;</code>
        */
-      public int getSequenceId() {
+      public long getSequenceId() {
         return sequenceId_;
       }
       /**
-       * <code>required uint32 sequence_id = 2;</code>
+       * <code>required uint64 sequence_id = 2;</code>
        */
-      public Builder setSequenceId(int value) {
+      public Builder setSequenceId(long value) {
         bitField0_ |= 0x00000002;
         sequenceId_ = value;
         onChanged();
         return this;
       }
       /**
-       * <code>required uint32 sequence_id = 2;</code>
+       * <code>required uint64 sequence_id = 2;</code>
        */
       public Builder clearSequenceId() {
         bitField0_ = (bitField0_ & ~0x00000002);
-        sequenceId_ = 0;
+        sequenceId_ = 0L;
         onChanged();
         return this;
       }
@@ -2221,7 +2222,7 @@ public final class MemstoreReplicaProtos {
     java.lang.String[] descriptorData = {
       "\n\025MemstoreReplica.proto\022\010hbase.pb\"N\n\030Mem" +
       "storeReplicationEntry\022\035\n\025associated_cell" +
-      "_count\030\001 \002(\r\022\023\n\013sequence_id\030\002 \002(\r\"\204\001\n\030Re" +
+      "_count\030\001 \002(\r\022\023\n\013sequence_id\030\002 \002(\004\"\204\001\n\030Re" +
       "plicateMemstoreRequest\022\033\n\023encoded_region" +
       "_name\030\001 \002(\014\022\030\n\020replicas_offered\030\002 \002(\r\0221\n" +
       "\005entry\030\003 \003(\0132\".hbase.pb.MemstoreReplicat" +
