@@ -380,7 +380,7 @@ public class TestHRegionReplayEvents {
         // after replay verify that everything is still visible
         verifyData(secondaryRegion, 0, lastReplayed+1, cq, families);
       } else if (compactionDesc != null) {
-        secondaryRegion.replayWALCompactionMarker(compactionDesc, true, false, Long.MAX_VALUE);
+        secondaryRegion.replayWALCompactionMarker(compactionDesc, true, false, Long.MAX_VALUE, 1);
 
         // assert that the compaction is applied
         for (Store store : secondaryRegion.getStores()) {
@@ -1571,7 +1571,7 @@ public class TestHRegionReplayEvents {
       .setStoreHomeDir("/store_home_dir")
       .setRegionName(UnsafeByteOperations.unsafeWrap(primaryRegion.getRegionInfo().getRegionName()))
       .build()
-      , true, true, Long.MAX_VALUE);
+      , true, true, Long.MAX_VALUE, 1);
   }
 
   @Test

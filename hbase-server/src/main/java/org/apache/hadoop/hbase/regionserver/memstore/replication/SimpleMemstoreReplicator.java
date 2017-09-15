@@ -77,11 +77,11 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   @Override
   public ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
-      MemstoreEdits memstoreEdits, boolean replay, int replicaId,
+      MemstoreEdits memstoreEdits, int replicaId,
       RegionReplicaReplicator regionReplicator)
       throws IOException, InterruptedException, ExecutionException {
     MemstoreReplicationEntry entry =
-        new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replay, replicaId);
+        new MemstoreReplicationEntry(memstoreReplicationKey, memstoreEdits, replicaId);
     CompletedFuture future = regionReplicator.append(entry);
     offer(regionReplicator, entry);
     return future.get(replicationTimeoutNs);

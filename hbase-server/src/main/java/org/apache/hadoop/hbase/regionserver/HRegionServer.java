@@ -3781,7 +3781,7 @@ public class HRegionServer extends HasThread implements
   public boolean reportReplicaRegionHealthChange(HRegionInfo region, boolean goodHealth) {
     if (this.rrssStub == null) return false;
     synchronized (region) {
-      if (this.healthBadRegions.contains(region)) {
+      if (!this.healthBadRegions.contains(region)) {
         RegionReplicaHealthChangeRequest.Builder builder = RegionReplicaHealthChangeRequest
             .newBuilder();
         builder.addRegionInfo(HRegionInfo.convert(region));

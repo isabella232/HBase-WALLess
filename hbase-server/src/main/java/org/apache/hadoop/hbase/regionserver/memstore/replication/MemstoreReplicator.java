@@ -28,7 +28,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.R
 @InterfaceAudience.Private
 public interface MemstoreReplicator {
   ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
-      MemstoreEdits memstoreEdits, boolean replay, int replicaId,
-      RegionReplicaReplicator regionReplicaReplicator)
+      MemstoreEdits memstoreEdits, int replicaId, RegionReplicaReplicator regionReplicaReplicator)
       throws IOException, InterruptedException, ExecutionException;
 }

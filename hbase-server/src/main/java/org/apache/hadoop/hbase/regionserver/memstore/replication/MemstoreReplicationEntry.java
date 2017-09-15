@@ -23,17 +23,14 @@ import org.apache.hadoop.hbase.classification.InterfaceAudience;
 public class MemstoreReplicationEntry {
   private final MemstoreReplicationKey memstoreReplicationKey;
   private final MemstoreEdits memstoreEdits;
-  private final boolean replay;
   private final int replicaId;
   private CompletedFuture future;
   private long seq;
 
   public MemstoreReplicationEntry(MemstoreReplicationKey memstoreRepKey,
-      MemstoreEdits memstoreEdits, final boolean replay,
-      final int replicaId) {
+      MemstoreEdits memstoreEdits, final int replicaId) {
     this.memstoreReplicationKey = memstoreRepKey;
     this.memstoreEdits = memstoreEdits;
-    this.replay = replay;
     this.replicaId = replicaId;
   }
 
@@ -43,10 +40,6 @@ public class MemstoreReplicationEntry {
 
   public MemstoreEdits getMemstoreEdits() {
     return this.memstoreEdits;
-  }
-
-  public boolean isReplay() {
-    return this.replay;
   }
 
   public int getReplicaId() {

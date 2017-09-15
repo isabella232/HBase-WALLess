@@ -490,7 +490,12 @@ public final class HConstants {
   /** The open seqnum column qualifier */
   public static final String SEQNUM_QUALIFIER_STR = "seqnumDuringOpen";
   /** The open seqnum column qualifier */
-  public static final byte [] SEQNUM_QUALIFIER = Bytes.toBytes(SEQNUM_QUALIFIER_STR);
+	public static final byte[] SEQNUM_QUALIFIER = Bytes.toBytes(SEQNUM_QUALIFIER_STR);
+
+	public static final String HEALTH_QUALIFIER_STR = "health";
+
+	/** The health column qualifier */
+	public static final byte[] HEALTH_QUALIFIER = Bytes.toBytes(HEALTH_QUALIFIER_STR);
 
   /** The state column qualifier */
   public static final String STATE_QUALIFIER_STR = "state";

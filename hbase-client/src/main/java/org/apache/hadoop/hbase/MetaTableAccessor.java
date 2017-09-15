@@ -908,6 +908,12 @@ public class MetaTableAccessor {
       + String.format(HRegionInfo.REPLICA_ID_FORMAT, replicaId));
   }
 
+  @VisibleForTesting
+  public static byte[] getReplicaHealthColumn(int replicaId) {
+    return replicaId == 0 ? HConstants.HEALTH_QUALIFIER
+        : Bytes.toBytes(HConstants.HEALTH_QUALIFIER_STR + META_REPLICA_ID_DELIMITER
+            + String.format(HRegionInfo.REPLICA_ID_FORMAT, replicaId));
+  }
   /**
    * Parses the replicaId from the server column qualifier. See top of the class javadoc
    * for the actual meta layout
@@ -965,6 +971,20 @@ public class MetaTableAccessor {
     Cell cell = r.getColumnLatestCell(getCatalogFamily(), getSeqNumColumn(replicaId));
     if (cell == null || cell.getValueLength() == 0) return HConstants.NO_SEQNUM;
     return Bytes.toLong(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
+  }
+  
+  /**
+   * The health of the replica.
+   * E.g. The health col is not found when the region is opened so we consider it as healthy. 
+   * If the replica is down then we mark it as bad.
+   * @param r Result to pull the seqNum from
+   * @return SeqNum, or HConstants.NO_SEQNUM if there's no value written.
+   */
+  private static boolean getHealthStatus(final Result r, final int replicaId) {
+    Cell cell = r.getColumnLatestCell(getCatalogFamily(), getReplicaHealthColumn(replicaId));
+    //In good health
+    if (cell == null || cell.getValueLength() == 0) return true;
+    return Boolean.valueOf(Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength()));
   }
 
   /**
@@ -1025,8 +1045,14 @@ public class MetaTableAccessor {
                                                    final int replicaId) {
     ServerName serverName = getServerName(r, replicaId);
     long seqNum = getSeqNumDuringOpen(r, replicaId);
-    HRegionInfo replicaInfo = RegionReplicaUtil.getRegionInfoForReplica(regionInfo, replicaId);
-    return new HRegionLocation(replicaInfo, serverName, seqNum);
+    // for now not changing the HRegionLocation to cache the 'health'.
+    boolean healthStatus = getHealthStatus(r, replicaId);
+    //if (healthStatus) {
+      HRegionInfo replicaInfo = RegionReplicaUtil.getRegionInfoForReplica(regionInfo, replicaId);
+      return new HRegionLocation(replicaInfo, serverName, seqNum);
+    //} else {
+      //return null;
+    //}
   }
 
   /**

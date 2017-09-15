@@ -1087,7 +1087,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
               // replay the compaction. Remove the files from stores only if we are the primary
               // region replica (thus own the files)
               hRegion.replayWALCompactionMarker(compactionDesc, !isDefaultReplica, isDefaultReplica,
-                replaySeqId);
+                replaySeqId, 1);
               continue;
             }
             FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(metaCell);
@@ -1157,7 +1157,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
               // replay the compaction. Remove the files from stores only if we are the primary
               // region replica (thus own the files)
               hRegion.replayWALCompactionMarker(compactionDesc, !isDefaultReplica, isDefaultReplica,
-                  metaCell.getSequenceId());
+                  metaCell.getSequenceId(), replicasOffered);
               continue;
             }
             FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(metaCell);
@@ -2215,6 +2215,8 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
   @Override
   public ReplicateMemstoreResponse replicateMemstore(RpcController controller,
       ReplicateMemstoreRequest request) throws ServiceException {
+    // Probably pass this request also so that it can be used for the next replica.
+    // But do not forgot to change replicaOfferd and replicaCommitted
     CellScanner cells = ((HBaseRpcController) controller).cellScanner();
     try {
       checkOpen();

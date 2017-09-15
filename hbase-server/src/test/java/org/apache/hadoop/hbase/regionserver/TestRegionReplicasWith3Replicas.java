@@ -32,7 +32,9 @@ import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.NotServingRegionException;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Consistency;
+import org.apache.hadoop.hbase.client.Durability;
 import org.apache.hadoop.hbase.client.Get;
+import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.RegionLocator;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Table;
@@ -116,6 +118,42 @@ public class TestRegionReplicasWith3Replicas {
 
   private HRegionServer getTertiaryRS() {
     return HTU.getMiniHBaseCluster().getRegionServer(2);
+  }
+  
+  @Test(timeout = 6000000)
+  public void testSimpleFlush() throws Exception {
+    new Thread() {
+      public void run() {
+        for (int i = 1; i < 100; i++) {
+          byte[] data = Bytes.toBytes(String.valueOf(i));
+          Put put = new Put(data);
+          put.setDurability(Durability.SKIP_WAL);
+          put.addColumn(f, null, data);
+          try {
+            table.put(put);
+            if(i == 50) {
+              System.out.println("");
+            }
+          } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+          }
+        }
+      }
+    }.start();
+    HRegion primaryRegion = null;
+    try {
+      primaryRegion = (HRegion) getRS().getRegionByEncodedName(hriPrimary.getEncodedName());
+    } catch (NotServingRegionException e) {
+      try {
+        primaryRegion =
+            (HRegion) getSecondaryRS().getRegionByEncodedName(hriPrimary.getEncodedName());
+      } catch (NotServingRegionException e1) {
+        primaryRegion =
+            (HRegion) getTertiaryRS().getRegionByEncodedName(hriPrimary.getEncodedName());
+      }
+    }
+    primaryRegion.flush(true);
   }
 
   @Test(timeout = 6000000)

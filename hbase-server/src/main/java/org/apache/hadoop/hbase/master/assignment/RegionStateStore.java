@@ -56,8 +56,6 @@ import com.google.common.base.Preconditions;
  */
 @InterfaceAudience.Private
 public class RegionStateStore {
-  private static final String HEALTH_QUALIFIER = "health";
-
   private static final Log LOG = LogFactory.getLog(RegionStateStore.class);
 
   /** The delimiter for meta columns for replicaIds &gt; 0 */
@@ -360,7 +358,7 @@ public class RegionStateStore {
   }
 
   private static byte[] getReplicaHealthColumn(int replicaId) {
-    return Bytes.toBytes(HEALTH_QUALIFIER + META_REPLICA_ID_DELIMITER
+    return Bytes.toBytes(HConstants.HEALTH_QUALIFIER_STR + META_REPLICA_ID_DELIMITER
         + String.format(HRegionInfo.REPLICA_ID_FORMAT, replicaId));
   }
 }
