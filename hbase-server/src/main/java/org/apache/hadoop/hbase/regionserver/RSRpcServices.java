@@ -2243,7 +2243,6 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
             throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
           }
           Cell cell = cells.current();
-          CellUtil.setSequenceId(cell, sequenceId);
           boolean isNewRowOrType = previousCell == null
               || previousCell.getTypeByte() != cell.getTypeByte()
               || !CellUtil.matchingRow(previousCell, cell);

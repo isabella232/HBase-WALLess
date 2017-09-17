@@ -24,6 +24,7 @@ import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
 import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.codec.KVCodecWithSeqId;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.v2.RegionReplicaReplicator;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
@@ -45,27 +46,27 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   protected final RegionServerServices rs;
   
   public SimpleMemstoreReplicator(Configuration conf, RegionServerServices rs) {
-    // TODO Auto-generated method stub
     this.conf = HBaseConfiguration.create(conf);
     // Adjusting the client retries number. This defaults to 31. (Multiplied by 10?)
     // The more this retries, the more latency we will have when we have some region replica write
     // fails. Adding a new config may be needed. As of now just making this to 2. And the multiplier to 1.
     this.conf.setInt("hbase.client.serverside.retries.multiplier", 1);
     this.conf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, 2);
+    this.conf.set(HConstants.RPC_CODEC_CONF_KEY, KVCodecWithSeqId.class.getCanonicalName());
 
     // TODO : Better math considering Regions count also? As per the cur parallel model, this is enough
     // use the regular RPC timeout for replica replication RPC's
-    this.operationTimeout = conf.getInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT,
+    this.operationTimeout = this.conf.getInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT,
       HConstants.DEFAULT_HBASE_CLIENT_OPERATION_TIMEOUT);
     
-    this.replicationTimeoutNs = TimeUnit.MILLISECONDS.toNanos(
-      conf.getLong("hbase.regionserver.mutations.sync.timeout", DEFAULT_WAL_SYNC_TIMEOUT_MS));
+    this.replicationTimeoutNs = TimeUnit.MILLISECONDS.toNanos(this.conf
+        .getLong("hbase.regionserver.mutations.sync.timeout", DEFAULT_WAL_SYNC_TIMEOUT_MS));
 
     try {
       this.connection = (ClusterConnection) ConnectionFactory.createConnection(this.conf);
     } catch (IOException ex) {
     }
-    int numWriterThreads = conf.getInt(HConstants.REGION_SERVER_HANDLER_COUNT,
+    int numWriterThreads = this.conf.getInt(HConstants.REGION_SERVER_HANDLER_COUNT,
         HConstants.DEFAULT_REGION_SERVER_HANDLER_COUNT);
     this.replicationThreads = new ReplicationThread[numWriterThreads];
     for (int i = 0; i < numWriterThreads; i++) {

@@ -88,12 +88,12 @@ public class KeyValueCodecWithTags implements Codec {
     }
 
     @Override
-    protected Cell createCell(byte[] buf, int offset, int len) {
+    protected Cell createCell(byte[] buf, int offset, int len) throws IOException {
       return new KeyValue(buf, offset, len);
     }
 
     @Override
-    protected Cell createCell(ByteBuffer bb, int pos, int len) {
+    protected Cell createCell(ByteBuffer bb, int pos, int len) throws IOException {
       return new ByteBufferKeyValue(bb, pos, len);
     }
   }

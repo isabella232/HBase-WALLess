@@ -105,11 +105,11 @@ public class KeyValueCodec implements Codec {
       return this.current;
     }
 
-    protected Cell createCell(byte[] buf, int offset, int len) {
+    protected Cell createCell(byte[] buf, int offset, int len) throws IOException {
       return new NoTagsKeyValue(buf, offset, len);
     }
 
-    protected Cell createCell(ByteBuffer bb, int pos, int len) {
+    protected Cell createCell(ByteBuffer bb, int pos, int len) throws IOException {
       // We know there is not going to be any tags.
       return new NoTagsByteBufferKeyValue(bb, pos, len);
     }
