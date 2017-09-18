@@ -698,20 +698,6 @@ public class HStore implements Store {
    * @param cell
    * @param memstoreSize
    */
-  public Action addForMemstoreReplication(final Cell cell, MemstoreSize memstoreSize) {
-    lock.readLock().lock();
-    try {
-       return this.memstore.addForMemstoreReplication(cell, memstoreSize);
-    } finally {
-      lock.readLock().unlock();
-    }
-  }
-
-  /**
-   * Adds a value to the memstore
-   * @param cell
-   * @param memstoreSize
-   */
   public void add(final Cell cell, MemstoreSize memstoreSize) {
     lock.readLock().lock();
     try {
@@ -739,7 +725,7 @@ public class HStore implements Store {
    * @param cells
    * @param memstoreSize
    */
-  public Action addForMemstoreReplication(final List<Cell> cells, MemstoreSize memstoreSize) {
+  public Action addForMemstoreReplication(final Collection<Cell> cells, MemstoreSize memstoreSize) {
     lock.readLock().lock();
     try {
       return memstore.addForMemstoreReplication(cells, memstoreSize);

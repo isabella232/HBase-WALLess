@@ -171,7 +171,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.WALEntry;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.WarmupRegionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.WarmupRegionResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.Action;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.BulkLoadHFileRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.BulkLoadHFileRequest.FamilyPath;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.BulkLoadHFileResponse;
@@ -208,7 +207,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.MapReduceProtos.ScanMet
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse.Builder;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse.TableQuotaSnapshot;
@@ -227,13 +225,14 @@ import org.apache.hadoop.hbase.util.Strings;
 import org.apache.hadoop.hbase.wal.WAL;
 import org.apache.hadoop.hbase.wal.WALKey;
 import org.apache.hadoop.hbase.wal.WALSplitter;
-import org.apache.hadoop.hbase.wal.WALSplitter.MutationReplay;
 import org.apache.hadoop.hbase.zookeeper.ZKSplitLog;
 import org.apache.zookeeper.KeeperException;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
 
 /**
  * Implements the regionserver RPC services.
@@ -1132,59 +1131,23 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
    * Execute a list of Put/Delete mutations. The function returns OperationStatus instead of
    * constructing MultiResponse to save a possible loop if caller doesn't need MultiResponse.
    * @param region
-   * @param mutations
+   * @param familyMaps
    * @param replicasOffered 
+   * @param maxSeqId 
    * @return an array of OperationStatus which internally contains the OperationStatusCode and the
    *         exceptionMessage if any
    * @throws IOException
    */
-  private BatchOperation doReplayBatchOpForMemstoreReplication(final Region region,
-      final List<WALSplitter.MutationReplay> mutations, int replicasOffered) throws IOException {
+  private Pair<Action, ReplicateMemstoreResponse> doReplayBatchOpForMemstoreReplication(
+      HRegion region, Multimap<byte[], Cell> familyMaps, int replicasOffered, long maxSeqId)
+      throws IOException {
     try {
-      for (Iterator<WALSplitter.MutationReplay> it = mutations.iterator(); it.hasNext();) {
-        WALSplitter.MutationReplay m = it.next();
-
-        NavigableMap<byte[], List<Cell>> map = m.mutation.getFamilyCellMap();
-        List<Cell> metaCells = map.get(WALEdit.METAFAMILY);
-        // TODO are we writing these META cells to Memstore replay list?  WAL any way not in pic now?
-        // How we will handle the cases like the flush/compaction now? That to tell abt it to replica regions
-        if (metaCells != null && !metaCells.isEmpty()) {
-          for (Cell metaCell : metaCells) {
-            CompactionDescriptor compactionDesc = WALEdit.getCompaction(metaCell);
-            boolean isDefaultReplica = RegionReplicaUtil.isDefaultReplica(region.getRegionInfo());
-            HRegion hRegion = (HRegion)region;
-            if (compactionDesc != null) {
-              // replay the compaction. Remove the files from stores only if we are the primary
-              // region replica (thus own the files)
-              hRegion.replayWALCompactionMarker(compactionDesc, !isDefaultReplica, isDefaultReplica,
-                  metaCell.getSequenceId(), replicasOffered);
-              continue;
-            }
-            FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(metaCell);
-            if (flushDesc != null && !isDefaultReplica) {
-              hRegion.replayWALFlushMarker(flushDesc, metaCell.getSequenceId(), replicasOffered);
-              continue;
-            }
-            RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(metaCell);
-            if (regionEvent != null && !isDefaultReplica) {
-              hRegion.replayWALRegionEventMarker(regionEvent);
-              continue;
-            }
-            BulkLoadDescriptor bulkLoadEvent = WALEdit.getBulkLoadDescriptor(metaCell);
-            if (bulkLoadEvent != null) {
-              hRegion.replayWALBulkLoadEventMarker(bulkLoadEvent);
-              continue;
-            }
-          }
-          it.remove();
-        }
-      }
-      requestCount.add(mutations.size());// TODO may be need another counter
+      //requestCount.add(familyMaps.size());
+      // TODO may be need another counter
       if (!region.getRegionInfo().isMetaTable()) {
         regionServer.cacheFlusher.reclaimMemStoreMemory();
       }
-      return region.batchReplayForMemstoreReplication(
-          mutations.toArray(new WALSplitter.MutationReplay[mutations.size()]), replicasOffered);
+      return region.batchReplayForMemstoreReplication(familyMaps, replicasOffered, maxSeqId);
     } finally {
       // metrics should be updated but need a new one.. Should not directly affect the normal put/delete metrics.
     }
@@ -2222,111 +2185,107 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       checkOpen();
       ByteString regionName = request.getEncodedRegionName();;
       int replicasOffered = request.getReplicasOffered();
-      Region region = regionServer.getRegionByEncodedName(regionName.toStringUtf8());
+      HRegion region = (HRegion) regionServer.getRegionByEncodedName(regionName.toStringUtf8());
       assert !(ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo()));
 
-      List<MutationReplay> mutations = new ArrayList<>();
+      // Separate the Cells in to a family specific Map so as to pass them to appropriate Memstores
+      // when reached HRegion.
+      // TODO in trunk, we have to use the shaded google class.
+      Multimap<byte[], Cell> familyMaps = HashMultimap.create();
       List<MemstoreReplicationEntry> entries = request.getEntryList();
+      long maxSeqId = -1;
       for (MemstoreReplicationEntry entry : entries) {
         int count = entry.getAssociatedCellCount();
-        long sequenceId = entry.getSequenceId();
-        // TODO Avoid MutationReplay. Make it as Mutations itself. If possible avoid making
-        // Mutations itself. Do we really need them? We dont have CPs in this flow. The next use of
-        // Mutation is for getting RK and get row lock. Even for that Cells are enough. But do we
-        // really need row locks? Already the row is locked at primary. Will it be possible that 2
-        // diff replicas write to same another replica on same row?
-        Cell previousCell = null;
-        Mutation m = null;
+        maxSeqId = maxSeqId < entry.getSequenceId() ? entry.getSequenceId() : maxSeqId;
         for (int i = 0; i < count; i++) {
           // Throw index out of bounds if our cell count is off
           if (!cells.advance()) {
             throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
           }
           Cell cell = cells.current();
-          boolean isNewRowOrType = previousCell == null
-              || previousCell.getTypeByte() != cell.getTypeByte()
-              || !CellUtil.matchingRow(previousCell, cell);
-          if (isNewRowOrType) {
-            // Create new mutation
-            if (CellUtil.isDelete(cell)) {
-              m = new Delete(cell.getRowArray(), cell.getRowOffset(), cell.getRowLength());
-              // Deletes don't have nonces.
-              mutations.add(new MutationReplay(MutationType.DELETE, m, HConstants.NO_NONCE,
-                  HConstants.NO_NONCE));
-            } else {
-              m = new Put(cell.getRowArray(), cell.getRowOffset(), cell.getRowLength());
-              // Puts might come from increment or append, thus we need nonces.
-              mutations.add(new MutationReplay(MutationType.PUT, m, HConstants.NO_NONCE,
-                  HConstants.NO_NONCE));
-            }
-          }
-          if (CellUtil.isDelete(cell)) {
-            ((Delete) m).addDeleteMarker(cell);
+          if (CellUtil.matchingFamily(cell, WALEdit.METAFAMILY)) {
+            handleMetaMarkerCell(cell, region, replicasOffered);
           } else {
-            ((Put) m).add(cell);
+            familyMaps.put(CellUtil.cloneFamily(cell), cell);
           }
-          previousCell = cell;
         }
       }
-      BatchOperation batchOp = null;
-      if (mutations != null && !mutations.isEmpty()) {
+      Pair<Action, ReplicateMemstoreResponse> pair = null;
+      if (!familyMaps.isEmpty()) {
         // Already the mutations will be sorted at primary region. And we get those in same order
         // here. So no need for extra sort.
         // create one per region  -  Anoop : Will be too much? May be ok.
         // DO this or go with an executor. //TODO : How to shutdown these threads on stop??
         ReplayCallbackExecutor replayCallbackExecutor =
-            regionCallBackExecutor.get(((HRegion) region).getRegionInfo().getEncodedName());
+            regionCallBackExecutor.get(region.getRegionInfo().getEncodedName());
         if (replayCallbackExecutor == null) {
           replayCallbackExecutor = new ReplayCallbackExecutor();
           replayCallbackExecutor.setDaemon(true);
-          regionCallBackExecutor.put(((HRegion) region).getRegionInfo().getEncodedName(),
+          regionCallBackExecutor.put(region.getRegionInfo().getEncodedName(),
             replayCallbackExecutor);
           // TODO : Handle interrupted exception
           replayCallbackExecutor.start();
         }
-        batchOp = doReplayBatchOpForMemstoreReplication(region, mutations, replicasOffered);
+        pair = doReplayBatchOpForMemstoreReplication(region, familyMaps, replicasOffered, maxSeqId);
         // if there is an error then this action is not going to be performed which means we are not advancing the
         // mvcc
-        if (batchOp.regionAction != null) {
-          try {
-            replayCallbackExecutor.offer(batchOp.regionAction);
-          } catch (InterruptedException e) {
-            // Handle this case
-          }
-        }
-        OperationStatus[] result = batchOp.retCodeDetails;
-        // check if it's a partial success
-        for (int i = 0; result != null && i < result.length; i++) {
-          if (result[i] != OperationStatus.SUCCESS) {
-            throw new IOException(result[i].getExceptionMsg());
-          }
+        try {
+          replayCallbackExecutor.offer(pair.getFirst());
+        } catch (InterruptedException e) {
+          // Handle this case
         }
       }
-      if(batchOp.response == null) {
+      if (pair == null || pair.getSecond() == null) {
         ReplicateMemstoreResponse.Builder newBuilder = ReplicateMemstoreResponse.newBuilder();
-        // revisist this
+        // TODO revisist this
         newBuilder.setReplicasCommitted(1);
         return newBuilder.build();
       }
-      return batchOp.response;
+      return pair.getSecond();
     } catch (IOException ie) {
       throw new ServiceException(ie);
     }
   }
 
-  class ReplayCallbackExecutor extends HasThread {
-
-    private BlockingQueue<org.apache.hadoop.hbase.regionserver.Action> callbackList =
-        new LinkedBlockingQueue<org.apache.hadoop.hbase.regionserver.Action>();
-
-    public void offer(org.apache.hadoop.hbase.regionserver.Action action)
-        throws InterruptedException {
-        callbackList.put(action);
+  private void handleMetaMarkerCell(Cell cell, HRegion region, int replicasOffered)
+      throws IOException {
+    CompactionDescriptor compactionDesc = WALEdit.getCompaction(cell);
+    // TODO why this? Always it wl be replica regions
+    boolean isDefaultReplica = RegionReplicaUtil.isDefaultReplica(region.getRegionInfo());
+    if (compactionDesc != null) {
+      // replay the compaction. Remove the files from stores only if we are the primary
+      // region replica (thus own the files)
+      region.replayWALCompactionMarker(compactionDesc, !isDefaultReplica, isDefaultReplica,
+          cell.getSequenceId(), replicasOffered);
+    } else {
+      FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(cell);
+      if (flushDesc != null) {
+        region.replayWALFlushMarker(flushDesc, cell.getSequenceId(), replicasOffered);
+      } else {
+        RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(cell);
+        if (regionEvent != null && !isDefaultReplica) {
+          region.replayWALRegionEventMarker(regionEvent);
+        } else {
+          BulkLoadDescriptor bulkLoadEvent = WALEdit.getBulkLoadDescriptor(cell);
+          if (bulkLoadEvent != null) {
+            region.replayWALBulkLoadEventMarker(bulkLoadEvent);
+          }
+        }
       }
+    }
+  }
+
+  private static class ReplayCallbackExecutor extends HasThread {
+
+    private BlockingQueue<Action> callbackList = new LinkedBlockingQueue<Action>();
+
+    public void offer(Action action) throws InterruptedException {
+      callbackList.put(action);
+    }
 
     @Override
     public void run() {
-      org.apache.hadoop.hbase.regionserver.Action action = null;
+      Action action = null;
       while (true) {
         try {
           action = callbackList.take();
@@ -2862,13 +2821,13 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
     return responseBuilder.build();
   }
 
-  private void skipCellsForMutations(List<Action> actions, CellScanner cellScanner) {
-    for (Action action : actions) {
+  private void skipCellsForMutations(List<ClientProtos.Action> actions, CellScanner cellScanner) {
+    for (ClientProtos.Action action : actions) {
       skipCellsForMutation(action, cellScanner);
     }
   }
 
-  private void skipCellsForMutation(Action action, CellScanner cellScanner) {
+  private void skipCellsForMutation(ClientProtos.Action action, CellScanner cellScanner) {
     try {
       if (action.hasMutation()) {
         MutationProto m = action.getMutation();

@@ -18,6 +18,7 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.hadoop.hbase.Cell;
@@ -74,16 +75,6 @@ public interface MemStore {
   void add(final Cell cell, MemstoreSize memstoreSize);
   
   /**
-   * Write an update
-   * @param cell
-   * @param memstoreSize The delta in memstore size will be passed back via this.
-   *        This will include both data size and heap overhead delta.
-   *  @return Action that needs to be performed at a later point of time
-   */
-  //TODO : remove the duplicate method.
-  Action addForMemstoreReplication(final Cell cell, MemstoreSize memstoreSize);
-
-  /**
    * Write the updates
    * @param cells
    * @param memstoreSize The delta in memstore size will be passed back via this.
@@ -98,9 +89,8 @@ public interface MemStore {
    *        This will include both data size and heap overhead delta.
    *  @return Action that needs to be performed at a later point of time
    */
-  //TODO : remove the duplicate method.
   // TODO : remove the duplicate method.
-  Action addForMemstoreReplication(List<Cell> cells, MemstoreSize memstoreSize);
+  Action addForMemstoreReplication(Collection<Cell> cells, MemstoreSize memstoreSize);
 
   /**
    * @return Oldest timestamp of all the Cells in the MemStore

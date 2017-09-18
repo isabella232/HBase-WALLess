@@ -26,6 +26,7 @@ option optimize_for = SPEED;
 message MemstoreReplicationEntry {
   // TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
   required uint32 associated_cell_count = 1;
+  // TODO seems we can remove this?
   required uint64 sequence_id = 2;
 }
 
@@ -36,6 +37,7 @@ message ReplicateMemstoreRequest {
 }
 
 message ReplicateMemstoreResponse {
+// TODO add a max sequence_id field. 
   repeated uint32 failed_replicas = 1;
   required uint32 replicas_committed = 2;
 }

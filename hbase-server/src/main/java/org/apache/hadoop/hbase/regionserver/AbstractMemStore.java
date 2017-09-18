@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.regionserver;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -62,6 +63,7 @@ public abstract class AbstractMemStore implements MemStore {
   private volatile long timeOfOldestEdit;
 
   // Will this grow in size?? TODO : check if CMS also works with this
+  // TODO what is this been used for?  So many Actions all over the places!
   private Map<ActionListener, Boolean> actionListeners = new ConcurrentHashMap<ActionListener, Boolean>();
 
   public final static long FIXED_OVERHEAD = ClassSize.OBJECT
@@ -118,7 +120,7 @@ public abstract class AbstractMemStore implements MemStore {
   }
 
   @Override
-  public Action addForMemstoreReplication(List<Cell> cells, MemstoreSize memstoreSize) {
+  public Action addForMemstoreReplication(Collection<Cell> cells, MemstoreSize memstoreSize) {
     // This active could change??
     MemstoreAction action =
         new MemstoreAction(active.getMemStoreLAB() != null, cells.size(), active, memstoreSize);
@@ -164,13 +166,6 @@ public abstract class AbstractMemStore implements MemStore {
       toAdd = deepCopyIfNeeded(toAdd);
     }
     internalAdd(toAdd, mslabUsed, memstoreSize);
-  }
-
-  @Override
-  public Action addForMemstoreReplication(Cell cell, MemstoreSize memstoreSize) {
-    MemstoreAction action = new MemstoreAction(active.getMemStoreLAB() != null, 1, active, memstoreSize);
-    actionListeners.put(action, true);
-    return add (cell , memstoreSize, action);
   }
 
   private static Cell deepCopyIfNeeded(Cell cell) {
