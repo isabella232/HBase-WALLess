@@ -721,14 +721,14 @@ public class HStore implements Store {
   }
   
   /**
-   * Adds the specified value to the memstore
+   * Adds the specified value to the memstore in async way
    * @param cells
    * @param memstoreSize
    */
-  public Action addForMemstoreReplication(final Collection<Cell> cells, MemstoreSize memstoreSize) {
+  public Action addAsync(final Collection<Cell> cells, MemstoreSize memstoreSize) {
     lock.readLock().lock();
     try {
-      return memstore.addForMemstoreReplication(cells, memstoreSize);
+      return memstore.addAsync(cells, memstoreSize);
     } finally {
       lock.readLock().unlock();
     }

@@ -3274,22 +3274,19 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
     // Better to make as a list so that all the callbacks can be handled one by one?
     private Action memstoreAction;
-    // TODO : we may need Coprocessor action etc.
-    private MultiVersionConcurrencyControl mvcc;
-    private long replayId;
+    private long seqNo;
 
-    public ReplayRegionAction(long replayId, Action memstoreAction,
-        MultiVersionConcurrencyControl mvcc) {
-      this.replayId = replayId;
+    public ReplayRegionAction(long seqNo, Action memstoreAction) {
+      this.seqNo = seqNo;
       this.memstoreAction = memstoreAction;
-      this.mvcc = mvcc;
     }
 
     @Override
     public void performAction() {
+      // TODO do we need an update lock here?
       memstoreAction.performAction();
       addAndGetMemstoreSize(memstoreAction.getSize());
-      this.mvcc.advanceTo(replayId);
+      mvcc.advanceTo(seqNo);
     }
   }
 
@@ -3304,32 +3301,26 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // primary or other replica regions call RPC with a batch of Mutaions each containing Cells. We
     // wont be calling other methods which required write row locks directly on this replica
     // regions.(Like checkAndPut, increment etc).. Only plain Cell write op will come to here. We
-    // dont really worry abt what kind of Mutation it is.  
-    MemstoreSize memstoreSize = new MemstoreSize();// TODO this size is not used and not updated against the Global size also.
+    // dont really worry abt what kind of Mutation it is.
+    MemstoreSize memstoreSize = new MemstoreSize();
     try {
-      int i = 0;
       lock(this.updatesLock.readLock(), familyMaps.size());
       locked = true;
 
-      // STEP 3 : Build memstoreEdit
       memstoreEdits = new MemstoreEdits();
       addFamilyMapToMemstoreEdit(familyMaps.asMap(), memstoreEdits);
 
-      // STEP 4. Append the edits to Memstore and also do the Memstore replication
-      MemstoreReplicationKey memstoreReplicationKey = null;
       ReplicateMemstoreResponse response = replicateCurrentBatch(memstoreEdits, replicasOffered + 1,
           maxSeqId);
       // shall we replicate this way only? But I think doing it like the WALEdit way will ensure
       // we reuse most of the code
-      Action memstoreAction = applyFamilyMapToMemstoreForMemstoreReplication(familyMaps,
-          memstoreSize);
-      // STEP 7. Release locks, etc.
+      Action action = applyFamilyMapToMemstoreForMemstoreReplication(familyMaps, memstoreSize);
       if (locked) {
         this.updatesLock.readLock().unlock();
         locked = false;
       }
-      return new Pair<Action, ReplicateMemstoreResponse>(
-          new ReplayRegionAction(maxSeqId, memstoreAction, mvcc), response);
+      return new Pair<Action, ReplicateMemstoreResponse>(new ReplayRegionAction(maxSeqId, action),
+          response);
     } finally {
       if (locked) {
         this.updatesLock.readLock().unlock();
@@ -4173,47 +4164,26 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    */
   private Action applyFamilyMapToMemstoreForMemstoreReplication(Multimap<byte[], Cell> familyMaps,
       MemstoreSize memstoreSize) throws IOException {
-    // TODO why we need an action list here? Can we have a single action ?
-    ActionList actionList = new ActionList();
+    List<Action> actions = new ArrayList<>(familyMaps.size());
     for (Entry<byte[], Collection<Cell>> e : familyMaps.asMap().entrySet()) {
+      HStore store = getHStore(e.getKey());
+      Action action = store.addAsync(e.getValue(), memstoreSize);
       // This is a bug
-      actionList.addAction(applyToMemstoreForMemstoreReplication(getStore(e.getKey()), e.getValue(),
-          false, memstoreSize));
+      actions.add(action);
     }
-    return actionList;
-  }
-
-  /*
-   * @param delta If we are doing delta changes -- e.g. increment/append -- then this flag will be
-   *  set; when set we will run operations that make sense in the increment/append scenario but
-   *  that do not make sense otherwise.
-   * @see #applyToMemstore(Store, Cell, long)
-   */
-  private Action applyToMemstoreForMemstoreReplication(final Store store,
-      final Collection<Cell> cells, final boolean delta, MemstoreSize memstoreSize)
-      throws IOException {
-    // Any change in how we update Store/MemStore needs to also be done in other applyToMemstore!!!!
-    boolean upsert = delta && store.getFamily().getMaxVersions() == 1;
-    if (upsert) {
-      ((HStore) store).upsert(cells, getSmallestReadPoint(), memstoreSize);
-      // TODO : Handle upsert
-      return null;
-    } else {
-      return ((HStore) store).addForMemstoreReplication(cells, memstoreSize);
-    }
+    return new ActionList(actions);
   }
 
   private static class ActionList implements Action {
 
-    private List<Action> actionList = new ArrayList<Action>();
+    private List<Action> actionList;
 
-    public void addAction(Action action) {
-      actionList.add(action);
+    ActionList(List<Action> actions) {
+      this.actionList = actions;
     }
 
     @Override
     public void performAction() {
-      // TODO Auto-generated method stub
       for (Action action : actionList) {
         action.performAction();
       }
@@ -4221,7 +4191,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
     @Override
     public MemstoreSize getSize() {
-      // TODO Auto-generated method stub
       MemstoreSize size = new MemstoreSize();
       for (Action action : actionList) {
         size.incMemstoreSize(action.getSize());
@@ -4229,6 +4198,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       return size;
     }
   }
+
   /*
    * @param delta If we are doing delta changes -- e.g. increment/append -- then this flag will be
    *  set; when set we will run operations that make sense in the increment/append scenario but

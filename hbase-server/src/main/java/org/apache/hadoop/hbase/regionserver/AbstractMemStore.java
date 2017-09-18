@@ -22,10 +22,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.NavigableSet;
 import java.util.SortedSet;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.commons.logging.Log;
@@ -62,10 +60,6 @@ public abstract class AbstractMemStore implements MemStore {
   // Used to track when to flush
   private volatile long timeOfOldestEdit;
 
-  // Will this grow in size?? TODO : check if CMS also works with this
-  // TODO what is this been used for?  So many Actions all over the places!
-  private Map<ActionListener, Boolean> actionListeners = new ConcurrentHashMap<ActionListener, Boolean>();
-
   public final static long FIXED_OVERHEAD = ClassSize.OBJECT
           + (4 * ClassSize.REFERENCE)
           + (2 * Bytes.SIZEOF_LONG); // snapshotId, timeOfOldestEdit
@@ -97,11 +91,6 @@ public abstract class AbstractMemStore implements MemStore {
   protected void resetActive() {
     // Reset heap to not include any keys
     this.active = SegmentFactory.instance().createMutableSegment(conf, comparator);
-    for (ActionListener actionListener : actionListeners.keySet()) {
-    	actionListener.updateAction();
-    }
-    // remove all the current actionListeners
-    actionListeners.clear();
     this.timeOfOldestEdit = Long.MAX_VALUE;
   }
 
@@ -120,33 +109,24 @@ public abstract class AbstractMemStore implements MemStore {
   }
 
   @Override
-  public Action addForMemstoreReplication(Collection<Cell> cells, MemstoreSize memstoreSize) {
+  public Action addAsync(Collection<Cell> cells, MemstoreSize memstoreSize) {
     // This active could change??
-    MemstoreAction action =
-        new MemstoreAction(active.getMemStoreLAB() != null, cells.size(), active, memstoreSize);
-    actionListeners.put(action, true);
+    MemstoreAction action = new MemstoreAction(cells.size(), memstoreSize);
+    // TODO update of this memstore size happens at the time of async op perform.. Partially this is
+    // wrong. The data size update happens then and there and the heap size update only been
+    // delayed.
     for (Cell cell : cells) {
-      add(cell, memstoreSize, action);
+      add(cell, action);
     }
     return action;
   }
 
-  private Action add(Cell cell, MemstoreSize memstoreSize, MemstoreAction action) {
+  private void add(Cell cell, MemstoreAction action) {
+    // TODO for our case we must copy to MSLAB area. To add such facility down the line.
     Cell toAdd = maybeCloneWithAllocator(cell);
     boolean mslabUsed = (toAdd != cell);
-    // This cell data is backed by the same byte[] where we read request in RPC(See HBASE-15180). By
-    // default MSLAB is ON and we might have copied cell to MSLAB area. If not we must do below deep
-    // copy. Or else we will keep referring to the bigger chunk of memory and prevent it from
-    // getting GCed.
-    // Copy to MSLAB would not have happened if
-    // 1. MSLAB is turned OFF. See "hbase.hregion.memstore.mslab.enabled"
-    // 2. When the size of the cell is bigger than the max size supported by MSLAB. See
-    // "hbase.hregion.memstore.mslab.max.allocation". This defaults to 256 KB
-    // 3. When cells are from Append/Increment operation.
-    if (!mslabUsed) {
-      toAdd = deepCopyIfNeeded(toAdd);
-    }
-    return internalAdd(toAdd, mslabUsed, memstoreSize, action);
+    assert mslabUsed;
+    action.add(toAdd);
   }
 
   @Override
@@ -331,34 +311,13 @@ public abstract class AbstractMemStore implements MemStore {
     checkActiveSize();
   }
 
-  /*
-   * Internal version of add() that doesn't clone Cells with the
-   * allocator, and doesn't take the lock.
-   *
-   * Callers should ensure they already have the read lock taken
-   * @param toAdd the cell to add
-   * @param mslabUsed whether using MSLAB
-   * @param memstoreSize
-   */
-  private Action internalAdd(final Cell toAdd, final boolean mslabUsed,
-      MemstoreSize memstoreSize, MemstoreAction action) {
-    action.add(toAdd);
-    return action;
-  }
-
-  class MemstoreAction implements Action, ActionListener {
-    private volatile Segment active;
+  class MemstoreAction implements Action {
     private MemstoreSize size;
-    private boolean mslabUsed;
     private List<Cell> cells;
-    private int noOfCells;
     // should this simple Reentrant Lock?
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
-    public MemstoreAction(boolean mslabUsed, int noOfCells, Segment active,
-        MemstoreSize memstoreSize) {
-      this.mslabUsed = mslabUsed;
-      this.active = active;
+    public MemstoreAction(int noOfCells, MemstoreSize memstoreSize) {
       this.size = memstoreSize;
       cells = new ArrayList<Cell>(noOfCells);
     }
@@ -376,25 +335,12 @@ public abstract class AbstractMemStore implements MemStore {
       lock.readLock().lock();
       try {
         for (Cell cell : cells) {
-          ((MutableSegment) active).add(cell, mslabUsed, size);
+          active.add(cell, true, size);
           setOldestEditTimeToNow();
           checkActiveSize();
         }
-        // remove the current action as it done
-        actionListeners.remove(this);
       } finally {
         lock.readLock().unlock();
-      }
-    }
-
-    @Override
-    public void updateAction() {
-      lock.writeLock().lock();
-      try {
-        // update the active with the reset Active
-        this.active = AbstractMemStore.this.active;
-      } finally {
-        lock.writeLock().unlock();
       }
     }
   }

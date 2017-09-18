@@ -2227,8 +2227,8 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           replayCallbackExecutor.start();
         }
         pair = doReplayBatchOpForMemstoreReplication(region, familyMaps, replicasOffered, maxSeqId);
-        // if there is an error then this action is not going to be performed which means we are not advancing the
-        // mvcc
+        // if there is an error then this action is not going to be performed which means we are not
+        // advancing the mvcc
         try {
           replayCallbackExecutor.offer(pair.getFirst());
         } catch (InterruptedException e) {
@@ -2250,22 +2250,22 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
   private void handleMetaMarkerCell(Cell cell, HRegion region, int replicasOffered)
       throws IOException {
     CompactionDescriptor compactionDesc = WALEdit.getCompaction(cell);
-    // TODO why this? Always it wl be replica regions
-    boolean isDefaultReplica = RegionReplicaUtil.isDefaultReplica(region.getRegionInfo());
     if (compactionDesc != null) {
       // replay the compaction. Remove the files from stores only if we are the primary
       // region replica (thus own the files)
-      region.replayWALCompactionMarker(compactionDesc, !isDefaultReplica, isDefaultReplica,
-          cell.getSequenceId(), replicasOffered);
+      region.replayWALCompactionMarker(compactionDesc, true, false, cell.getSequenceId(),
+          replicasOffered);
     } else {
       FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(cell);
       if (flushDesc != null) {
         region.replayWALFlushMarker(flushDesc, cell.getSequenceId(), replicasOffered);
       } else {
+        // TODO region open and close events not been RPCed into replicas now. This can help?
         RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(cell);
-        if (regionEvent != null && !isDefaultReplica) {
+        if (regionEvent != null) {
           region.replayWALRegionEventMarker(regionEvent);
         } else {
+          // TODO bulk load events not been RPCed to replicas now.
           BulkLoadDescriptor bulkLoadEvent = WALEdit.getBulkLoadDescriptor(cell);
           if (bulkLoadEvent != null) {
             region.replayWALBulkLoadEventMarker(bulkLoadEvent);
@@ -2277,10 +2277,10 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
 
   private static class ReplayCallbackExecutor extends HasThread {
 
-    private BlockingQueue<Action> callbackList = new LinkedBlockingQueue<Action>();
+    private BlockingQueue<Action> callbacks = new LinkedBlockingQueue<Action>();
 
     public void offer(Action action) throws InterruptedException {
-      callbackList.put(action);
+      callbacks.put(action);
     }
 
     @Override
@@ -2288,7 +2288,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       Action action = null;
       while (true) {
         try {
-          action = callbackList.take();
+          action = callbacks.take();
         } catch (InterruptedException e) {
         }
         action.performAction();

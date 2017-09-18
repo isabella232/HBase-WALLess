@@ -83,14 +83,17 @@ public interface MemStore {
   void add(List<Cell> cells, MemstoreSize memstoreSize);
 
   /**
-   * Write an update
+   * Write the cells in an async way. The actual addition to the Tree structure will be happening
+   * when the Action is performed which again depends on when the action execution is been initiated
+   * by upper layer. The cells data will be copied to MSLAB in sync way only.
+   *
    * @param cells
-   * @param memstoreSize The delta in memstore size will be passed back via this.
-   *        This will include both data size and heap overhead delta.
-   *  @return Action that needs to be performed at a later point of time
+   * @param memstoreSize
+   *          The delta in memstore size will be passed back via this. This will include both data
+   *          size and heap overhead delta.
+   * @return Action that needs to be performed at a later point of time
    */
-  // TODO : remove the duplicate method.
-  Action addForMemstoreReplication(Collection<Cell> cells, MemstoreSize memstoreSize);
+  Action addAsync(Collection<Cell> cells, MemstoreSize memstoreSize);
 
   /**
    * @return Oldest timestamp of all the Cells in the MemStore
