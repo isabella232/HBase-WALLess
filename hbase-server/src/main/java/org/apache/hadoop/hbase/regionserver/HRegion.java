@@ -3492,7 +3492,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         if (batchOp.retCodeDetails[i].getOperationStatusCode() != OperationStatusCode.NOT_RUN) {
           continue;
         }
-        addFamilyMapToMemstoreEdit1(familyMaps[i], memstoreEdits);
+        addFamilyMapToMemstoreEdit(familyMaps[i], memstoreEdits);
         Mutation m = batchOp.getMutation(i);
         Durability tmpDur = getEffectiveDurability(m.getDurability());
         if (tmpDur.ordinal() > durability.ordinal()) {
@@ -3667,7 +3667,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // ensure that we do things in order (probably easier for flush special entry? We need
       // that to be done.)
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
-        memstoreEdits, this.getRegionInfo().getReplicaId(), regionReplicator);
+          memstoreEdits, regionReplicator);
       if (response.getFailedReplicasCount() > 0) {
         // update the location
         updateLocationOnException();
@@ -3686,19 +3686,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
-  private void addFamilyMapToMemstoreEdit(Map<byte[], Collection<Cell>> familyMap,
+  private void addFamilyMapToMemstoreEdit(Map<byte[], ? extends Collection<Cell>> familyMap,
       MemstoreEdits memstoreEdits) {
     for (Collection<Cell> cells : familyMap.values()) {
-      for (Cell cell : cells) {
-        memstoreEdits.add(cell);
-      }
-    }
-  }
-
-  // TODO avoid duplication and this junk name
-  private void addFamilyMapToMemstoreEdit1(Map<byte[], List<Cell>> familyMap,
-      MemstoreEdits memstoreEdits) {
-    for (List<Cell> cells : familyMap.values()) {
       for (Cell cell : cells) {
         memstoreEdits.add(cell);
       }
@@ -4729,14 +4719,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   public ReplicateMemstoreResponse replicateMetaCell(int currentReplicaIndex, KeyValue kv)
       throws IOException {
     MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
-        this.getRegionInfo().getEncodedNameAsBytes(),
-         currentReplicaIndex);
+        this.getRegionInfo().getEncodedNameAsBytes(), currentReplicaIndex);
     MemstoreEdits memstoreEdits = new MemstoreEdits();
     memstoreEdits.add(kv);
     // replicate this
     try {
       return this.memstoreReplicator.replicate(memstoreReplicationKey, memstoreEdits,
-        this.getRegionInfo().getReplicaId(), regionReplicator);
+          regionReplicator);
     } catch (InterruptedException e) {
       // Ignore this. Probably next time we will be able to
       // TODO : Here we may not wait for the result.

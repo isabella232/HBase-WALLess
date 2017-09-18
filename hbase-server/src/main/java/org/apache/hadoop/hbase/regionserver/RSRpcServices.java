@@ -231,6 +231,7 @@ import org.apache.zookeeper.KeeperException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 
@@ -2191,7 +2192,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       // Separate the Cells in to a family specific Map so as to pass them to appropriate Memstores
       // when reached HRegion.
       // TODO in trunk, we have to use the shaded google class.
-      Multimap<byte[], Cell> familyMaps = HashMultimap.create();
+      Multimap<byte[], Cell> familyMaps = ArrayListMultimap.create();
       List<MemstoreReplicationEntry> entries = request.getEntryList();
       long maxSeqId = -1;
       for (MemstoreReplicationEntry entry : entries) {
