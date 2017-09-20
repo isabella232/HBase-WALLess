@@ -114,6 +114,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     private final RpcControllerFactory rpcControllerFactory;
     private final RpcRetryingCallerFactory rpcRetryingCallerFactory;
     
+    // TODO : create thread affinity here.
     public ReplicationThread() {
       this.rpcRetryingCallerFactory = RpcRetryingCallerFactory
           .instantiate(connection.getConfiguration());
