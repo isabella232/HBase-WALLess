@@ -8222,7 +8222,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           locations = RegionAdminServiceCallable.getRegionLocations(connection,
             this.getRegionInfo().getTable(), this.getRegionInfo().getStartKey(), false,
             this.getRegionInfo().getReplicaId());
-          regionReplicator = new RegionReplicaReplicator(this.getRegionInfo(), locations);
+          int replicationThreadIndex = 0;
+          if (regionReplicator == null) {
+            replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
+          } else {
+            replicationThreadIndex = regionReplicator.getReplicationThreadIndex();
+          }
+          regionReplicator =
+              new RegionReplicaReplicator(this.getRegionInfo(), locations, replicationThreadIndex);
         }
       }
     }

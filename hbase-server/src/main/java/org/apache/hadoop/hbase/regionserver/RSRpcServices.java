@@ -2209,6 +2209,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           } else {
             familyMaps.put(CellUtil.cloneFamily(cell), cell);
           }
+          CellUtil.setSequenceId(cell, entry.getSequenceId());
         }
       }
       Pair<Action, ReplicateMemstoreResponse> pair = null;

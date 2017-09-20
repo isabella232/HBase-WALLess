@@ -173,12 +173,11 @@ public class ReplicationProtbufUtil {
       getCellScanner(allCells, size));
   }
 
-  public static Pair<MemstoreReplicaProtos.ReplicateMemstoreRequest, CellScanner>
+  public static Pair<MemstoreReplicaProtos.ReplicateMemstoreRequest, List<Cell>>
       buildReplicateMemstoreEntryRequest(final MemstoreReplicationEntry[] entries,
-          byte[] encodedRegionName, String replicationClusterId, Path sourceBaseNamespaceDir,
-          Path sourceHFileArchiveDir) {
+          byte[] encodedRegionName) {
     // Accumulate all the Cells seen in here.
-    List<List<? extends Cell>> allCells = new ArrayList<>(entries.length);
+    List<Cell> allCells = new ArrayList<>();
     int size = 0;
     MemstoreReplicaProtos.ReplicateMemstoreRequest.Builder reqBuilder =
         MemstoreReplicaProtos.ReplicateMemstoreRequest.newBuilder();
@@ -188,7 +187,7 @@ public class ReplicationProtbufUtil {
       MemstoreEdits edit = entry.getMemstoreEdits();
       List<Cell> cells = edit.getCells();
       // Collect up the cells
-      allCells.add(cells);
+      allCells.addAll(cells);
       MemstoreReplicaProtos.MemstoreReplicationEntry.Builder entryBuilder =
           MemstoreReplicaProtos.MemstoreReplicationEntry.newBuilder();
       entryBuilder.setAssociatedCellCount(cells.size());
@@ -198,7 +197,7 @@ public class ReplicationProtbufUtil {
     }
     reqBuilder.setEncodedRegionName(UnsafeByteOperations.unsafeWrap(encodedRegionName));
     reqBuilder.setReplicasOffered(replicasOffsered);
-    return new Pair<>(reqBuilder.build(), getCellScanner(allCells, size));
+    return new Pair<>(reqBuilder.build(), allCells);
   }
 
   
@@ -235,6 +234,28 @@ public class ReplicationProtbufUtil {
       @Override
       public long heapSize() {
         return size;
+      }
+    };
+  }
+
+  public static CellScanner getCellScannerOnCells(final List<Cell> cells) {
+    return new CellScanner() {
+      private final Iterator<? extends Cell> entries = cells.iterator();
+      private Cell currentCell;
+
+      @Override
+      public Cell current() {
+        return this.currentCell;
+      }
+
+      @Override
+      public boolean advance() {
+        if (!this.entries.hasNext()) {
+          this.currentCell = null;
+          return false;
+        }
+        this.currentCell = this.entries.next();
+        return true;
       }
     };
   }

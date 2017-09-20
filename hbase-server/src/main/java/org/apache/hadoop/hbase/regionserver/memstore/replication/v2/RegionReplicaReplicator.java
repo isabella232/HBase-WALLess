@@ -5,12 +5,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.RegionLocations;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.CompletedFuture;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 
 // This is a per Region instance 
 //TODO better name
@@ -21,11 +23,14 @@ public class RegionReplicaReplicator {
   private List<MemstoreReplicationEntry> entryBuffer;
   private volatile long curSeq = 0;
   private volatile long curMaxConsumedSeq = -1;
+  private int replicationThreadIndex; 
 
-  public RegionReplicaReplicator(HRegionInfo currentRegion, RegionLocations locations) {
+  public RegionReplicaReplicator(HRegionInfo currentRegion, RegionLocations locations,
+      int replicationThreadIndex) {
     this.curRegion = currentRegion;
     this.locations = locations;
     this.entryBuffer = new ArrayList<>();
+    this.replicationThreadIndex = replicationThreadIndex;
   }
 
   // Seems no way to avoid this sync
@@ -78,6 +83,10 @@ public class RegionReplicaReplicator {
 
   public int getReplicasCount() {
     return this.locations.size();
+  }
+
+  public int getReplicationThreadIndex() {
+    return this.replicationThreadIndex;
   }
 
   private void loadRegionLocationFromMeta() throws IOException {

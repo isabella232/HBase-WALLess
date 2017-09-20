@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.CellScanner;
+import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
@@ -26,6 +26,8 @@ import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.codec.KVCodecWithSeqId;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.v2.RegionReplicaReplicator;
+import org.apache.hadoop.hbase.shaded.com.google.protobuf.UnsafeByteOperations;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -37,13 +39,13 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private final Configuration conf;
   // TODO this is a global level Q for all the ReplicationThreads? Should we have individual Qs for
   // each of the Threads. Discuss pros and cons and arrive
-  private final BlockingQueue<Entry> regionQueue = new LinkedBlockingQueue<>();
   private ClusterConnection connection;
   private final int operationTimeout;
   private final ReplicationThread[] replicationThreads;
   private final long replicationTimeoutNs;
   protected static final int DEFAULT_WAL_SYNC_TIMEOUT_MS = 5 * 60 * 1000;
   protected final RegionServerServices rs;
+  private int threadIndex = 0;
   
   public SimpleMemstoreReplicator(Configuration conf, RegionServerServices rs) {
     this.conf = HBaseConfiguration.create(conf);
@@ -87,6 +89,14 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     return future.get(replicationTimeoutNs);
   }
 
+  @Override
+  public ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request,
+      RegionReplicaReplicator regionReplicaReplicator)
+      throws IOException, InterruptedException, ExecutionException {
+    // the replicas will call this
+    return null;
+  }
+
   public void stop() {
     for (ReplicationThread thread : this.replicationThreads) {
       thread.stop();
@@ -94,7 +104,22 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   }
 
   public void offer(RegionReplicaReplicator replicator, MemstoreReplicationEntry entry) {
-    this.regionQueue.offer(new Entry(replicator, entry.getSeq()));
+    int index = replicator.getReplicationThreadIndex();
+    this.replicationThreads[index].regionQueue.offer(new Entry(replicator, entry.getSeq()));
+  }
+
+  // TODO : round robin is fine but if round robin should we cache that thread index in the region
+  // replica? If on failure if the locations are udpated and so the regionreplicator we wil have to update
+  // the index?
+/*  private int getThreadForRegion(RegionReplicaReplicator replicator) {
+    return (replicator.getRegionInfo().hashCode() % this.replicationThreads.length);
+  }*/
+
+  // called only when the region replicator is created
+  @Override
+  public synchronized int getNextReplicationThread() {
+    this.threadIndex = (threadIndex + 1) % this.replicationThreads.length;
+    return threadIndex;
   }
 
   private class Entry {
@@ -113,12 +138,14 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     // TODO may be these factory  can be at Top class level.
     private final RpcControllerFactory rpcControllerFactory;
     private final RpcRetryingCallerFactory rpcRetryingCallerFactory;
+    private final BlockingQueue<Entry> regionQueue;
     
     // TODO : create thread affinity here.
     public ReplicationThread() {
       this.rpcRetryingCallerFactory = RpcRetryingCallerFactory
           .instantiate(connection.getConfiguration());
       this.rpcControllerFactory = RpcControllerFactory.instantiate(connection.getConfiguration());
+      regionQueue = new LinkedBlockingQueue<>();
     }
 
     @Override
@@ -136,6 +163,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     }
 
     private void replicate(Entry entry) {
+      // TODO : Handle requests directly that comes for replica regions
       RegionReplicaReplicator replicator = entry.replicator;
       List<MemstoreReplicationEntry> entries = replicator.pullEntries(entry.seq);
       if (entries == null || entries.isEmpty()) {
@@ -154,7 +182,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
           if (nextRegionLocation != null) {
             RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
                 rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
-                nextRegionLocation.getRegionInfo(), null, entries);
+                nextRegionLocation.getRegionInfo(), null,
+                new Pair<List<MemstoreReplicationEntry>, RequestEntryHolder>(entries, null));
             try {
               ReplicateMemstoreResponse response =
                   rpcRetryingCallerFactory.<ReplicateMemstoreResponse> newCaller()
@@ -201,17 +230,57 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     }
   }
 
+  private static class RequestEntryHolder {
+    private ReplicateMemstoreRequest request;
+    private List<Cell> cells;
+    private CompletedFuture future;
+
+    public RequestEntryHolder(ReplicateMemstoreRequest request, List<Cell> allCells,
+        CompletedFuture future) {
+      this.request = request;
+      this.cells = allCells;
+      this.future = future;
+    }
+
+    public void setRequest(ReplicateMemstoreRequest request) {
+      this.request = request;
+    }
+
+    public ReplicateMemstoreRequest getRequest() {
+      return this.request;
+    }
+
+    public CompletedFuture getCompletedFuture() {
+      return this.future;
+    }
+
+    public List<Cell> getCells() {
+      return this.cells;
+    }
+  }
   private static class RegionReplicaReplayCallable
       extends RegionAdminServiceCallable<ReplicateMemstoreResponse> {
-    private final List<MemstoreReplicationEntry> entries;
+    private RequestEntryHolder request;
     private final byte[] initialEncodedRegionName;
 
     public RegionReplicaReplayCallable(ClusterConnection connection,
         RpcControllerFactory rpcControllerFactory, TableName tableName, HRegionLocation location,
-        HRegionInfo regionInfo, byte[] row, List<MemstoreReplicationEntry> entries) {
+        HRegionInfo regionInfo, byte[] row,
+        Pair<List<MemstoreReplicationEntry>, RequestEntryHolder> request) {
       super(connection, rpcControllerFactory, location, tableName, row, regionInfo.getReplicaId());
-      this.entries = entries;
       this.initialEncodedRegionName = regionInfo.getEncodedNameAsBytes();
+      if (request.getSecond() != null) {
+        this.request = request.getSecond();
+      } else {
+        List<MemstoreReplicationEntry> entries = request.getFirst();
+        if (entries != null && !entries.isEmpty()) {
+          MemstoreReplicationEntry[] entriesArray = new MemstoreReplicationEntry[entries.size()];
+          entriesArray = entries.toArray(entriesArray);
+          Pair<ReplicateMemstoreRequest, List<Cell>> pair = ReplicationProtbufUtil
+              .buildReplicateMemstoreEntryRequest(entriesArray, initialEncodedRegionName);
+          this.request = new RequestEntryHolder(pair.getFirst(), pair.getSecond(), null);
+        }
+      }
     }
 
     @Override
@@ -221,20 +290,19 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       // Regions can change because of (1) region split (2) region merge (3) table recreated
       boolean skip = false;
       if (!Bytes.equals(location.getRegionInfo().getEncodedNameAsBytes(),
-          initialEncodedRegionName)) {
+        initialEncodedRegionName)) {
         skip = true;
       }
-      if (!this.entries.isEmpty() && !skip) {
-        MemstoreReplicationEntry[] entriesArray = new MemstoreReplicationEntry[this.entries.size()];
-        entriesArray = this.entries.toArray(entriesArray);
-        // set the region name for the target region replica
-        Pair<ReplicateMemstoreRequest, CellScanner> p = ReplicationProtbufUtil
-            .buildReplicateMemstoreEntryRequest(entriesArray,
-                location.getRegionInfo().getEncodedNameAsBytes(), null, null, null);
-        controller.setCellScanner(p.getSecond());
-        return stub.replicateMemstore(controller, p.getFirst());
+      controller.setCellScanner(ReplicationProtbufUtil.getCellScannerOnCells(request.getCells()));
+      MemstoreReplicaProtos.ReplicateMemstoreRequest.Builder reqBuilder =
+          MemstoreReplicaProtos.ReplicateMemstoreRequest.newBuilder();
+      for (int i = 0; i < request.getRequest().getEntryCount(); i++) {
+        reqBuilder.addEntry(request.getRequest().getEntry(i));
       }
-      return ReplicateMemstoreResponse.newBuilder().build();
+      reqBuilder.setEncodedRegionName(
+        UnsafeByteOperations.unsafeWrap(location.getRegionInfo().getEncodedNameAsBytes()));
+      reqBuilder.setReplicasOffered(request.getRequest().getReplicasOffered() + 1);
+      return stub.replicateMemstore(controller, reqBuilder.build());
     }
   }
 }
