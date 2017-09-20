@@ -232,7 +232,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 
 /**
@@ -1139,7 +1138,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
    *         exceptionMessage if any
    * @throws IOException
    */
-  private Pair<Action, ReplicateMemstoreResponse> doReplayBatchOpForMemstoreReplication(
+  private Action doReplayBatchOpForMemstoreReplication(
       HRegion region, Multimap<byte[], Cell> familyMaps, int replicasOffered, long maxSeqId)
       throws IOException {
     try {
@@ -2184,26 +2183,42 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
     CellScanner cells = ((HBaseRpcController) controller).cellScanner();
     try {
       checkOpen();
+      List<Cell> allCells = new ArrayList<>();
+      try {
+        while (cells.advance()) {
+          allCells.add(cells.current());
+        }
+      } catch (Exception e) {
+        throw new ServiceException(e);
+      }
       ByteString regionName = request.getEncodedRegionName();;
       int replicasOffered = request.getReplicasOffered();
       HRegion region = (HRegion) regionServer.getRegionByEncodedName(regionName.toStringUtf8());
       assert !(ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo()));
-
+      ReplicateMemstoreResponse response = null;
+      try {
+        response = region.replicateMemstore(request, allCells);
+      } catch (Exception e1) {
+        LOG.error("Exception in getting the memstore response from the pipeline " + e1 + " "
+            + region.getRegionInfo());
+        throw new ServiceException(e1);
+      }
       // Separate the Cells in to a family specific Map so as to pass them to appropriate Memstores
       // when reached HRegion.
       // TODO in trunk, we have to use the shaded google class.
       Multimap<byte[], Cell> familyMaps = ArrayListMultimap.create();
       List<MemstoreReplicationEntry> entries = request.getEntryList();
       long maxSeqId = -1;
+      int cellItr = 0;
       for (MemstoreReplicationEntry entry : entries) {
         int count = entry.getAssociatedCellCount();
         maxSeqId = maxSeqId < entry.getSequenceId() ? entry.getSequenceId() : maxSeqId;
         for (int i = 0; i < count; i++) {
-          // Throw index out of bounds if our cell count is off
-          if (!cells.advance()) {
+          Cell cell = allCells.get(cellItr);
+          cellItr++;
+          if (cell == null) {
             throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
           }
-          Cell cell = cells.current();
           if (CellUtil.matchingFamily(cell, WALEdit.METAFAMILY)) {
             handleMetaMarkerCell(cell, region, replicasOffered);
           } else {
@@ -2212,7 +2227,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           CellUtil.setSequenceId(cell, entry.getSequenceId());
         }
       }
-      Pair<Action, ReplicateMemstoreResponse> pair = null;
+      Action action = null;
       if (!familyMaps.isEmpty()) {
         // Already the mutations will be sorted at primary region. And we get those in same order
         // here. So no need for extra sort.
@@ -2228,22 +2243,28 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           // TODO : Handle interrupted exception
           replayCallbackExecutor.start();
         }
-        pair = doReplayBatchOpForMemstoreReplication(region, familyMaps, replicasOffered, maxSeqId);
+        try {
+          action =
+              doReplayBatchOpForMemstoreReplication(region, familyMaps, replicasOffered, maxSeqId);
+        } catch (Exception e) {
+          // no excpetion will happen here
+          throw new ServiceException(e);
+        }
         // if there is an error then this action is not going to be performed which means we are not
         // advancing the mvcc
         try {
-          replayCallbackExecutor.offer(pair.getFirst());
+          replayCallbackExecutor.offer(action);
         } catch (InterruptedException e) {
           // Handle this case
         }
       }
-      if (pair == null || pair.getSecond() == null) {
+      if (action == null) {
         ReplicateMemstoreResponse.Builder newBuilder = ReplicateMemstoreResponse.newBuilder();
         // TODO revisist this
         newBuilder.setReplicasCommitted(1);
         return newBuilder.build();
       }
-      return pair.getSecond();
+      return response;
     } catch (IOException ie) {
       throw new ServiceException(ie);
     }

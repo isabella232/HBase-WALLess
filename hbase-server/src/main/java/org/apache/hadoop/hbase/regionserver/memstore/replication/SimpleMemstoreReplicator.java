@@ -20,6 +20,7 @@ import org.apache.hadoop.hbase.client.ClusterConnection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
 import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
+import org.apache.hadoop.hbase.exceptions.TimeoutIOException;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
 import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
@@ -46,6 +47,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   protected static final int DEFAULT_WAL_SYNC_TIMEOUT_MS = 5 * 60 * 1000;
   protected final RegionServerServices rs;
   private int threadIndex = 0;
+  private final RpcControllerFactory rpcControllerFactory;
+  private final RpcRetryingCallerFactory rpcRetryingCallerFactory;
   
   public SimpleMemstoreReplicator(Configuration conf, RegionServerServices rs) {
     this.conf = HBaseConfiguration.create(conf);
@@ -70,6 +73,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     }
     int numWriterThreads = this.conf.getInt(HConstants.REGION_SERVER_HANDLER_COUNT,
         HConstants.DEFAULT_REGION_SERVER_HANDLER_COUNT);
+    this.rpcRetryingCallerFactory = RpcRetryingCallerFactory
+        .instantiate(connection.getConfiguration());
+    this.rpcControllerFactory = RpcControllerFactory.instantiate(connection.getConfiguration());
     this.replicationThreads = new ReplicationThread[numWriterThreads];
     for (int i = 0; i < numWriterThreads; i++) {
       this.replicationThreads[i] = new ReplicationThread();
@@ -90,12 +96,17 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   }
 
   @Override
-  public ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request,
-      RegionReplicaReplicator regionReplicaReplicator)
-      throws IOException, InterruptedException, ExecutionException {
-    // the replicas will call this
-    return null;
+  // directly waiting on this? Is it better to go with the rep threads here too???
+  public ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
+      RegionReplicaReplicator replicator)
+      throws TimeoutIOException, InterruptedException, ExecutionException {
+    CompletedFuture future = new CompletedFuture();
+    replicate(new Pair<List<MemstoreReplicationEntry>, RequestEntryHolder>(null,
+        new RequestEntryHolder(request, allCells, future)),
+      replicator);
+    return future.get(replicationTimeoutNs);
   }
+
 
   public void stop() {
     for (ReplicationThread thread : this.replicationThreads) {
@@ -122,6 +133,64 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     return threadIndex;
   }
 
+  void replicate(Pair<List<MemstoreReplicationEntry>, RequestEntryHolder> pair,
+      RegionReplicaReplicator replicator) {
+    int curRegionReplicaId = replicator.getCurRegionReplicaId();
+    ReplicateMemstoreResponse.Builder builder = ReplicateMemstoreResponse.newBuilder();
+    builder.setReplicasCommitted(1);
+    try {
+      // The write pipeline for replication will always be R1 -> R2 ->.. Rn
+      // When there is a failure for any node, the current replica will try with its next and so on
+      // Replica ids are like 0, 1, 2...
+      for (int i = curRegionReplicaId + 1; i < replicator.getReplicasCount(); i++) {
+        // Getting the location of the next Region Replica (in pipeline)
+        HRegionLocation nextRegionLocation = replicator.getRegionLocation(i);
+        if (nextRegionLocation != null) {
+          RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
+              rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
+              nextRegionLocation.getRegionInfo(), null, pair);
+          try {
+            ReplicateMemstoreResponse response =
+                rpcRetryingCallerFactory.<ReplicateMemstoreResponse> newCaller()
+                    .callWithRetries(callable, operationTimeout);
+            // we need this because we may have a success after some failures.
+            // TODO is this the correct place to create Response?  After all we are not setting it any where.
+            builder.setReplicasCommitted(response.getReplicasCommitted() + 1);// Adding this write itelf as success.
+            break;// Break the inner for loop
+          } catch (IOException | RuntimeException e) {
+            // TODO
+            // This data was not replicated to given replica means it is in bad state. We have to
+            // mark same in META table. Need an RPC call to master for that. Only master should
+            // talk to META table. Need add new PB based RPC call.
+            // To have a row specific lock here so that only one RPC will go from here to HM. There
+            // may be other parallel handlers also trying to write to that replica.
+            // Get all info where all success and where all failed. Just commented out the call.
+            // rs.reportReplicaRegionHealthChange(nextRegionLocation.getRegionInfo(), false);
+            builder.addFailedReplicas(i);
+            // We should mark the future with exception only after retrying with the other Replicas
+            // so that the write is successful??
+          }
+        } else {
+          // TODO - This is unexpected situation. Should not mark as success
+          // markEntriesSuccess(entries);
+          builder.addFailedReplicas(i);
+        }
+      }
+    } finally {
+      markResponse(pair, builder.build());
+    }
+  }
+
+  private void markResponse(Pair<List<MemstoreReplicationEntry>, RequestEntryHolder> request,
+      ReplicateMemstoreResponse response) {
+    if (request.getSecond() != null) {
+      request.getSecond().getCompletedFuture().markResponse(response);
+    } else {
+      for (MemstoreReplicationEntry entry : request.getFirst()) {
+        entry.getFuture().markResponse(response);
+      }
+    }
+  }
   private class Entry {
     private final RegionReplicaReplicator replicator;
     private final long seq;
@@ -135,16 +204,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private class ReplicationThread extends HasThread {
     
     private volatile boolean closed = false;
-    // TODO may be these factory  can be at Top class level.
-    private final RpcControllerFactory rpcControllerFactory;
-    private final RpcRetryingCallerFactory rpcRetryingCallerFactory;
     private final BlockingQueue<Entry> regionQueue;
     
     // TODO : create thread affinity here.
     public ReplicationThread() {
-      this.rpcRetryingCallerFactory = RpcRetryingCallerFactory
-          .instantiate(connection.getConfiguration());
-      this.rpcControllerFactory = RpcControllerFactory.instantiate(connection.getConfiguration());
       regionQueue = new LinkedBlockingQueue<>();
     }
 
@@ -169,59 +232,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       if (entries == null || entries.isEmpty()) {
         return;
       }
-      int curRegionReplicaId = replicator.getCurRegionReplicaId();
-      ReplicateMemstoreResponse.Builder builder = ReplicateMemstoreResponse.newBuilder();
-      builder.setReplicasCommitted(1);
-      try {
-        // The write pipeline for replication will always be R1 -> R2 ->.. Rn
-        // When there is a failure for any node, the current replica will try with its next and so on
-        // Replica ids are like 0, 1, 2...
-        for (int i = curRegionReplicaId + 1; i < replicator.getReplicasCount(); i++) {
-          // Getting the location of the next Region Replica (in pipeline)
-          HRegionLocation nextRegionLocation = replicator.getRegionLocation(i);
-          if (nextRegionLocation != null) {
-            RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
-                rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
-                nextRegionLocation.getRegionInfo(), null,
-                new Pair<List<MemstoreReplicationEntry>, RequestEntryHolder>(entries, null));
-            try {
-              ReplicateMemstoreResponse response =
-                  rpcRetryingCallerFactory.<ReplicateMemstoreResponse> newCaller()
-                      .callWithRetries(callable, operationTimeout);
-              // we need this because we may have a success after some failures.
-              // TODO is this the correct place to create Response?  After all we are not setting it any where.
-              builder.setReplicasCommitted(response.getReplicasCommitted() + 1);// Adding this write itelf as success.
-              break;// Break the inner for loop
-            } catch (IOException | RuntimeException e) {
-              // TODO
-              // This data was not replicated to given replica means it is in bad state. We have to
-              // mark same in META table. Need an RPC call to master for that. Only master should
-              // talk to META table. Need add new PB based RPC call.
-              // To have a row specific lock here so that only one RPC will go from here to HM. There
-              // may be other parallel handlers also trying to write to that replica.
-              // Get all info where all success and where all failed. Just commented out the call.
-              // rs.reportReplicaRegionHealthChange(nextRegionLocation.getRegionInfo(), false);
-              builder.addFailedReplicas(i);
-              // We should mark the future with exception only after retrying with the other Replicas
-              // so that the write is successful??
-            }
-          } else {
-            // TODO - This is unexpected situation. Should not mark as success
-            // markEntriesSuccess(entries);
-            builder.addFailedReplicas(i);
-          }
-        }
-      } finally {
-        markResponse(entries, builder.build());
-      }
-    }
-
-    private void markResponse(List<MemstoreReplicationEntry> entries,
-        ReplicateMemstoreResponse response) {
-      for (MemstoreReplicationEntry entry : entries) {
-        // directly marking on the future
-        entry.getFuture().markResponse(response);
-      }
+      SimpleMemstoreReplicator.this.replicate(
+        new Pair<List<MemstoreReplicationEntry>, RequestEntryHolder>(entries, null), replicator);
     }
  
     public void stop() {
@@ -262,6 +274,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       extends RegionAdminServiceCallable<ReplicateMemstoreResponse> {
     private RequestEntryHolder request;
     private final byte[] initialEncodedRegionName;
+    private boolean primaryRegion = false;
 
     public RegionReplicaReplayCallable(ClusterConnection connection,
         RpcControllerFactory rpcControllerFactory, TableName tableName, HRegionLocation location,
@@ -272,6 +285,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       if (request.getSecond() != null) {
         this.request = request.getSecond();
       } else {
+        primaryRegion = true;
         List<MemstoreReplicationEntry> entries = request.getFirst();
         if (entries != null && !entries.isEmpty()) {
           MemstoreReplicationEntry[] entriesArray = new MemstoreReplicationEntry[entries.size()];
@@ -294,15 +308,20 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         skip = true;
       }
       controller.setCellScanner(ReplicationProtbufUtil.getCellScannerOnCells(request.getCells()));
-      MemstoreReplicaProtos.ReplicateMemstoreRequest.Builder reqBuilder =
-          MemstoreReplicaProtos.ReplicateMemstoreRequest.newBuilder();
-      for (int i = 0; i < request.getRequest().getEntryCount(); i++) {
-        reqBuilder.addEntry(request.getRequest().getEntry(i));
+      if (primaryRegion) {
+        // already request is created
+        return stub.replicateMemstore(controller, request.getRequest());
+      } else {
+        MemstoreReplicaProtos.ReplicateMemstoreRequest.Builder reqBuilder =
+            MemstoreReplicaProtos.ReplicateMemstoreRequest.newBuilder();
+        for (int i = 0; i < request.getRequest().getEntryCount(); i++) {
+          reqBuilder.addEntry(request.getRequest().getEntry(i));
+        }
+        reqBuilder.setEncodedRegionName(
+          UnsafeByteOperations.unsafeWrap(location.getRegionInfo().getEncodedNameAsBytes()));
+        reqBuilder.setReplicasOffered(request.getRequest().getReplicasOffered() + 1);
+        return stub.replicateMemstore(controller, reqBuilder.build());
       }
-      reqBuilder.setEncodedRegionName(
-        UnsafeByteOperations.unsafeWrap(location.getRegionInfo().getEncodedNameAsBytes()));
-      reqBuilder.setReplicasOffered(request.getRequest().getReplicasOffered() + 1);
-      return stub.replicateMemstore(controller, reqBuilder.build());
     }
   }
 }

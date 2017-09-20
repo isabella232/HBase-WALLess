@@ -19,8 +19,10 @@
 package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.v2.RegionReplicaReplicator;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
@@ -33,7 +35,7 @@ public interface MemstoreReplicator {
       throws IOException, InterruptedException, ExecutionException;
 
   // TODO : Use this in  replica regions
-  ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request,
+  ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
       RegionReplicaReplicator regionReplicaReplicator)
       throws IOException, InterruptedException, ExecutionException;
 
