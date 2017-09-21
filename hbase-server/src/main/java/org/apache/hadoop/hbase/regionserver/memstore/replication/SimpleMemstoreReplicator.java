@@ -37,6 +37,8 @@ import org.apache.hadoop.hbase.util.Pair;
 
 public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private static final Log LOG = LogFactory.getLog(SimpleMemstoreReplicator.class);
+  private static final String MEMSTORE_REPLICATION_THREAD_COUNT = 
+      "hbase.regionserver.memstore.replication.threads";
   private final Configuration conf;
   // TODO this is a global level Q for all the ReplicationThreads? Should we have individual Qs for
   // each of the Threads. Discuss pros and cons and arrive
@@ -71,7 +73,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       this.connection = (ClusterConnection) ConnectionFactory.createConnection(this.conf);
     } catch (IOException ex) {
     }
-    int numWriterThreads = this.conf.getInt(HConstants.REGION_SERVER_HANDLER_COUNT,
+    int numWriterThreads = this.conf.getInt(MEMSTORE_REPLICATION_THREAD_COUNT,
         HConstants.DEFAULT_REGION_SERVER_HANDLER_COUNT);
     this.rpcRetryingCallerFactory = RpcRetryingCallerFactory
         .instantiate(connection.getConfiguration());

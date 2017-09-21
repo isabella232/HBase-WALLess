@@ -2176,6 +2176,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
   }
 
   @Override
+  @QosPriority(priority=HConstants.MEMSTORE_REPLICATION_QOS)
   public ReplicateMemstoreResponse replicateMemstore(RpcController controller,
       ReplicateMemstoreRequest request) throws ServiceException {
     // Probably pass this request also so that it can be used for the next replica.
