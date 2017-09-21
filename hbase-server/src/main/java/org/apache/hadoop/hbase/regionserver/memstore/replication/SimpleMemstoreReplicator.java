@@ -103,9 +103,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       RegionReplicaReplicator replicator)
       throws TimeoutIOException, InterruptedException, ExecutionException {
     CompletedFuture future = new CompletedFuture();
-    replicate(new Pair<List<MemstoreReplicationEntry>, RequestEntryHolder>(null,
-        new RequestEntryHolder(request, allCells, future)),
-      replicator);
+    replicate(new RequestEntryHolder(request, allCells, future), null, replicator);
     return future.get(replicationTimeoutNs);
   }
 
@@ -135,7 +133,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     return threadIndex;
   }
 
-  void replicate(Pair<List<MemstoreReplicationEntry>, RequestEntryHolder> pair,
+  void replicate(RequestEntryHolder request, List<MemstoreReplicationEntry> replicationEntries,
       RegionReplicaReplicator replicator) {
     int curRegionReplicaId = replicator.getCurRegionReplicaId();
     ReplicateMemstoreResponse.Builder builder = ReplicateMemstoreResponse.newBuilder();
@@ -150,7 +148,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         if (nextRegionLocation != null) {
           RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
               rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
-              nextRegionLocation.getRegionInfo(), null, pair);
+              nextRegionLocation.getRegionInfo(), null, request, replicationEntries);
           try {
             ReplicateMemstoreResponse response =
                 rpcRetryingCallerFactory.<ReplicateMemstoreResponse> newCaller()
@@ -179,16 +177,16 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         }
       }
     } finally {
-      markResponse(pair, builder.build());
+      markResponse(request, replicationEntries, builder.build());
     }
   }
 
-  private void markResponse(Pair<List<MemstoreReplicationEntry>, RequestEntryHolder> request,
-      ReplicateMemstoreResponse response) {
-    if (request.getSecond() != null) {
-      request.getSecond().getCompletedFuture().markResponse(response);
+  private void markResponse(RequestEntryHolder request,
+      List<MemstoreReplicationEntry> replicationEntries, ReplicateMemstoreResponse response) {
+    if (request != null) {
+      request.getCompletedFuture().markResponse(response);
     } else {
-      for (MemstoreReplicationEntry entry : request.getFirst()) {
+      for (MemstoreReplicationEntry entry : replicationEntries) {
         entry.getFuture().markResponse(response);
       }
     }
@@ -234,8 +232,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       if (entries == null || entries.isEmpty()) {
         return;
       }
-      SimpleMemstoreReplicator.this.replicate(
-        new Pair<List<MemstoreReplicationEntry>, RequestEntryHolder>(entries, null), replicator);
+      SimpleMemstoreReplicator.this.replicate(null, entries, replicator);
     }
  
     public void stop() {
@@ -281,14 +278,13 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     public RegionReplicaReplayCallable(ClusterConnection connection,
         RpcControllerFactory rpcControllerFactory, TableName tableName, HRegionLocation location,
         HRegionInfo regionInfo, byte[] row,
-        Pair<List<MemstoreReplicationEntry>, RequestEntryHolder> request) {
+        RequestEntryHolder request, List<MemstoreReplicationEntry> entries) {
       super(connection, rpcControllerFactory, location, tableName, row, regionInfo.getReplicaId());
       this.initialEncodedRegionName = regionInfo.getEncodedNameAsBytes();
-      if (request.getSecond() != null) {
-        this.request = request.getSecond();
+      if (request != null) {
+        this.request = request;
       } else {
         primaryRegion = true;
-        List<MemstoreReplicationEntry> entries = request.getFirst();
         if (entries != null && !entries.isEmpty()) {
           MemstoreReplicationEntry[] entriesArray = new MemstoreReplicationEntry[entries.size()];
           entriesArray = entries.toArray(entriesArray);

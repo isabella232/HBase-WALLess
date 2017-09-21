@@ -8203,6 +8203,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
+  // TODO this is some what ugly what is happening here. startRegionOperation doing this?!
+  // Can we do this on the real replicate request time?
   private void updateRegionLocation()
       throws IOException, RetriesExhaustedException, DoNotRetryIOException, InterruptedIOException {
     // update the region locations here.
