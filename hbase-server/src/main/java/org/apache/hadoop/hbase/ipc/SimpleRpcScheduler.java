@@ -131,6 +131,9 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
     if (replicationExecutor != null) {
       replicationExecutor.resizeQueues(conf);
     }
+    if (memstoreReplicationExecutor != null) {
+      memstoreReplicationExecutor.resizeQueues(conf);
+    }
 
     String callQueueType = conf.get(RpcExecutor.CALL_QUEUE_TYPE_CONF_KEY,
       RpcExecutor.CALL_QUEUE_TYPE_CONF_DEFAULT);
@@ -149,6 +152,7 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
     callExecutor.start(port);
     if (priorityExecutor != null) priorityExecutor.start(port);
     if (replicationExecutor != null) replicationExecutor.start(port);
+    if (memstoreReplicationExecutor != null) memstoreReplicationExecutor.start(port);
   }
 
   @Override
@@ -156,6 +160,7 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
     callExecutor.stop();
     if (priorityExecutor != null) priorityExecutor.stop();
     if (replicationExecutor != null) replicationExecutor.stop();
+    if (memstoreReplicationExecutor != null) memstoreReplicationExecutor.stop();
   }
 
   @Override
