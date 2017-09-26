@@ -5761,7 +5761,7 @@ public class TestHRegion {
       super(tableDir, wal, fs, confParam, regionInfo, htd, rsServices);
     }
     @Override
-    protected long getNextSequenceId(WAL wal) throws IOException {
+    protected long getNextSequenceId() throws IOException {
       return 42;
     }
   }

@@ -45,9 +45,9 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos;
 import org.apache.hadoop.hbase.testclassification.MediumTests;
 import org.apache.hadoop.hbase.testclassification.RegionServerTests;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.hbase.util.JVMClusterUtil.RegionServerThread;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.util.Threads;
-import org.apache.hadoop.hbase.util.JVMClusterUtil.RegionServerThread;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -265,8 +265,10 @@ public class TestRegionReplicasWith3Replicas {
       int keys = 0;
       int sum = 0;
       // try on tertiary region
-      for (StoreFile sf : tertiaryRegion.getStore(f).getStorefiles()) {
+      Assert.assertEquals(1, tertiaryRegion.getStore(f).getStorefilesCount());
+      for (StoreFile sf : tertiaryRegion.getStore(f).getCompactedFiles()) {
         // Our file does not exist anymore. was moved by the compaction above.
+        // but the compacted file will be existing
         LOG.debug(getRS().getFileSystem().exists(sf.getPath()));
         Assert.assertFalse(getRS().getFileSystem().exists(sf.getPath()));
 

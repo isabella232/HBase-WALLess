@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.hadoop.hbase.Cell;
@@ -34,10 +35,19 @@ public interface MemstoreReplicator {
       MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicaReplicator)
       throws IOException, InterruptedException, ExecutionException;
 
-  // TODO : Use this in  replica regions
   ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
       RegionReplicaReplicator regionReplicaReplicator)
       throws IOException, InterruptedException, ExecutionException;
 
+  //TODO : Shall we return our own CompletedFuture here and wait on the Future explicitly??
+  CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
+      MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
+      RegionReplicaReplicator regionReplicaReplicator)
+      throws IOException, InterruptedException, ExecutionException;
+
+  /**
+   * Picks up the next replication thread available when requested by the caller
+   * @return the next available replication thread
+   */
   public int getNextReplicationThread();
 }

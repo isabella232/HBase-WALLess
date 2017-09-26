@@ -3,6 +3,7 @@ package org.apache.hadoop.hbase.regionserver.memstore.replication;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -97,6 +98,19 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     return future.get(replicationTimeoutNs);
   }
 
+  @Override
+  public CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
+      MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
+      RegionReplicaReplicator regionReplicaReplicator)
+      throws IOException, InterruptedException, ExecutionException {
+    return wrap(replicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator));
+  }
+
+  private CompletableFuture<ReplicateMemstoreResponse>
+      wrap(ReplicateMemstoreResponse replicateMemstoreResponse) {
+    CompletableFuture<ReplicateMemstoreResponse> asyncFuture = new CompletableFuture<>();
+    return asyncFuture;
+  }
   @Override
   // directly waiting on this? Is it better to go with the rep threads here too???
   public ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
