@@ -54,11 +54,11 @@ import org.mockito.Mockito;
 
 @Category({ RegionServerTests.class, MediumTests.class })
 public class TestMemstoreRegionReplicaWithFailures {
-  private static final Log LOG = LogFactory.getLog(TestRegionReplicasWith3Replicas.class);
+  private static final Log LOG = LogFactory.getLog(TestMemstoreRegionReplicaWithFailures.class);
 
   private static final int NB_SERVERS = 3;
   private static Table table;
-  private static final byte[] row = "TestRegionReplicaWithFailures".getBytes();
+  private static final byte[] row = "TestMemstoreRegionReplicaWithFailures".getBytes();
 
   private static HRegionInfo hriPrimary;
   private static HRegionInfo hriSecondary;
@@ -149,7 +149,6 @@ public class TestMemstoreRegionReplicaWithFailures {
       closeTertiary(tertiaryOpenedIn);
     }
   }
-  
 
   @Test(timeout = 6000000)
   public void testFailWriteOnSecondary() throws Exception {

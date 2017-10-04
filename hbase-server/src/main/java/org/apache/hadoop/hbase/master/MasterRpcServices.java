@@ -273,7 +273,7 @@ public class MasterRpcServices extends RSRpcServices
    */
   @Override
   protected List<BlockingServiceAndInterface> getServices() {
-    List<BlockingServiceAndInterface> bssi = new ArrayList<>(5);
+    List<BlockingServiceAndInterface> bssi = new ArrayList<>(6);
     bssi.add(new BlockingServiceAndInterface(
       MasterService.newReflectiveBlockingService(this),
       MasterService.BlockingInterface.class));
@@ -282,6 +282,9 @@ public class MasterRpcServices extends RSRpcServices
       RegionServerStatusService.BlockingInterface.class));
     bssi.add(new BlockingServiceAndInterface(LockService.newReflectiveBlockingService(this),
         LockService.BlockingInterface.class));
+    bssi.add(new BlockingServiceAndInterface(
+      ReplicaRegionHealthService.newReflectiveBlockingService(this),
+      ReplicaRegionHealthService.BlockingInterface.class));
     bssi.addAll(super.getServices());
     return bssi;
   }

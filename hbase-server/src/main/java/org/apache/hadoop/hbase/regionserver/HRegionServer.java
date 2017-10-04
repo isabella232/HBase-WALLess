@@ -2361,12 +2361,13 @@ public class HRegionServer extends HasThread implements
     // java.util.HashSet's toString() method to print the coprocessor names.
     LOG.fatal("RegionServer abort: loaded coprocessors are: " +
         CoprocessorHost.getLoadedCoprocessors());
+    // TODO : test is failing here
     // Try and dump metrics if abort -- might give clue as to how fatal came about....
-    try {
+/*    try {
       LOG.info("Dump of metrics as JSON on abort: " + JSONBean.dumpRegionServerMetrics());
     } catch (MalformedObjectNameException | IOException e) {
       LOG.warn("Failed dumping metrics", e);
-    }
+    }*/
 
     // Do our best to report our abort to the master, but this may not work
     try {

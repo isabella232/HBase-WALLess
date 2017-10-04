@@ -133,13 +133,6 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     this.replicationThreads[index].regionQueue.offer(new Entry(replicator, entry.getSeq()));
   }
 
-  // TODO : round robin is fine but if round robin should we cache that thread index in the region
-  // replica? If on failure if the locations are udpated and so the regionreplicator we wil have to update
-  // the index?
-/*  private int getThreadForRegion(RegionReplicaReplicator replicator) {
-    return (replicator.getRegionInfo().hashCode() % this.replicationThreads.length);
-  }*/
-
   // called only when the region replicator is created
   @Override
   public synchronized int getNextReplicationThread() {
@@ -156,6 +149,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       // The write pipeline for replication will always be R1 -> R2 ->.. Rn
       // When there is a failure for any node, the current replica will try with its next and so on
       // Replica ids are like 0, 1, 2...
+      //TODO : If a RS goes down we assign the region to the same RS. So two replicas in same RS is 
+      // not right. Fix it in LB.
       for (int i = curRegionReplicaId + 1; i < replicator.getReplicasCount(); i++) {
         // Getting the location of the next Region Replica (in pipeline)
         HRegionLocation nextRegionLocation = replicator.getRegionLocation(i);
@@ -179,7 +174,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
             // To have a row specific lock here so that only one RPC will go from here to HM. There
             // may be other parallel handlers also trying to write to that replica.
             // Get all info where all success and where all failed. Just commented out the call.
-            // rs.reportReplicaRegionHealthChange(nextRegionLocation.getRegionInfo(), false);
+            LOG.warn("Marking "+nextRegionLocation.getRegionInfo()+ " as bad in META");
+            // We should mark it as good again?? How is the client going to know about it?
+            // Client side cache has to be updated on this call??
+            rs.reportReplicaRegionHealthChange(nextRegionLocation.getRegionInfo(), false);
             builder.addFailedReplicas(i);
             // We should mark the future with exception only after retrying with the other Replicas
             // so that the write is successful??

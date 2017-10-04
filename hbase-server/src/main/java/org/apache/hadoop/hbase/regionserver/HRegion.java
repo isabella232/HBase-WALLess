@@ -3379,8 +3379,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       memstoreEdits = new MemstoreEdits();
       addFamilyMapToMemstoreEdit(familyMaps.asMap(), memstoreEdits);
 
-/*      ReplicateMemstoreResponse response = replicateCurrentBatch(memstoreEdits, replicasOffered + 1,
-          maxSeqId);*/
       // shall we replicate this way only? But I think doing it like the WALEdit way will ensure
       // we reuse most of the code
       Action action = applyFamilyMapToMemstoreForMemstoreReplication(familyMaps, memstoreSize);
@@ -3736,10 +3734,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // that to be done.)
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
           memstoreEdits, regionReplicator);
-      if (response.getFailedReplicasCount() > 0) {
-        // update the location
-        updateLocationOnException();
-      }
+      checkIfMinWriteReplicSatisfied(response);
       // TODO : need to handle all exceptions - make things synchronous in terms of
       // replication to all the replicas. End the mvcc in case of exception
       return response;
@@ -8565,10 +8560,25 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       List<Cell> allCells) throws Exception {
     updateRegionLocation();
     try {
-      return this.memstoreReplicator.replicate(request, allCells, this.regionReplicator);
+      ReplicateMemstoreResponse response =
+          this.memstoreReplicator.replicate(request, allCells, this.regionReplicator);
+      if (response != null) {
+        checkIfMinWriteReplicSatisfied(response);
+      }
+      return response;
     } catch (TimeoutIOException | InterruptedException | ExecutionException e) {
       updateLocationOnException();
       throw e;
+    }
+  }
+
+  private void checkIfMinWriteReplicSatisfied(ReplicateMemstoreResponse response)
+      throws IOException {
+    if(response.getFailedReplicasCount() > 0) {
+      updateLocationOnException();
+      if(response.getFailedReplicasCount() > this.getTableDesc().getMinWriteReplica()) {
+        throw new IOException("Minimum write replica not satisfied "+this.getTableDesc().getMinWriteReplica());
+      }
     }
   }
 }

@@ -567,12 +567,22 @@ public class HTableDescriptor implements TableDescriptor, Comparable<HTableDescr
     return delegatee.getRegionReplication();
   }
 
+  @Override
+  public int getMinWriteReplica() {
+    return delegatee.getMinWriteReplica();
+  }
+
   /**
    * Sets the number of replicas per region.
    * @param regionReplication the replication factor per region
    */
   public HTableDescriptor setRegionReplication(int regionReplication) {
     getDelegateeForModification().setRegionReplication(regionReplication);
+    return this;
+  }
+
+  public HTableDescriptor setMinimumWriteReplica(int minWriteReplica) {
+    getDelegateeForModification().setMinimumWriteReplica(minWriteReplica);
     return this;
   }
 

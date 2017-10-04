@@ -125,6 +125,13 @@ public class TableDescriptorBuilder {
           = new Bytes(Bytes.toBytes(REGION_REPLICATION));
 
   /**
+   * The number of region replicas for the table.
+   */
+  @InterfaceAudience.Private
+  public static final String MIN_REGION_WRITE_REPLICATION = "MIN_REGION_WRITE_REPLICATION";
+  private static final Bytes MIN_REGION_WRITE_REPLICATION_KEY
+          = new Bytes(Bytes.toBytes(MIN_REGION_WRITE_REPLICATION));
+  /**
    * The flag to indicate whether or not the memstore should be
    * replicated for read-replicas (CONSISTENCY =&gt; TIMELINE).
    */
@@ -181,6 +188,8 @@ public class TableDescriptorBuilder {
   public static final long DEFAULT_MEMSTORE_FLUSH_SIZE = 1024 * 1024 * 128L;
 
   public static final int DEFAULT_REGION_REPLICATION = 1;
+
+  public static final int DEFAULT_MIN_REGION_WRITE_REPLICATION = 1;
 
   public static final boolean DEFAULT_REGION_MEMSTORE_REPLICATION = true;
 
@@ -1068,9 +1077,17 @@ public class TableDescriptorBuilder {
       return getOrDefault(REGION_REPLICATION_KEY, Integer::valueOf, DEFAULT_REGION_REPLICATION);
     }
 
+    @Override
+    public int getMinWriteReplica() {
+      return getOrDefault(MIN_REGION_WRITE_REPLICATION_KEY, Integer::valueOf, DEFAULT_MIN_REGION_WRITE_REPLICATION);
+    }
+
+    public ModifyableTableDescriptor setMinimumWriteReplica(int minWriteReplica) {
+      return setValue(MIN_REGION_WRITE_REPLICATION_KEY, Integer.toString(minWriteReplica));
+    }
+
     /**
      * Sets the number of replicas per region.
-     *
      * @param regionReplication the replication factor per region
      * @return the modifyable TD
      */
