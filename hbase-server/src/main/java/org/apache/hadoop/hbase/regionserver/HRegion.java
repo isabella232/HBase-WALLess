@@ -200,7 +200,6 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Multimap;
 import com.google.common.io.Closeables;
 
 @SuppressWarnings("deprecation")
@@ -3240,8 +3239,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     this.throwError = throwError;
   }
   
-  public Action batchReplayForMemstoreReplication(
-      Multimap<byte[], Cell> familyMaps, int replicasOffered, long maxSeqId) throws IOException {
+  public Action batchReplayForMemstoreReplication(NavigableMap<byte[], Collection<Cell>> familyMaps,
+      int replicasOffered, long maxSeqId) throws IOException {
     return batchMutateForMemstoreReplication(familyMaps, replicasOffered, maxSeqId);
   }
 
@@ -3281,14 +3280,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return batchOp.retCodeDetails;
   }
 
-  Action batchMutateForMemstoreReplication(
-      Multimap<byte[], Cell> familyMaps, int replicasOffered, long maxSeqId) throws IOException {
+  Action batchMutateForMemstoreReplication(NavigableMap<byte[], Collection<Cell>> familyMaps,
+      int replicasOffered, long maxSeqId) throws IOException {
     startRegionOperation(Operation.REPLAY_BATCH_MUTATE);
     try {
       // TODO We will be in replay mode. This will never happen. Do we need to check this for
       // replication also?
       // checkReadOnly();
-      checkResources();
+      // Should we call this or just leave it?? I think not to call it because primary is yet to update its
+      // size?? TODO - check for now commenting
+      //checkResources();
       if(throwError) {
         throw new IOException("Purposefully throwing error");
       }
@@ -3363,8 +3364,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       justification="Findbugs seems to be confused on this.")
   @SuppressWarnings("unchecked")
   private Action doMiniBatchMutateForMemstoreReplication(
-      Multimap<byte[], Cell> familyMaps, int replicasOffered, long maxSeqId) throws IOException {
-    MemstoreEdits memstoreEdits = null;
+      NavigableMap<byte[], Collection<Cell>> familyMaps, int replicasOffered, long maxSeqId)
+      throws IOException {
     boolean locked = false;
     // We dont need row locking here at all.. This method is executed at the replica regions. The
     // primary or other replica regions call RPC with a batch of Mutaions each containing Cells. We
@@ -3375,10 +3376,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     try {
       lock(this.updatesLock.readLock(), familyMaps.size());
       locked = true;
-
-      memstoreEdits = new MemstoreEdits();
-      addFamilyMapToMemstoreEdit(familyMaps.asMap(), memstoreEdits);
-
       // shall we replicate this way only? But I think doing it like the WALEdit way will ensure
       // we reuse most of the code
       Action action = applyFamilyMapToMemstoreForMemstoreReplication(familyMaps, memstoreSize);
@@ -4213,10 +4210,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * @param familyMap Map of Cells by family
    * @param memstoreSize
    */
-  private Action applyFamilyMapToMemstoreForMemstoreReplication(Multimap<byte[], Cell> familyMaps,
-      MemstoreSize memstoreSize) throws IOException {
+  private Action applyFamilyMapToMemstoreForMemstoreReplication(
+      NavigableMap<byte[], Collection<Cell>> familyMaps, MemstoreSize memstoreSize)
+      throws IOException {
     List<Action> actions = new ArrayList<>(familyMaps.size());
-    for (Entry<byte[], Collection<Cell>> e : familyMaps.asMap().entrySet()) {
+    for (Entry<byte[], Collection<Cell>> e : familyMaps.entrySet()) {
       HStore store = getHStore(e.getKey());
       Action action = store.addAsync(e.getValue(), memstoreSize);
       // This is a bug

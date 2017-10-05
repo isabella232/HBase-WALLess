@@ -27,6 +27,7 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -35,6 +36,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -1133,20 +1135,22 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
    * constructing MultiResponse to save a possible loop if caller doesn't need MultiResponse.
    * @param region
    * @param familyMaps
-   * @param replicasOffered 
-   * @param maxSeqId 
+   * @param replicasOffered
+   * @param maxSeqId
    * @return an array of OperationStatus which internally contains the OperationStatusCode and the
    *         exceptionMessage if any
    * @throws IOException
    */
-  private Action doReplayBatchOpForMemstoreReplication(
-      HRegion region, Multimap<byte[], Cell> familyMaps, int replicasOffered, long maxSeqId)
+  private Action doReplayBatchOpForMemstoreReplication(HRegion region,
+      NavigableMap<byte[], Collection<Cell>> familyMaps, int replicasOffered, long maxSeqId)
       throws IOException {
     try {
       //requestCount.add(familyMaps.size());
       // TODO may be need another counter
       if (!region.getRegionInfo().isMetaTable()) {
-        regionServer.cacheFlusher.reclaimMemStoreMemory();
+        // why is this been called here? For replica regions this should not be done. only when primary fills up we should
+       // do the snapshotting here and that too when primary says to do so?? - TODO - check
+        //regionServer.cacheFlusher.reclaimMemStoreMemory();
       }
       return region.batchReplayForMemstoreReplication(familyMaps, replicasOffered, maxSeqId);
     } finally {
@@ -2193,7 +2197,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       } catch (Exception e) {
         throw new ServiceException(e);
       }
-      ByteString regionName = request.getEncodedRegionName();;
+      ByteString regionName = request.getEncodedRegionName();
       int replicasOffered = request.getReplicasOffered();
       HRegion region = (HRegion) regionServer.getRegionByEncodedName(regionName.toStringUtf8());
       assert !(ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo()));
@@ -2208,7 +2212,9 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       // Separate the Cells in to a family specific Map so as to pass them to appropriate Memstores
       // when reached HRegion.
       // TODO in trunk, we have to use the shaded google class.
-      Multimap<byte[], Cell> familyMaps = ArrayListMultimap.create();
+      // Important change. Without this things just don't work. MultiMaps needs to be revisited
+      NavigableMap<byte[], Collection<Cell>> familyMaps =
+          new TreeMap<byte[], Collection<Cell>>(Bytes.BYTES_COMPARATOR);
       List<MemstoreReplicationEntry> entries = request.getEntryList();
       long maxSeqId = -1;
       int cellItr = 0;
@@ -2224,7 +2230,12 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           if (CellUtil.matchingFamily(cell, WALEdit.METAFAMILY)) {
             handleMetaMarkerCell(cell, region, replicasOffered);
           } else {
-            familyMaps.put(CellUtil.cloneFamily(cell), cell);
+            Collection<Cell> list = familyMaps.get(CellUtil.cloneFamily(cell));
+            if (list == null) {
+              list = new ArrayList<Cell>();
+            }
+            list.add(cell);
+            familyMaps.put(CellUtil.cloneFamily(cell), list);
           }
           CellUtil.setSequenceId(cell, entry.getSequenceId());
         }
