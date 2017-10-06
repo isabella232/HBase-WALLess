@@ -156,6 +156,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.MergeRegion
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest.RegionOpenInfo;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RegionReplicaHealthUpdateRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RegionReplicaHealthUpdateResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse.RegionOpeningState;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
@@ -2283,6 +2285,20 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
     }
   }
 
+  @Override
+  public RegionReplicaHealthUpdateResponse updateHealthStatus(RpcController controller,
+      RegionReplicaHealthUpdateRequest request) throws ServiceException {
+    ByteString encodedRegionName = request.getEncodedRegionName();
+    try {
+      HRegion region =
+          (HRegion) regionServer.getRegionByEncodedName(encodedRegionName.toStringUtf8());
+      region.markHealthStatus(request.getHealth());
+    } catch (NotServingRegionException e) {
+      LOG.error("Region not being served by this region server "+encodedRegionName.toStringUtf8());
+      throw new ServiceException(e);
+    }
+    return RegionReplicaHealthUpdateResponse.newBuilder().build();
+  }
   private void handleMetaMarkerCell(Cell cell, HRegion region, int replicasOffered)
       throws IOException {
     CompactionDescriptor compactionDesc = WALEdit.getCompaction(cell);

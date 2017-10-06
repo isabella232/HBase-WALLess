@@ -155,6 +155,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         // Getting the location of the next Region Replica (in pipeline)
         HRegionLocation nextRegionLocation = replicator.getRegionLocation(i);
         if (nextRegionLocation != null) {
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("Replicating from region " + replicator.getRegionLocation(curRegionReplicaId)
+                + "  to the next replica " + nextRegionLocation);
+          }
           RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
               rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
               nextRegionLocation.getRegionInfo(), null, request, replicationEntries);
@@ -163,8 +167,15 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
                 rpcRetryingCallerFactory.<ReplicateMemstoreResponse> newCaller()
                     .callWithRetries(callable, operationTimeout);
             // we need this because we may have a success after some failures.
-            // TODO is this the correct place to create Response?  After all we are not setting it any where.
-            builder.setReplicasCommitted(response.getReplicasCommitted() + 1);// Adding this write itelf as success.
+            builder.setReplicasCommitted(response.getReplicasCommitted() + 1);// Adding this write
+                                                                              // itelf as success.
+            if (response.getFailedReplicasCount() > 0) {
+              // Since only primary takes the decision of marking the META as bad we need
+              // to pass on this information till the primary
+              for (int replicaId : response.getFailedReplicasList()) {
+                builder.addFailedReplicas(replicaId);
+              }
+            }
             break;// Break the inner for loop
           } catch (IOException | RuntimeException e) {
             // TODO
@@ -173,11 +184,6 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
             // talk to META table. Need add new PB based RPC call.
             // To have a row specific lock here so that only one RPC will go from here to HM. There
             // may be other parallel handlers also trying to write to that replica.
-            // Get all info where all success and where all failed. Just commented out the call.
-            LOG.warn("Marking "+nextRegionLocation.getRegionInfo()+ " as bad in META");
-            // We should mark it as good again?? How is the client going to know about it?
-            // Client side cache has to be updated on this call??
-            rs.reportReplicaRegionHealthChange(nextRegionLocation.getRegionInfo(), false);
             builder.addFailedReplicas(i);
             // We should mark the future with exception only after retrying with the other Replicas
             // so that the write is successful??

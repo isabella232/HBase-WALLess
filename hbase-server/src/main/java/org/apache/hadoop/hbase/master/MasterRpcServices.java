@@ -78,11 +78,15 @@ import org.apache.hadoop.hbase.shaded.com.google.protobuf.RpcController;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.ServiceException;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.UnsafeByteOperations;
 import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
+import org.apache.hadoop.hbase.shaded.protobuf.RequestConverter;
 import org.apache.hadoop.hbase.shaded.protobuf.ResponseConverter;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.AdminService.BlockingInterface;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.CompactRegionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.CompactRegionResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.GetRegionInfoRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.GetRegionInfoResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RegionReplicaHealthUpdateRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RegionReplicaHealthUpdateResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.*;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.RegionStoreSequenceIds;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.NameStringPair;
@@ -2055,9 +2059,21 @@ public class MasterRpcServices extends RSRpcServices
     pbRegions.forEach((pbRegion) -> regions.add(HRegionInfo.convert(pbRegion)));
     try {
       this.master.getAssignmentManager().getRegionStateStore().updateReplicaRegionHealth(regions,
-          request.getGoodState());
-    } catch (IOException ioe) {
-      throw new ServiceException(ioe);
+        request.getGoodState());
+      // send an RPC to the region indicating to mark itself as BAD
+      for (HRegionInfo regionInfo : regions) {
+        ServerName regionServerOfRegion = this.master.getAssignmentManager().getRegionStates()
+            .getRegionServerOfRegion(regionInfo);
+        // create an RPC request to the region
+        BlockingInterface rsAdmin = this.master.getServerManager().getRsAdmin(regionServerOfRegion);
+        RegionReplicaHealthUpdateRequest healthChangeRequset = RequestConverter
+            .buildHealthChangeRequest(regionInfo, request.getGoodState());
+        RegionReplicaHealthUpdateResponse response =
+            rsAdmin.updateHealthStatus(null, healthChangeRequset);
+        // TODO : if there is an error here still fail the healthUpdate itself?? We should retry??
+      }
+    } catch (IOException e) {
+      throw new ServiceException(e);
     }
     return RegionReplicaHealthChangeResponse.newBuilder().build();
   }

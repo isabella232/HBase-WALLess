@@ -99,6 +99,14 @@ message OpenRegionResponse {
   }
 }
 
+message RegionReplicaHealthUpdateRequest {
+	required bytes encoded_region_name = 1;
+	required bool health = 2;
+}
+
+message RegionReplicaHealthUpdateResponse {
+
+}
 message WarmupRegionRequest {
 
     required RegionInfo regionInfo = 1;
@@ -354,4 +362,7 @@ service AdminService {
 
   rpc MergeRegions(MergeRegionsRequest)
     returns(MergeRegionsResponse);
+
+  rpc UpdateHealthStatus(RegionReplicaHealthUpdateRequest)
+ 	returns (RegionReplicaHealthUpdateResponse);
 }

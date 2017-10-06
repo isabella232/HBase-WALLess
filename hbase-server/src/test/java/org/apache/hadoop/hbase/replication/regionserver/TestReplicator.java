@@ -418,6 +418,13 @@ public class TestReplicator extends TestReplicationBase {
         // TODO Auto-generated method stub
         return null;
       }
+
+      @Override
+      public RegionReplicaHealthUpdateResponse updateHealthStatus(RpcController controller,
+          RegionReplicaHealthUpdateRequest request) throws ServiceException {
+        // TODO Auto-generated method stub
+        return null;
+      }
     }
 
     public class FailureInjectingReplicatorForTest extends ReplicatorForTest {

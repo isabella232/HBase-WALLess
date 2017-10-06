@@ -413,6 +413,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // whether the reads are enabled. This is different than readOnly, because readOnly is
     // static in the lifetime of the region, while readsEnabled is dynamic
     volatile boolean readsEnabled = true;
+    // indicates whether the current region(replica) is in good health to accept memstore edits
+    // This is usually set by master through an RPC call
+    volatile boolean badReplica = false;
 
     /**
      * Set flags that make this region read-only.
@@ -2784,6 +2787,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // Mark the end of flush
       try {
         // failure of this should not mean that we should call ABORT_FLUSH because primary has already flushed
+        // TODO : shall we wait for the response in this case??
         response = sendFlushRpc(FlushAction.COMMIT_FLUSH, flushOpSeqId, committedFiles, 1,
           writeNumber.getWriteNumber());
       } finally {
@@ -4772,6 +4776,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // when replicated
     try {
       CellUtil.setSequenceId(kv, writeEntry.getWriteNumber());
+      // Should we do async or wait for the response??
       replicateMetaCell(replicaOffered, kv);
     } finally {
       this.getMVCC().completeAndWait(writeEntry);
@@ -8202,6 +8207,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   @edu.umd.cs.findbugs.annotations.SuppressWarnings(value="SF_SWITCH_FALLTHROUGH",
     justification="Intentional")
   public void startRegionOperation(Operation op) throws IOException {
+    checkHealthStatus();
     switch (op) {
       case GET:  // read operations
       case SCAN:
@@ -8246,6 +8252,15 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     } catch (Exception e) {
       lock.readLock().unlock();
       throw new IOException(e);
+    }
+  }
+
+  private void checkHealthStatus() throws DoNotRetryIOException {
+    synchronized (writestate) {
+      if (writestate.badReplica) {
+        LOG.warn("Region " + this.getRegionInfo() + " found in BAD health");
+        throw new DoNotRetryIOException("Region " + this.getRegionInfo() + " found in BAD health");
+      }
     }
   }
 
@@ -8572,11 +8587,39 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   private void checkIfMinWriteReplicSatisfied(ReplicateMemstoreResponse response)
       throws IOException {
-    if(response.getFailedReplicasCount() > 0) {
+    if (response.getFailedReplicasCount() > 0) {
       updateLocationOnException();
-      if(response.getFailedReplicasCount() > this.getTableDesc().getMinWriteReplica()) {
-        throw new IOException("Minimum write replica not satisfied "+this.getTableDesc().getMinWriteReplica());
+      // only primary should do this
+      if (this.getRegionInfo().getReplicaId() == RegionReplicaUtil.DEFAULT_REPLICA_ID) {
+        // mark the replicas as bad in META
+        markBadReplicasInMETA(response);
+        if (response.getFailedReplicasCount() > this.getTableDesc().getMinWriteReplica()) {
+          throw new IOException(
+              "Minimum write replica not satisfied " + this.getTableDesc().getMinWriteReplica());
+        }
       }
+    }
+  }
+
+  private void markBadReplicasInMETA(ReplicateMemstoreResponse response) {
+    List<Integer> failedReplicasList = response.getFailedReplicasList();
+    for (int replicaId : failedReplicasList) {
+      HRegionInfo regionInfoForReplica =
+          RegionReplicaUtil.getRegionInfoForReplica(this.getRegionInfo(), replicaId);
+      LOG.warn("Marking " + regionInfoForReplica + " as bad in META");
+      this.getRegionServerServices().reportReplicaRegionHealthChange(regionInfoForReplica, false);
+    }
+  }
+
+  /**
+   * Marks the health of this region replica
+   * @param health
+   */
+  public void markHealthStatus(boolean health) {
+    assert !RegionReplicaUtil.isDefaultReplica(this.getRegionInfo());
+    synchronized (writestate) {
+      LOG.info("Marking " + this.getRegionInfo() + " as " + (health ? "GOOD" : "BAD"));
+      writestate.badReplica = !health;
     }
   }
 }

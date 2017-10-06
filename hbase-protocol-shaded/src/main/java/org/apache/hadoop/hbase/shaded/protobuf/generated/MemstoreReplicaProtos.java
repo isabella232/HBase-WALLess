@@ -36,10 +36,18 @@ public final class MemstoreReplicaProtos {
     int getAssociatedCellCount();
 
     /**
+     * <pre>
+     * TODO seems we can remove this?
+     * </pre>
+     *
      * <code>required uint64 sequence_id = 2;</code>
      */
     boolean hasSequenceId();
     /**
+     * <pre>
+     * TODO seems we can remove this?
+     * </pre>
+     *
      * <code>required uint64 sequence_id = 2;</code>
      */
     long getSequenceId();
@@ -149,12 +157,20 @@ public final class MemstoreReplicaProtos {
     public static final int SEQUENCE_ID_FIELD_NUMBER = 2;
     private long sequenceId_;
     /**
+     * <pre>
+     * TODO seems we can remove this?
+     * </pre>
+     *
      * <code>required uint64 sequence_id = 2;</code>
      */
     public boolean hasSequenceId() {
       return ((bitField0_ & 0x00000002) == 0x00000002);
     }
     /**
+     * <pre>
+     * TODO seems we can remove this?
+     * </pre>
+     *
      * <code>required uint64 sequence_id = 2;</code>
      */
     public long getSequenceId() {
@@ -536,18 +552,30 @@ public final class MemstoreReplicaProtos {
 
       private long sequenceId_ ;
       /**
+       * <pre>
+       * TODO seems we can remove this?
+       * </pre>
+       *
        * <code>required uint64 sequence_id = 2;</code>
        */
       public boolean hasSequenceId() {
         return ((bitField0_ & 0x00000002) == 0x00000002);
       }
       /**
+       * <pre>
+       * TODO seems we can remove this?
+       * </pre>
+       *
        * <code>required uint64 sequence_id = 2;</code>
        */
       public long getSequenceId() {
         return sequenceId_;
       }
       /**
+       * <pre>
+       * TODO seems we can remove this?
+       * </pre>
+       *
        * <code>required uint64 sequence_id = 2;</code>
        */
       public Builder setSequenceId(long value) {
@@ -557,6 +585,10 @@ public final class MemstoreReplicaProtos {
         return this;
       }
       /**
+       * <pre>
+       * TODO seems we can remove this?
+       * </pre>
+       *
        * <code>required uint64 sequence_id = 2;</code>
        */
       public Builder clearSequenceId() {
@@ -1567,14 +1599,26 @@ public final class MemstoreReplicaProtos {
       org.apache.hadoop.hbase.shaded.com.google.protobuf.MessageOrBuilder {
 
     /**
+     * <pre>
+     * TODO add a max sequence_id field. 
+     * </pre>
+     *
      * <code>repeated uint32 failed_replicas = 1;</code>
      */
     java.util.List<java.lang.Integer> getFailedReplicasList();
     /**
+     * <pre>
+     * TODO add a max sequence_id field. 
+     * </pre>
+     *
      * <code>repeated uint32 failed_replicas = 1;</code>
      */
     int getFailedReplicasCount();
     /**
+     * <pre>
+     * TODO add a max sequence_id field. 
+     * </pre>
+     *
      * <code>repeated uint32 failed_replicas = 1;</code>
      */
     int getFailedReplicas(int index);
@@ -1689,6 +1733,10 @@ public final class MemstoreReplicaProtos {
     public static final int FAILED_REPLICAS_FIELD_NUMBER = 1;
     private java.util.List<java.lang.Integer> failedReplicas_;
     /**
+     * <pre>
+     * TODO add a max sequence_id field. 
+     * </pre>
+     *
      * <code>repeated uint32 failed_replicas = 1;</code>
      */
     public java.util.List<java.lang.Integer>
@@ -1696,12 +1744,20 @@ public final class MemstoreReplicaProtos {
       return failedReplicas_;
     }
     /**
+     * <pre>
+     * TODO add a max sequence_id field. 
+     * </pre>
+     *
      * <code>repeated uint32 failed_replicas = 1;</code>
      */
     public int getFailedReplicasCount() {
       return failedReplicas_.size();
     }
     /**
+     * <pre>
+     * TODO add a max sequence_id field. 
+     * </pre>
+     *
      * <code>repeated uint32 failed_replicas = 1;</code>
      */
     public int getFailedReplicas(int index) {
@@ -2058,6 +2114,10 @@ public final class MemstoreReplicaProtos {
          }
       }
       /**
+       * <pre>
+       * TODO add a max sequence_id field. 
+       * </pre>
+       *
        * <code>repeated uint32 failed_replicas = 1;</code>
        */
       public java.util.List<java.lang.Integer>
@@ -2065,18 +2125,30 @@ public final class MemstoreReplicaProtos {
         return java.util.Collections.unmodifiableList(failedReplicas_);
       }
       /**
+       * <pre>
+       * TODO add a max sequence_id field. 
+       * </pre>
+       *
        * <code>repeated uint32 failed_replicas = 1;</code>
        */
       public int getFailedReplicasCount() {
         return failedReplicas_.size();
       }
       /**
+       * <pre>
+       * TODO add a max sequence_id field. 
+       * </pre>
+       *
        * <code>repeated uint32 failed_replicas = 1;</code>
        */
       public int getFailedReplicas(int index) {
         return failedReplicas_.get(index);
       }
       /**
+       * <pre>
+       * TODO add a max sequence_id field. 
+       * </pre>
+       *
        * <code>repeated uint32 failed_replicas = 1;</code>
        */
       public Builder setFailedReplicas(
@@ -2087,6 +2159,10 @@ public final class MemstoreReplicaProtos {
         return this;
       }
       /**
+       * <pre>
+       * TODO add a max sequence_id field. 
+       * </pre>
+       *
        * <code>repeated uint32 failed_replicas = 1;</code>
        */
       public Builder addFailedReplicas(int value) {
@@ -2096,6 +2172,10 @@ public final class MemstoreReplicaProtos {
         return this;
       }
       /**
+       * <pre>
+       * TODO add a max sequence_id field. 
+       * </pre>
+       *
        * <code>repeated uint32 failed_replicas = 1;</code>
        */
       public Builder addAllFailedReplicas(
@@ -2107,6 +2187,10 @@ public final class MemstoreReplicaProtos {
         return this;
       }
       /**
+       * <pre>
+       * TODO add a max sequence_id field. 
+       * </pre>
+       *
        * <code>repeated uint32 failed_replicas = 1;</code>
        */
       public Builder clearFailedReplicas() {

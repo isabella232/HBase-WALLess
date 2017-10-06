@@ -18,6 +18,8 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.List;
@@ -25,6 +27,7 @@ import java.util.List;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.DoNotRetryIOException;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
@@ -151,11 +154,9 @@ public class TestRegionReplicasWithRestartScenarios {
     try {
       List<Region> onlineRegions = getRS().getOnlineRegions();
       HRegionInfo region = onlineRegions.get(0).getRegionInfo();
-      HRegionInfo tertiaryRegionInfo = RegionReplicaUtil.getRegionInfoForReplica(region, 2);
       for (RegionServerThread rs : HTU.getMiniHBaseCluster().getRegionServerThreads()) {
         for (Region r : rs.getRegionServer().getOnlineRegions(table.getName())) {
           if (r.getRegionInfo().getReplicaId() == 2) {
-            LOG.info("Aborting region server hosting tertiary region replica");
             ((HRegion)r).throwErrorOnMemstoreReplay(true);
             tertiaryRegion = (HRegion)r;
             //rs.getRegionServer().abort("for test");
@@ -176,6 +177,24 @@ public class TestRegionReplicasWithRestartScenarios {
       get.setReplicaId(1);
       Result result = table.get(get);
       Assert.assertArrayEquals(row, result.getValue(f, null));
+      // Getting the same row from replica 3 should throw an exception to the client
+      row = Bytes.toBytes(String.valueOf(100));
+      get = new Get(row);
+      get.setConsistency(Consistency.TIMELINE);
+      get.setReplicaId(2);
+      try {
+        table.get(get);
+        fail("Test should have got an exception");
+      } catch (Exception e) {
+        assertTrue(e instanceof DoNotRetryIOException);
+      }
+      // again trying to write - this time tertiary should be avoided if the cache was actually cleared
+      // TODO : The client should not be getting the tertiary region itself
+      data = Bytes.toBytes(String.valueOf(101));
+      put = new Put(data);
+      put.setDurability(Durability.SKIP_WAL);
+      put.addColumn(f, null, data);
+      table.put(put);
     } finally {
       if (tertiaryRegion != null) {
         tertiaryRegion.throwErrorOnMemstoreReplay(false);

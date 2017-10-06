@@ -73,6 +73,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.MergeRegion
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.MergeRegionsResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RegionReplicaHealthUpdateRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RegionReplicaHealthUpdateResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RollWALWriterRequest;
@@ -761,5 +763,12 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
   public boolean reportReplicaRegionHealthChange(HRegionInfo region, boolean good) {
     // TODO Auto-generated method stub
     return false;
+  }
+
+  @Override
+  public RegionReplicaHealthUpdateResponse updateHealthStatus(RpcController controller,
+      RegionReplicaHealthUpdateRequest request) throws ServiceException {
+    // TODO Auto-generated method stub
+    return null;
   }
 }
