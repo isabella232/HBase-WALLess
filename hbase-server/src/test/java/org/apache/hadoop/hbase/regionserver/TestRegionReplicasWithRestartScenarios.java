@@ -189,12 +189,17 @@ public class TestRegionReplicasWithRestartScenarios {
         assertTrue(e instanceof DoNotRetryIOException);
       }
       // again trying to write - this time tertiary should be avoided if the cache was actually cleared
-      // TODO : The client should not be getting the tertiary region itself
       data = Bytes.toBytes(String.valueOf(101));
       put = new Put(data);
       put.setDurability(Durability.SKIP_WAL);
       put.addColumn(f, null, data);
       table.put(put);
+      row = Bytes.toBytes(String.valueOf(101));
+      get = new Get(row);
+      get.setConsistency(Consistency.TIMELINE);
+      get.setReplicaId(1);
+      result = table.get(get);
+      Assert.assertArrayEquals(row, result.getValue(f, null));
     } finally {
       if (tertiaryRegion != null) {
         tertiaryRegion.throwErrorOnMemstoreReplay(false);

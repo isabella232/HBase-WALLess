@@ -1045,14 +1045,13 @@ public class MetaTableAccessor {
                                                    final int replicaId) {
     ServerName serverName = getServerName(r, replicaId);
     long seqNum = getSeqNumDuringOpen(r, replicaId);
-    // for now not changing the HRegionLocation to cache the 'health'.
-    boolean healthStatus = getHealthStatus(r, replicaId);
-    //if (healthStatus) {
+    if (getHealthStatus(r, replicaId)) {
+      // only if healthStatus is good take that location.
       HRegionInfo replicaInfo = RegionReplicaUtil.getRegionInfoForReplica(regionInfo, replicaId);
       return new HRegionLocation(replicaInfo, serverName, seqNum);
-    //} else {
-      //return null;
-    //}
+    } else {
+      return null;
+    }
   }
 
   /**

@@ -8248,7 +8248,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       if (coprocessorHost != null) {
         coprocessorHost.postStartRegionOperation(op);
       }
-      updateRegionLocation();
+      if (op != Operation.REPLAY_BATCH_MUTATE) {
+        // The update region location would have already happened when the replication had to be done
+        updateRegionLocation();
+      }
     } catch (Exception e) {
       lock.readLock().unlock();
       throw new IOException(e);
@@ -8284,6 +8287,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
             replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
           } else {
             replicationThreadIndex = regionReplicator.getReplicationThreadIndex();
+          }
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("The number of locations " + locations.size());
+            for (int i = 0; i < locations.size(); i++) {
+              LOG.debug("The location is " + locations.getRegionLocation(i));
+            }
           }
           regionReplicator =
               new RegionReplicaReplicator(this.getRegionInfo(), locations, replicationThreadIndex);
