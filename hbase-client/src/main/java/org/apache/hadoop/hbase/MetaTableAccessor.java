@@ -984,7 +984,8 @@ public class MetaTableAccessor {
     Cell cell = r.getColumnLatestCell(getCatalogFamily(), getReplicaHealthColumn(replicaId));
     //In good health
     if (cell == null || cell.getValueLength() == 0) return true;
-    return Boolean.valueOf(Bytes.toString(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength()));
+    byte[] val = Bytes.copy(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
+    return Bytes.toBoolean(val);
   }
 
   /**
@@ -2100,6 +2101,9 @@ public class MetaTableAccessor {
       Bytes.toBytes(sn.getStartcode()));
     p.addImmutable(getCatalogFamily(), getSeqNumColumn(replicaId), time,
       Bytes.toBytes(openSeqNum));
+    // can we always add health column here
+    p.addImmutable(getCatalogFamily(), getReplicaHealthColumn(replicaId), time,
+      Bytes.toBytes(true));
     return p;
   }
 

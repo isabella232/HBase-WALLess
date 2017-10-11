@@ -34,6 +34,8 @@ message ReplicateMemstoreRequest {
   required bytes encoded_region_name = 1;
   required uint32 replicas_offered = 2;
   repeated MemstoreReplicationEntry entry = 3;
+  // It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+  repeated uint32 replicas = 4;
 }
 
 message ReplicateMemstoreResponse {

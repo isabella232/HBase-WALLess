@@ -691,6 +691,19 @@ public final class MemstoreReplicaProtos {
      */
     org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntryOrBuilder getEntryOrBuilder(
         int index);
+
+    /**
+     * <code>repeated uint32 replicas = 4;</code>
+     */
+    java.util.List<java.lang.Integer> getReplicasList();
+    /**
+     * <code>repeated uint32 replicas = 4;</code>
+     */
+    int getReplicasCount();
+    /**
+     * <code>repeated uint32 replicas = 4;</code>
+     */
+    int getReplicas(int index);
   }
   /**
    * Protobuf type {@code hbase.pb.ReplicateMemstoreRequest}
@@ -707,6 +720,7 @@ public final class MemstoreReplicaProtos {
       encodedRegionName_ = org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString.EMPTY;
       replicasOffered_ = 0;
       entry_ = java.util.Collections.emptyList();
+      replicas_ = java.util.Collections.emptyList();
     }
 
     @java.lang.Override
@@ -756,6 +770,27 @@ public final class MemstoreReplicaProtos {
                   input.readMessage(org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry.PARSER, extensionRegistry));
               break;
             }
+            case 32: {
+              if (!((mutable_bitField0_ & 0x00000008) == 0x00000008)) {
+                replicas_ = new java.util.ArrayList<java.lang.Integer>();
+                mutable_bitField0_ |= 0x00000008;
+              }
+              replicas_.add(input.readUInt32());
+              break;
+            }
+            case 34: {
+              int length = input.readRawVarint32();
+              int limit = input.pushLimit(length);
+              if (!((mutable_bitField0_ & 0x00000008) == 0x00000008) && input.getBytesUntilLimit() > 0) {
+                replicas_ = new java.util.ArrayList<java.lang.Integer>();
+                mutable_bitField0_ |= 0x00000008;
+              }
+              while (input.getBytesUntilLimit() > 0) {
+                replicas_.add(input.readUInt32());
+              }
+              input.popLimit(limit);
+              break;
+            }
           }
         }
       } catch (org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException e) {
@@ -766,6 +801,9 @@ public final class MemstoreReplicaProtos {
       } finally {
         if (((mutable_bitField0_ & 0x00000004) == 0x00000004)) {
           entry_ = java.util.Collections.unmodifiableList(entry_);
+        }
+        if (((mutable_bitField0_ & 0x00000008) == 0x00000008)) {
+          replicas_ = java.util.Collections.unmodifiableList(replicas_);
         }
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -849,6 +887,28 @@ public final class MemstoreReplicaProtos {
       return entry_.get(index);
     }
 
+    public static final int REPLICAS_FIELD_NUMBER = 4;
+    private java.util.List<java.lang.Integer> replicas_;
+    /**
+     * <code>repeated uint32 replicas = 4;</code>
+     */
+    public java.util.List<java.lang.Integer>
+        getReplicasList() {
+      return replicas_;
+    }
+    /**
+     * <code>repeated uint32 replicas = 4;</code>
+     */
+    public int getReplicasCount() {
+      return replicas_.size();
+    }
+    /**
+     * <code>repeated uint32 replicas = 4;</code>
+     */
+    public int getReplicas(int index) {
+      return replicas_.get(index);
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -884,6 +944,9 @@ public final class MemstoreReplicaProtos {
       for (int i = 0; i < entry_.size(); i++) {
         output.writeMessage(3, entry_.get(i));
       }
+      for (int i = 0; i < replicas_.size(); i++) {
+        output.writeUInt32(4, replicas_.get(i));
+      }
       unknownFields.writeTo(output);
     }
 
@@ -903,6 +966,15 @@ public final class MemstoreReplicaProtos {
       for (int i = 0; i < entry_.size(); i++) {
         size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, entry_.get(i));
+      }
+      {
+        int dataSize = 0;
+        for (int i = 0; i < replicas_.size(); i++) {
+          dataSize += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+            .computeUInt32SizeNoTag(replicas_.get(i));
+        }
+        size += dataSize;
+        size += 1 * getReplicasList().size();
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -933,6 +1005,8 @@ public final class MemstoreReplicaProtos {
       }
       result = result && getEntryList()
           .equals(other.getEntryList());
+      result = result && getReplicasList()
+          .equals(other.getReplicasList());
       result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
@@ -955,6 +1029,10 @@ public final class MemstoreReplicaProtos {
       if (getEntryCount() > 0) {
         hash = (37 * hash) + ENTRY_FIELD_NUMBER;
         hash = (53 * hash) + getEntryList().hashCode();
+      }
+      if (getReplicasCount() > 0) {
+        hash = (37 * hash) + REPLICAS_FIELD_NUMBER;
+        hash = (53 * hash) + getReplicasList().hashCode();
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -1085,6 +1163,8 @@ public final class MemstoreReplicaProtos {
         } else {
           entryBuilder_.clear();
         }
+        replicas_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000008);
         return this;
       }
 
@@ -1126,6 +1206,11 @@ public final class MemstoreReplicaProtos {
         } else {
           result.entry_ = entryBuilder_.build();
         }
+        if (((bitField0_ & 0x00000008) == 0x00000008)) {
+          replicas_ = java.util.Collections.unmodifiableList(replicas_);
+          bitField0_ = (bitField0_ & ~0x00000008);
+        }
+        result.replicas_ = replicas_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -1199,6 +1284,16 @@ public final class MemstoreReplicaProtos {
               entryBuilder_.addAllMessages(other.entry_);
             }
           }
+        }
+        if (!other.replicas_.isEmpty()) {
+          if (replicas_.isEmpty()) {
+            replicas_ = other.replicas_;
+            bitField0_ = (bitField0_ & ~0x00000008);
+          } else {
+            ensureReplicasIsMutable();
+            replicas_.addAll(other.replicas_);
+          }
+          onChanged();
         }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
@@ -1544,6 +1639,72 @@ public final class MemstoreReplicaProtos {
           entry_ = null;
         }
         return entryBuilder_;
+      }
+
+      private java.util.List<java.lang.Integer> replicas_ = java.util.Collections.emptyList();
+      private void ensureReplicasIsMutable() {
+        if (!((bitField0_ & 0x00000008) == 0x00000008)) {
+          replicas_ = new java.util.ArrayList<java.lang.Integer>(replicas_);
+          bitField0_ |= 0x00000008;
+         }
+      }
+      /**
+       * <code>repeated uint32 replicas = 4;</code>
+       */
+      public java.util.List<java.lang.Integer>
+          getReplicasList() {
+        return java.util.Collections.unmodifiableList(replicas_);
+      }
+      /**
+       * <code>repeated uint32 replicas = 4;</code>
+       */
+      public int getReplicasCount() {
+        return replicas_.size();
+      }
+      /**
+       * <code>repeated uint32 replicas = 4;</code>
+       */
+      public int getReplicas(int index) {
+        return replicas_.get(index);
+      }
+      /**
+       * <code>repeated uint32 replicas = 4;</code>
+       */
+      public Builder setReplicas(
+          int index, int value) {
+        ensureReplicasIsMutable();
+        replicas_.set(index, value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated uint32 replicas = 4;</code>
+       */
+      public Builder addReplicas(int value) {
+        ensureReplicasIsMutable();
+        replicas_.add(value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated uint32 replicas = 4;</code>
+       */
+      public Builder addAllReplicas(
+          java.lang.Iterable<? extends java.lang.Integer> values) {
+        ensureReplicasIsMutable();
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, replicas_);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated uint32 replicas = 4;</code>
+       */
+      public Builder clearReplicas() {
+        replicas_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000008);
+        onChanged();
+        return this;
       }
       public final Builder setUnknownFields(
           final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -2306,15 +2467,15 @@ public final class MemstoreReplicaProtos {
     java.lang.String[] descriptorData = {
       "\n\025MemstoreReplica.proto\022\010hbase.pb\"N\n\030Mem" +
       "storeReplicationEntry\022\035\n\025associated_cell" +
-      "_count\030\001 \002(\r\022\023\n\013sequence_id\030\002 \002(\004\"\204\001\n\030Re" +
+      "_count\030\001 \002(\r\022\023\n\013sequence_id\030\002 \002(\004\"\226\001\n\030Re" +
       "plicateMemstoreRequest\022\033\n\023encoded_region" +
       "_name\030\001 \002(\014\022\030\n\020replicas_offered\030\002 \002(\r\0221\n" +
       "\005entry\030\003 \003(\0132\".hbase.pb.MemstoreReplicat" +
-      "ionEntry\"P\n\031ReplicateMemstoreResponse\022\027\n" +
-      "\017failed_replicas\030\001 \003(\r\022\032\n\022replicas_commi" +
-      "tted\030\002 \002(\rBR\n1org.apache.hadoop.hbase.sh" +
-      "aded.protobuf.generatedB\025MemstoreReplica",
-      "ProtosH\001\210\001\000\240\001\001"
+      "ionEntry\022\020\n\010replicas\030\004 \003(\r\"P\n\031ReplicateM" +
+      "emstoreResponse\022\027\n\017failed_replicas\030\001 \003(\r" +
+      "\022\032\n\022replicas_committed\030\002 \002(\rBR\n1org.apac" +
+      "he.hadoop.hbase.shaded.protobuf.generate",
+      "dB\025MemstoreReplicaProtosH\001\210\001\000\240\001\001"
     };
     org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -2339,7 +2500,7 @@ public final class MemstoreReplicaProtos {
     internal_static_hbase_pb_ReplicateMemstoreRequest_fieldAccessorTable = new
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_hbase_pb_ReplicateMemstoreRequest_descriptor,
-        new java.lang.String[] { "EncodedRegionName", "ReplicasOffered", "Entry", });
+        new java.lang.String[] { "EncodedRegionName", "ReplicasOffered", "Entry", "Replicas", });
     internal_static_hbase_pb_ReplicateMemstoreResponse_descriptor =
       getDescriptor().getMessageTypes().get(2);
     internal_static_hbase_pb_ReplicateMemstoreResponse_fieldAccessorTable = new

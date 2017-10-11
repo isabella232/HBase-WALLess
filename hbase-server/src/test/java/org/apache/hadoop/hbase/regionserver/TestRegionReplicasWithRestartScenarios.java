@@ -27,12 +27,14 @@ import java.util.List;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.BadReplicaException;
 import org.apache.hadoop.hbase.DoNotRetryIOException;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Consistency;
 import org.apache.hadoop.hbase.client.Durability;
 import org.apache.hadoop.hbase.client.Get;
@@ -203,6 +205,144 @@ public class TestRegionReplicasWithRestartScenarios {
     } finally {
       if (tertiaryRegion != null) {
         tertiaryRegion.throwErrorOnMemstoreReplay(false);
+      }
+    }
+  }
+
+  @Test(timeout = 6000000)
+  public void testFailWriteOnTertiaryWhenTertiaryIsDown1() throws Exception {
+    Pair<OpenedIn, OpenedIn> pair = null;
+    OpenedIn tertiaryOpenedIn = null;
+    HRegion tertiaryRegion = null;
+    try {
+      for (RegionServerThread rs : HTU.getMiniHBaseCluster().getRegionServerThreads()) {
+        for (Region r : rs.getRegionServer().getOnlineRegions(table.getName())) {
+          if (r.getRegionInfo().getReplicaId() == 2) {
+            ((HRegion)r).throwErrorOnMemstoreReplay(true);
+            tertiaryRegion = (HRegion)r;
+            break;
+          }
+        }
+      }
+      List<Region> onlineRegions = getRS().getOnlineRegions();
+      HRegionInfo region = onlineRegions.get(0).getRegionInfo();
+      byte[] data = Bytes.toBytes(String.valueOf(100));
+      Put put = new Put(data);
+      put.setDurability(Durability.SKIP_WAL);
+      put.addColumn(f, null, data);
+      table.put(put);
+      // just sleeping to see if the value is visible
+      // try directly Get against region replica
+      byte[] row = Bytes.toBytes(String.valueOf(100));
+      Get get = new Get(row);
+      get.setConsistency(Consistency.TIMELINE);
+      get.setReplicaId(1);
+      Result result = table.get(get);
+      Assert.assertArrayEquals(row, result.getValue(f, null));
+      // Getting the same row from replica 3 should throw an exception to the client
+      row = Bytes.toBytes(String.valueOf(100));
+      get = new Get(row);
+      get.setConsistency(Consistency.TIMELINE);
+      get.setReplicaId(2);
+      try {
+        table.get(get);
+        fail("Test should have got an exception");
+      } catch (Exception e) {
+        // If users get this issue. They should actually try to refresh the cache or
+        // create a new connection
+        assertTrue(e instanceof BadReplicaException);
+      }
+
+      for (RegionServerThread rs : HTU.getMiniHBaseCluster().getRegionServerThreads()) {
+        for (Region r : rs.getRegionServer().getOnlineRegions(table.getName())) {
+          if (r.getRegionInfo().getReplicaId() == 2) {
+            tertiaryRegion = (HRegion)r;
+            rs.getRegionServer().abort("for test");
+            break;
+          }
+        }
+      }
+      //Wait for reassignment
+      Thread.sleep(2000);
+      // Getting the same row from replica 3 should throw an exception to the client
+      row = Bytes.toBytes(String.valueOf(100));
+      get = new Get(row);
+      get.setConsistency(Consistency.TIMELINE);
+      get.setReplicaId(2);
+      try {
+        result = table.get(get);
+        // no result will be there
+        Assert.assertArrayEquals(null, result.getValue(f, null));
+        // wont' get any exception
+      } catch (Exception e) {
+        fail("Cannot get an exception");
+      }
+    } finally {
+      if (tertiaryRegion != null) {
+        tertiaryRegion.throwErrorOnMemstoreReplay(false);
+      }
+    }
+  }
+  
+  @Test(timeout = 6000000)
+  public void testFailWriteOnSecondaryWhenSecondaryisDown() throws Exception {
+    Pair<OpenedIn, OpenedIn> pair = null;
+    OpenedIn secondaryOpenedIn = null;
+    HRegion secondaryRegion = null;
+    try {
+      List<Region> onlineRegions = getRS().getOnlineRegions();
+      HRegionInfo region = onlineRegions.get(0).getRegionInfo();
+      for (RegionServerThread rs : HTU.getMiniHBaseCluster().getRegionServerThreads()) {
+        for (Region r : rs.getRegionServer().getOnlineRegions(table.getName())) {
+          if (r.getRegionInfo().getReplicaId() == 1) {
+            ((HRegion) r).throwErrorOnMemstoreReplay(true);
+            secondaryRegion = (HRegion) r;
+            // rs.getRegionServer().abort("for test");
+            break;
+          }
+        }
+      }
+      byte[] data = Bytes.toBytes(String.valueOf(100));
+      Put put = new Put(data);
+      put.setDurability(Durability.SKIP_WAL);
+      put.addColumn(f, null, data);
+      table.put(put);
+      // just sleeping to see if the value is visible
+      // try directly Get against region replica
+      byte[] row = Bytes.toBytes(String.valueOf(100));
+      Get get = new Get(row);
+      get.setConsistency(Consistency.TIMELINE);
+      get.setReplicaId(2);
+      Result result = table.get(get);
+      Assert.assertArrayEquals(row, result.getValue(f, null));
+      // Getting the same row from replica 3 should throw an exception to the client
+      row = Bytes.toBytes(String.valueOf(100));
+      get = new Get(row);
+      get.setConsistency(Consistency.TIMELINE);
+      get.setReplicaId(1);
+      try {
+        table.get(get);
+        fail("Test should have got an exception");
+      } catch (Exception e) {
+        // If users get this issue. They should actually try to refresh the cache or
+        // create a new connection
+        assertTrue(e instanceof BadReplicaException);
+      }
+      // again trying to write - this time tertiary should be avoided if the cache was actually
+      // cleared
+      data = Bytes.toBytes(String.valueOf(101));
+      put = new Put(data);
+      put.setDurability(Durability.SKIP_WAL);
+      put.addColumn(f, null, data);
+      table.put(put);
+      get = new Get(data);
+      get.setConsistency(Consistency.TIMELINE);
+      get.setReplicaId(2);
+      result = table.get(get);
+      Assert.assertArrayEquals(data, result.getValue(f, null));
+    } finally {
+      if (secondaryRegion != null) {
+        secondaryRegion.throwErrorOnMemstoreReplay(false);
       }
     }
   }

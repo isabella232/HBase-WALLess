@@ -2058,9 +2058,11 @@ public class MasterRpcServices extends RSRpcServices
     List<HRegionInfo> regions = new ArrayList<>(pbRegions.size());
     pbRegions.forEach((pbRegion) -> regions.add(HRegionInfo.convert(pbRegion)));
     try {
+      LOG.info("Marking the replicas" + regions+ " as BAD in META");
       this.master.getAssignmentManager().getRegionStateStore().updateReplicaRegionHealth(regions,
         request.getGoodState());
       // send an RPC to the region indicating to mark itself as BAD
+      // This needs to be done if the master has decided the region is down
       for (HRegionInfo regionInfo : regions) {
         ServerName regionServerOfRegion = this.master.getAssignmentManager().getRegionStates()
             .getRegionServerOfRegion(regionInfo);
