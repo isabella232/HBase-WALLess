@@ -514,6 +514,24 @@ public class RSProcedureDispatcher
     }
   }
 
+  public static class ReplicaToPrimaryRegionConvertOperation extends RegionOpenOperation {
+
+    private final HRegionInfo destinationRegion;
+
+    public ReplicaToPrimaryRegionConvertOperation(RemoteProcedure remoteProcedure,
+        HRegionInfo regionInfo, List<ServerName> favoredNodes, boolean openForReplay,
+        HRegionInfo destinationRegion) {
+      super(remoteProcedure, regionInfo, favoredNodes, openForReplay);
+      this.destinationRegion = destinationRegion;
+    }
+
+    public OpenRegionRequest.RegionOpenInfo buildRegionOpenInfoRequest(
+        final MasterProcedureEnv env) {
+      return RequestConverter.buildRegionOpenInfo(getRegionInfo(), this.destinationRegion,
+        env.getAssignmentManager().getFavoredNodes(getRegionInfo()), false);
+    }
+  }
+
   public static class RegionCloseOperation extends RegionOperation {
     private final ServerName destinationServer;
     private boolean closed = false;

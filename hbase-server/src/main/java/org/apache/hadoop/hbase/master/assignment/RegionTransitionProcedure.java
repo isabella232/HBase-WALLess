@@ -130,7 +130,7 @@ public abstract class RegionTransitionProcedure
   protected abstract boolean updateTransition(MasterProcedureEnv env, RegionStateNode regionNode)
     throws IOException, ProcedureSuspendedException;
 
-  protected abstract void finishTransition(MasterProcedureEnv env, RegionStateNode regionNode)
+  protected abstract Procedure finishTransition(MasterProcedureEnv env, RegionStateNode regionNode)
     throws IOException, ProcedureSuspendedException;
 
   protected abstract void reportTransition(MasterProcedureEnv env,
@@ -287,9 +287,9 @@ public abstract class RegionTransitionProcedure
 
           case REGION_TRANSITION_FINISH:
             // 3. wait assignment response. completion/failure
-            finishTransition(env, regionNode);
+            Procedure subProc = finishTransition(env, regionNode);
             am.removeRegionInTransition(regionNode, this);
-            return null;
+            return subProc == null ? null : new Procedure[] {subProc};
         }
       } while (retry);
     } catch (IOException e) {

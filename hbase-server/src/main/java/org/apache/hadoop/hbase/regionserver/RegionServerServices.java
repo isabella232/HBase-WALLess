@@ -99,15 +99,20 @@ public interface RegionServerServices extends OnlineRegions, FavoredNodesForRegi
    */
   class PostOpenDeployContext {
     private final Region region;
+    private final HRegionInfo replacedRegion;
     private final long masterSystemTime;
 
     @InterfaceAudience.Private
-    public PostOpenDeployContext(Region region, long masterSystemTime) {
+    public PostOpenDeployContext(Region region, HRegionInfo replacedRegion, long masterSystemTime) {
       this.region = region;
+      this.replacedRegion = replacedRegion;
       this.masterSystemTime = masterSystemTime;
     }
     public Region getRegion() {
       return region;
+    }
+    public HRegionInfo getReplacedRegion(){
+      return this.replacedRegion;
     }
     public long getMasterSystemTime() {
       return masterSystemTime;

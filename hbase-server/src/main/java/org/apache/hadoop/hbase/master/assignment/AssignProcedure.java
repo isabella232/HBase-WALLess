@@ -34,6 +34,7 @@ import org.apache.hadoop.hbase.master.RegionState.State;
 import org.apache.hadoop.hbase.master.assignment.RegionStates.RegionStateNode;
 import org.apache.hadoop.hbase.master.procedure.MasterProcedureEnv;
 import org.apache.hadoop.hbase.master.procedure.RSProcedureDispatcher.RegionOpenOperation;
+import org.apache.hadoop.hbase.procedure2.Procedure;
 import org.apache.hadoop.hbase.procedure2.ProcedureMetrics;
 import org.apache.hadoop.hbase.procedure2.ProcedureSuspendedException;
 import org.apache.hadoop.hbase.procedure2.RemoteProcedureDispatcher.RemoteOperation;
@@ -189,11 +190,15 @@ public class AssignProcedure extends RegionTransitionProcedure {
         }
       }
     }
-    LOG.info("Start " + this + "; " + regionNode.toShortString() +
-        "; forceNewPlan=" + this.forceNewPlan +
-        ", retain=" + retain);
-    env.getAssignmentManager().queueAssign(regionNode);
+    queueForBalance(regionNode, env, retain);
     return true;
+  }
+
+  protected void queueForBalance(RegionStateNode regionNode, MasterProcedureEnv env,
+      boolean retain) {
+    LOG.info("Start " + this + "; " + regionNode.toShortString() + "; forceNewPlan="
+        + this.forceNewPlan + ", retain=" + retain);
+    env.getAssignmentManager().queueAssign(regionNode);
   }
 
   @Override
@@ -247,12 +252,13 @@ public class AssignProcedure extends RegionTransitionProcedure {
   }
 
   @Override
-  protected void finishTransition(final MasterProcedureEnv env, final RegionStateNode regionNode)
-      throws IOException {
+  protected Procedure finishTransition(final MasterProcedureEnv env,
+      final RegionStateNode regionNode) throws IOException {
     env.getAssignmentManager().markRegionAsOpened(regionNode);
     // This success may have been after we failed open a few times. Be sure to cleanup any
     // failed open references. See #incrementAndCheckMaxAttempts and where it is called.
     env.getAssignmentManager().getRegionStates().removeFromFailedOpen(regionNode.getRegionInfo());
+    return null;
   }
 
   @Override
@@ -290,7 +296,7 @@ public class AssignProcedure extends RegionTransitionProcedure {
    * generally OPENING. Cleanup and reset to OFFLINE and put our Procedure
    * State back to REGION_TRANSITION_QUEUE so the Assign starts over.
    */
-  private void handleFailure(final MasterProcedureEnv env, final RegionStateNode regionNode) {
+  protected void handleFailure(final MasterProcedureEnv env, final RegionStateNode regionNode) {
     if (incrementAndCheckMaxAttempts(env, regionNode)) {
       aborted.set(true);
     }
@@ -303,7 +309,7 @@ public class AssignProcedure extends RegionTransitionProcedure {
     setTransitionState(RegionTransitionState.REGION_TRANSITION_QUEUE);
   }
 
-  private boolean incrementAndCheckMaxAttempts(final MasterProcedureEnv env,
+  protected boolean incrementAndCheckMaxAttempts(final MasterProcedureEnv env,
       final RegionStateNode regionNode) {
     final int retries = env.getAssignmentManager().getRegionStates().
         addToFailedOpen(regionNode).incrementAndGetRetries();

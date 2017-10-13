@@ -228,6 +228,16 @@ public abstract class AbstractProcedureScheduler implements ProcedureScheduler {
     }
   }
 
+  public void markEventReady(final ProcedureEvent event) {
+    final boolean traceEnabled = LOG.isTraceEnabled();
+    synchronized (event) {
+      event.setReady(true);
+      if (traceEnabled) {
+        LOG.trace(event + " is marked as ready.");
+      }
+    }
+  }
+
   @Override
   public void wakeEvent(final ProcedureEvent event) {
     wakeEvents(1, event);

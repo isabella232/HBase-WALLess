@@ -33,6 +33,7 @@ import java.util.Iterator;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 import org.apache.commons.logging.Log;
@@ -48,6 +49,7 @@ import org.apache.hadoop.hbase.master.RegionState.State;
 import org.apache.hadoop.hbase.procedure2.ProcedureEvent;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+import org.apache.hadoop.hbase.util.Pair;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -117,6 +119,8 @@ public class RegionStates {
     private volatile long lastUpdate = 0;
 
     private volatile long openSeqNum = HConstants.NO_SEQNUM;
+
+    private volatile boolean goodHealth = true;
 
     public RegionStateNode(final HRegionInfo regionInfo) {
       this.regionInfo = regionInfo;
@@ -967,5 +971,36 @@ public class RegionStates {
     }
     sb.append("]");
     return sb.toString();
+  }
+
+  public Pair<HRegionInfo, ServerName> getNextReplicaRegion(HRegionInfo primaryRegion) {
+    Collection<RegionStateNode> regions = this.regionsMap
+        .tailMap(getRegionNameWithoutHash(primaryRegion)).values();
+    for (RegionStateNode region : regions) {
+      if (!region.getTable().equals(primaryRegion.getTable())) break;
+      if (!Bytes.equals(region.regionInfo.getStartKey(), primaryRegion.getStartKey())) {
+        break;
+      }
+      if (region.regionInfo.equals(primaryRegion)) continue;
+      if (region.goodHealth && region.state == State.OPEN) {
+        return new Pair<HRegionInfo, ServerName>(region.regionInfo, region.regionLocation);
+      }
+    }
+    return null;
+  }
+
+  private byte[] getRegionNameWithoutHash(HRegionInfo region) {
+    byte[] regionName = region.getRegionName();
+    return region.isMetaRegion() ? regionName
+        : Arrays.copyOfRange(regionName, 0, regionName.length - (2 + HRegionInfo.MD5_HEX_LENGTH));
+  }
+
+  public void updateReplicaRegionHealth(List<HRegionInfo> regions, boolean good) {
+    regions.forEach((region) -> {
+      RegionStateNode regionStateNode = this.regionsMap.get(region.getRegionName());
+      synchronized (regionStateNode) {
+        regionStateNode.goodHealth = good;
+      }
+    });
   }
 }

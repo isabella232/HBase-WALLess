@@ -79,7 +79,7 @@ public class HRegionFileSystem {
   /** Temporary subdirectory of the region directory used for compaction output. */
   private static final String REGION_TEMP_DIR = ".tmp";
 
-  private final HRegionInfo regionInfo;
+  private HRegionInfo regionInfo;
   //regionInfo for interacting with FS (getting encodedName, etc)
   private final HRegionInfo regionInfoForFs;
   private final Configuration conf;
@@ -1196,5 +1196,9 @@ public class HRegionFileSystem {
       LOG.debug(msg + ", sleeping " + baseSleepBeforeRetries + " times " + sleepMultiplier);
     }
     Thread.sleep((long)baseSleepBeforeRetries * sleepMultiplier);
+  }
+
+  public void convertAsPrimaryRegion() {
+    this.regionInfo = regionInfoForFs;
   }
 }

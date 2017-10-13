@@ -86,6 +86,7 @@ message OpenRegionRequest {
     repeated ServerName favored_nodes = 3;
     // open region for distributedLogReplay
     optional bool openForDistributedLogReplay = 4;
+    optional RegionInfo destination_region = 5;
   }
 }
 

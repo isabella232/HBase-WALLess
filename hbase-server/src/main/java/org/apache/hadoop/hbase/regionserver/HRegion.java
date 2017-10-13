@@ -8664,4 +8664,17 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       writestate.badReplica = !health;
     }
   }
+
+  /**
+   * Converts this replica region into a primary region. Will enable the writes.
+   */
+  public void convertAsPrimaryRegion() {
+    if (ServerRegionReplicaUtil.isDefaultReplica(getRegionInfo())) {
+      LOG.info("Already this is the primary region. This is a noop call");
+      // TODO should we throw Exception?
+      return;
+    }
+    this.fs.convertAsPrimaryRegion();
+    this.writestate.setReadOnly(false);
+  }
 }

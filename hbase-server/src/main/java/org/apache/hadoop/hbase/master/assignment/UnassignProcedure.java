@@ -38,6 +38,7 @@ import org.apache.hadoop.hbase.master.procedure.MasterProcedureEnv;
 import org.apache.hadoop.hbase.master.procedure.ServerCrashException;
 import org.apache.hadoop.hbase.master.procedure.RSProcedureDispatcher.RegionCloseOperation;
 import org.apache.hadoop.hbase.master.RegionState.State;
+import org.apache.hadoop.hbase.procedure2.Procedure;
 import org.apache.hadoop.hbase.procedure2.ProcedureMetrics;
 import org.apache.hadoop.hbase.procedure2.RemoteProcedureDispatcher.RemoteOperation;
 import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
@@ -189,9 +190,10 @@ public class UnassignProcedure extends RegionTransitionProcedure {
   }
 
   @Override
-  protected void finishTransition(final MasterProcedureEnv env, final RegionStateNode regionNode)
-      throws IOException {
+  protected Procedure finishTransition(final MasterProcedureEnv env,
+      final RegionStateNode regionNode) throws IOException {
     env.getAssignmentManager().markRegionAsClosed(regionNode);
+    return null;
   }
 
   @Override

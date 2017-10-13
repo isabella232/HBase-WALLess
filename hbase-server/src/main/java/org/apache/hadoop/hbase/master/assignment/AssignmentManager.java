@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.master.assignment;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -593,6 +594,10 @@ public class AssignmentManager implements ServerListener {
 
   public AssignProcedure createAssignProcedure(final HRegionInfo regionInfo,
       final boolean forceNewPlan) {
+    // TODO. Here we have to make the new Procedure if this is a case of primary region reassign
+    // because of RS down. For the very first time region open, we should go with AssignProcedure
+    // only. How to know that clearly? May be just see whether there is as SN for this region
+    // already and if so this is a crash and reassign case. Confirm and then add.
     AssignProcedure proc = new AssignProcedure(regionInfo, forceNewPlan);
     proc.setOwner(getProcedureEnvironment().getRequestUser().getShortName());
     return proc;
@@ -1328,6 +1333,11 @@ public class AssignmentManager implements ServerListener {
     return regionState != null ? regionState.getRegionInfo() : null;
   }
 
+  // TODO
+  public Pair<HRegionInfo, ServerName> getNextReplicaRegion(HRegionInfo primaryRegion) {
+    return this.regionStates.getNextReplicaRegion(primaryRegion);
+  }
+
   // ============================================================================================
   //  TODO: Region Status update
   // ============================================================================================
@@ -1718,5 +1728,20 @@ public class AssignmentManager implements ServerListener {
       regionNode.offline();
     }*/
     master.getServerManager().expireServer(serverNode.getServerName());
+  }
+
+  public void updateReplicaRegionHealth(List<HRegionInfo> regions, boolean goodState)
+      throws IOException {
+    regionStates.updateReplicaRegionHealth(regions, goodState);
+    regionStateStore.updateReplicaRegionHealth(regions, goodState);
+  }
+
+  public void markRegionAsOffline(HRegionInfo region) throws IOException {
+    RegionStateNode regionNode = this.regionStates.getRegionNode(region);
+    synchronized (regionNode) {
+      regionNode.offline();
+    }
+    // also mark this replica region, which is going to be opened now, as BAD health.
+    this.regionStateStore.updateReplicaRegionHealth(Arrays.asList(region), false);
   }
 }

@@ -47,7 +47,7 @@ public class OpenRegionHandler extends EventHandler {
 
   protected final RegionServerServices rsServices;
 
-  private final HRegionInfo regionInfo;
+  protected final HRegionInfo regionInfo;
   private final HTableDescriptor htd;
   private final long masterSystemTime;
 
@@ -119,7 +119,7 @@ public class OpenRegionHandler extends EventHandler {
       }
 
       // Successful region open, and add it to OnlineRegions
-      this.rsServices.addToOnlineRegions(region);
+      addToOnlineRegions(region);
       openSuccessful = true;
 
       // Done!  Successful region open
@@ -152,6 +152,10 @@ public class OpenRegionHandler extends EventHandler {
     }
   }
 
+  protected void addToOnlineRegions(HRegion region) {
+    this.rsServices.addToOnlineRegions(region);
+  }
+
   private void doCleanUpOnFailedOpen(HRegion region)
       throws IOException {
     try {
@@ -177,8 +181,7 @@ public class OpenRegionHandler extends EventHandler {
     // Object we do wait/notify on.  Make it boolean.  If set, we're done.
     // Else, wait.
     final AtomicBoolean signaller = new AtomicBoolean(false);
-    PostOpenDeployTasksThread t = new PostOpenDeployTasksThread(r,
-      this.server, this.rsServices, signaller, masterSystemTime);
+    PostOpenDeployTasksThread t = createPostOpenDeployTasksThread(r, masterSystemTime, signaller);
     t.start();
     // Post open deploy task:
     //   meta => update meta location in ZK
@@ -217,6 +220,12 @@ public class OpenRegionHandler extends EventHandler {
     return (!Thread.interrupted() && t.getException() == null);
   }
 
+  protected PostOpenDeployTasksThread createPostOpenDeployTasksThread(final HRegion r,
+      long masterSystemTime, final AtomicBoolean signaller) {
+    return new PostOpenDeployTasksThread(r, null, this.server, this.rsServices, signaller,
+        masterSystemTime);
+  }
+
   /**
    * Thread to run region post open tasks. Call {@link #getException()} after the thread finishes
    * to check for exceptions running {@link RegionServerServices#postOpenDeployTasks(Region)}.
@@ -226,16 +235,19 @@ public class OpenRegionHandler extends EventHandler {
     private final Server server;
     private final RegionServerServices services;
     private final HRegion region;
+    private final HRegionInfo replacedRegionInfo;
     private final AtomicBoolean signaller;
     private final long masterSystemTime;
 
-    PostOpenDeployTasksThread(final HRegion region, final Server server,
-        final RegionServerServices services, final AtomicBoolean signaller, long masterSystemTime) {
+    PostOpenDeployTasksThread(final HRegion region, final HRegionInfo replacedRegionInfo,
+        final Server server, final RegionServerServices services, final AtomicBoolean signaller,
+        long masterSystemTime) {
       super("PostOpenDeployTasks:" + region.getRegionInfo().getEncodedName());
       this.setDaemon(true);
       this.server = server;
       this.services = services;
       this.region = region;
+      this.replacedRegionInfo = replacedRegionInfo;
       this.signaller = signaller;
       this.masterSystemTime = masterSystemTime;
     }
@@ -243,7 +255,8 @@ public class OpenRegionHandler extends EventHandler {
     @Override
     public void run() {
       try {
-        this.services.postOpenDeployTasks(new PostOpenDeployContext(region, masterSystemTime));
+        this.services.postOpenDeployTasks(
+            new PostOpenDeployContext(region, replacedRegionInfo, masterSystemTime));
       } catch (Throwable e) {
         String msg = "Exception running postOpenDeployTasks; region=" +
           this.region.getRegionInfo().getEncodedName();
@@ -273,7 +286,7 @@ public class OpenRegionHandler extends EventHandler {
   /**
    * @return Instance of HRegion if successful open else null.
    */
-  HRegion openRegion() {
+  protected HRegion openRegion() {
     HRegion region = null;
     try {
       // Instantiate the region.  This also periodically tickles OPENING

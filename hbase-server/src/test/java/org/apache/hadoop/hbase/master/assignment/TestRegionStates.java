@@ -31,12 +31,15 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
+import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
+import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.procedure2.util.StringUtils;
 import org.apache.hadoop.hbase.testclassification.MasterTests;
 import org.apache.hadoop.hbase.testclassification.MediumTests;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.util.Threads;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -216,6 +219,32 @@ public class TestRegionStates {
     LOG.info(String.format("PERF SingleThread: %s %s/sec",
         StringUtils.humanTimeDiff(et - st),
       StringUtils.humanSize(NRUNS / ((et - st) / 1000.0f))));
+  }
+
+  @Test
+  public void testGettingReplicaRegionsByPrimaryRegionName() {
+    final TableName TABLE_NAME = TableName.valueOf("testGettingReplicaRegionsByPrimaryRegionName");
+    final RegionStates stateMap = new RegionStates();
+    HRegionInfo hri1_0 = new HRegionInfo(TABLE_NAME, HConstants.EMPTY_BYTE_ARRAY,
+        Bytes.toBytes("A"), false, 1);
+    HRegionInfo hri1_1 = new HRegionInfo(TABLE_NAME, HConstants.EMPTY_BYTE_ARRAY,
+        Bytes.toBytes("A"), false, 1, 1);
+    HRegionInfo hri1_2 = new HRegionInfo(TABLE_NAME, HConstants.EMPTY_BYTE_ARRAY,
+        Bytes.toBytes("A"), false, 1, 2);
+    stateMap.createRegionNode(hri1_0);
+    stateMap.createRegionNode(hri1_1);
+    stateMap.createRegionNode(hri1_2);
+    HRegionInfo hri2_0 = new HRegionInfo(TABLE_NAME, Bytes.toBytes("A"), Bytes.toBytes("B"), false,
+        2);
+    HRegionInfo hri2_1 = new HRegionInfo(TABLE_NAME, Bytes.toBytes("A"), Bytes.toBytes("B"), false,
+        2, 1);
+    HRegionInfo hri2_2 = new HRegionInfo(TABLE_NAME, Bytes.toBytes("A"), Bytes.toBytes("B"), false,
+        2, 2);
+    stateMap.createRegionNode(hri2_0);
+    stateMap.createRegionNode(hri2_1);
+    stateMap.createRegionNode(hri2_2);
+    Pair<HRegionInfo, ServerName> replicaRegion = stateMap.getNextReplicaRegion(hri1_0);
+    System.out.println(replicaRegion);
   }
 
   // ==========================================================================

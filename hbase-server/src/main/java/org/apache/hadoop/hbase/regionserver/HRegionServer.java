@@ -2156,23 +2156,28 @@ public class HRegionServer extends HasThread implements
 
   @Override
   public void postOpenDeployTasks(final Region r) throws KeeperException, IOException {
-    postOpenDeployTasks(new PostOpenDeployContext(r, -1));
+    postOpenDeployTasks(new PostOpenDeployContext(r, null, -1));
   }
 
   @Override
   public void postOpenDeployTasks(final PostOpenDeployContext context)
       throws KeeperException, IOException {
     Region r = context.getRegion();
+    HRegionInfo replacedRegion = context.getReplacedRegion();
+    boolean primaryRegionReplace = replacedRegion != null;
     long masterSystemTime = context.getMasterSystemTime();
     Preconditions.checkArgument(r instanceof HRegion, "r must be an HRegion");
     rpcServices.checkOpen();
     LOG.info("Post open deploy tasks for " + r.getRegionInfo().getRegionNameAsString());
     // Do checks to see if we need to compact (references or too many files)
-    for (Store s : r.getStores()) {
-      if (s.hasReferences() || s.needsCompaction()) {
-       this.compactSplitThread.requestSystemCompaction(r, s, "Opening Region");
+    if (!primaryRegionReplace) {
+      for (Store s : r.getStores()) {
+        if (s.hasReferences() || s.needsCompaction()) {
+          this.compactSplitThread.requestSystemCompaction(r, s, "Opening Region");
+        }
       }
     }
+    // TODO this openSeqNum will make any issue? At HM what is its use?
     long openSeqNum = r.getOpenSeqNum();
     if (openSeqNum == HConstants.NO_SEQNUM) {
       // If we opened a region, we should have read some sequence number from it.
@@ -2181,9 +2186,10 @@ public class HRegionServer extends HasThread implements
       openSeqNum = 0;
     }
 
-    // Update flushed sequence id of a recovering region in ZK
-    updateRecoveringRegionLastFlushedSequenceId(r);
-
+    if (!primaryRegionReplace) {
+      // Update flushed sequence id of a recovering region in ZK
+      updateRecoveringRegionLastFlushedSequenceId(r);
+    }
     // Notify master
     if (!reportRegionStateTransition(new RegionStateTransitionContext(
         TransitionCode.OPENED, openSeqNum, masterSystemTime, r.getRegionInfo()))) {
@@ -2191,7 +2197,7 @@ public class HRegionServer extends HasThread implements
         + r.getRegionInfo().getRegionNameAsString());
     }
 
-    triggerFlushInPrimaryRegion((HRegion)r);
+    if (!primaryRegionReplace) triggerFlushInPrimaryRegion((HRegion)r);
 
     LOG.debug("Finished post open deploy task for " + r.getRegionInfo().getRegionNameAsString());
   }
@@ -3265,6 +3271,12 @@ public class HRegionServer extends HasThread implements
       addToMovedRegions(r.getRegionInfo().getEncodedName(), destination, closeSeqNum);
     }
     this.regionFavoredNodesMap.remove(r.getRegionInfo().getEncodedName());
+    return toReturn != null;
+  }
+
+  public boolean removeFromOnlineRegions(HRegionInfo r) {
+    Region toReturn = this.onlineRegions.remove(r.getEncodedName());
+    this.regionFavoredNodesMap.remove(r.getEncodedName());
     return toReturn != null;
   }
 

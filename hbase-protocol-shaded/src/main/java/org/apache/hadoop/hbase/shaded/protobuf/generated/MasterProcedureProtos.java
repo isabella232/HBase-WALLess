@@ -26742,6 +26742,1213 @@ public final class MasterProcedureProtos {
 
   }
 
+  public interface AssignReplicaRegionAsPrimaryStateDataOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:hbase.pb.AssignReplicaRegionAsPrimaryStateData)
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>required .hbase.pb.RegionTransitionState transition_state = 1;</code>
+     */
+    boolean hasTransitionState();
+    /**
+     * <code>required .hbase.pb.RegionTransitionState transition_state = 1;</code>
+     */
+    org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState getTransitionState();
+
+    /**
+     * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+     */
+    boolean hasRegionInfo();
+    /**
+     * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+     */
+    org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo getRegionInfo();
+    /**
+     * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+     */
+    org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder getRegionInfoOrBuilder();
+
+    /**
+     * <code>optional bool force_new_plan = 3 [default = false];</code>
+     */
+    boolean hasForceNewPlan();
+    /**
+     * <code>optional bool force_new_plan = 3 [default = false];</code>
+     */
+    boolean getForceNewPlan();
+
+    /**
+     * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+     */
+    boolean hasTargetServer();
+    /**
+     * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+     */
+    org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName getTargetServer();
+    /**
+     * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+     */
+    org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerNameOrBuilder getTargetServerOrBuilder();
+
+    /**
+     * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+     */
+    boolean hasDestinationRegion();
+    /**
+     * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+     */
+    org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo getDestinationRegion();
+    /**
+     * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+     */
+    org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder getDestinationRegionOrBuilder();
+  }
+  /**
+   * Protobuf type {@code hbase.pb.AssignReplicaRegionAsPrimaryStateData}
+   */
+  public  static final class AssignReplicaRegionAsPrimaryStateData extends
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:hbase.pb.AssignReplicaRegionAsPrimaryStateData)
+      AssignReplicaRegionAsPrimaryStateDataOrBuilder {
+    // Use AssignReplicaRegionAsPrimaryStateData.newBuilder() to construct.
+    private AssignReplicaRegionAsPrimaryStateData(org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private AssignReplicaRegionAsPrimaryStateData() {
+      transitionState_ = 1;
+      forceNewPlan_ = false;
+    }
+
+    @java.lang.Override
+    public final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return this.unknownFields;
+    }
+    private AssignReplicaRegionAsPrimaryStateData(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet.newBuilder();
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!parseUnknownField(input, unknownFields,
+                                     extensionRegistry, tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 8: {
+              int rawValue = input.readEnum();
+              org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState value = org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState.valueOf(rawValue);
+              if (value == null) {
+                unknownFields.mergeVarintField(1, rawValue);
+              } else {
+                bitField0_ |= 0x00000001;
+                transitionState_ = rawValue;
+              }
+              break;
+            }
+            case 18: {
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder subBuilder = null;
+              if (((bitField0_ & 0x00000002) == 0x00000002)) {
+                subBuilder = regionInfo_.toBuilder();
+              }
+              regionInfo_ = input.readMessage(org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.PARSER, extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(regionInfo_);
+                regionInfo_ = subBuilder.buildPartial();
+              }
+              bitField0_ |= 0x00000002;
+              break;
+            }
+            case 24: {
+              bitField0_ |= 0x00000004;
+              forceNewPlan_ = input.readBool();
+              break;
+            }
+            case 34: {
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.Builder subBuilder = null;
+              if (((bitField0_ & 0x00000008) == 0x00000008)) {
+                subBuilder = targetServer_.toBuilder();
+              }
+              targetServer_ = input.readMessage(org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.PARSER, extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(targetServer_);
+                targetServer_ = subBuilder.buildPartial();
+              }
+              bitField0_ |= 0x00000008;
+              break;
+            }
+            case 42: {
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder subBuilder = null;
+              if (((bitField0_ & 0x00000010) == 0x00000010)) {
+                subBuilder = destinationRegion_.toBuilder();
+              }
+              destinationRegion_ = input.readMessage(org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.PARSER, extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(destinationRegion_);
+                destinationRegion_ = subBuilder.buildPartial();
+              }
+              bitField0_ |= 0x00000010;
+              break;
+            }
+          }
+        }
+      } catch (org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        this.unknownFields = unknownFields.build();
+        makeExtensionsImmutable();
+      }
+    }
+    public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.internal_static_hbase_pb_AssignReplicaRegionAsPrimaryStateData_descriptor;
+    }
+
+    protected org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.internal_static_hbase_pb_AssignReplicaRegionAsPrimaryStateData_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData.class, org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData.Builder.class);
+    }
+
+    private int bitField0_;
+    public static final int TRANSITION_STATE_FIELD_NUMBER = 1;
+    private int transitionState_;
+    /**
+     * <code>required .hbase.pb.RegionTransitionState transition_state = 1;</code>
+     */
+    public boolean hasTransitionState() {
+      return ((bitField0_ & 0x00000001) == 0x00000001);
+    }
+    /**
+     * <code>required .hbase.pb.RegionTransitionState transition_state = 1;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState getTransitionState() {
+      org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState result = org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState.valueOf(transitionState_);
+      return result == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState.REGION_TRANSITION_QUEUE : result;
+    }
+
+    public static final int REGION_INFO_FIELD_NUMBER = 2;
+    private org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo regionInfo_;
+    /**
+     * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+     */
+    public boolean hasRegionInfo() {
+      return ((bitField0_ & 0x00000002) == 0x00000002);
+    }
+    /**
+     * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo getRegionInfo() {
+      return regionInfo_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.getDefaultInstance() : regionInfo_;
+    }
+    /**
+     * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder getRegionInfoOrBuilder() {
+      return regionInfo_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.getDefaultInstance() : regionInfo_;
+    }
+
+    public static final int FORCE_NEW_PLAN_FIELD_NUMBER = 3;
+    private boolean forceNewPlan_;
+    /**
+     * <code>optional bool force_new_plan = 3 [default = false];</code>
+     */
+    public boolean hasForceNewPlan() {
+      return ((bitField0_ & 0x00000004) == 0x00000004);
+    }
+    /**
+     * <code>optional bool force_new_plan = 3 [default = false];</code>
+     */
+    public boolean getForceNewPlan() {
+      return forceNewPlan_;
+    }
+
+    public static final int TARGET_SERVER_FIELD_NUMBER = 4;
+    private org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName targetServer_;
+    /**
+     * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+     */
+    public boolean hasTargetServer() {
+      return ((bitField0_ & 0x00000008) == 0x00000008);
+    }
+    /**
+     * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName getTargetServer() {
+      return targetServer_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.getDefaultInstance() : targetServer_;
+    }
+    /**
+     * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerNameOrBuilder getTargetServerOrBuilder() {
+      return targetServer_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.getDefaultInstance() : targetServer_;
+    }
+
+    public static final int DESTINATION_REGION_FIELD_NUMBER = 5;
+    private org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo destinationRegion_;
+    /**
+     * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+     */
+    public boolean hasDestinationRegion() {
+      return ((bitField0_ & 0x00000010) == 0x00000010);
+    }
+    /**
+     * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo getDestinationRegion() {
+      return destinationRegion_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.getDefaultInstance() : destinationRegion_;
+    }
+    /**
+     * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+     */
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder getDestinationRegionOrBuilder() {
+      return destinationRegion_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.getDefaultInstance() : destinationRegion_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      if (!hasTransitionState()) {
+        memoizedIsInitialized = 0;
+        return false;
+      }
+      if (!hasRegionInfo()) {
+        memoizedIsInitialized = 0;
+        return false;
+      }
+      if (!hasDestinationRegion()) {
+        memoizedIsInitialized = 0;
+        return false;
+      }
+      if (!getRegionInfo().isInitialized()) {
+        memoizedIsInitialized = 0;
+        return false;
+      }
+      if (hasTargetServer()) {
+        if (!getTargetServer().isInitialized()) {
+          memoizedIsInitialized = 0;
+          return false;
+        }
+      }
+      if (!getDestinationRegion().isInitialized()) {
+        memoizedIsInitialized = 0;
+        return false;
+      }
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (((bitField0_ & 0x00000001) == 0x00000001)) {
+        output.writeEnum(1, transitionState_);
+      }
+      if (((bitField0_ & 0x00000002) == 0x00000002)) {
+        output.writeMessage(2, getRegionInfo());
+      }
+      if (((bitField0_ & 0x00000004) == 0x00000004)) {
+        output.writeBool(3, forceNewPlan_);
+      }
+      if (((bitField0_ & 0x00000008) == 0x00000008)) {
+        output.writeMessage(4, getTargetServer());
+      }
+      if (((bitField0_ & 0x00000010) == 0x00000010)) {
+        output.writeMessage(5, getDestinationRegion());
+      }
+      unknownFields.writeTo(output);
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (((bitField0_ & 0x00000001) == 0x00000001)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeEnumSize(1, transitionState_);
+      }
+      if (((bitField0_ & 0x00000002) == 0x00000002)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeMessageSize(2, getRegionInfo());
+      }
+      if (((bitField0_ & 0x00000004) == 0x00000004)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeBoolSize(3, forceNewPlan_);
+      }
+      if (((bitField0_ & 0x00000008) == 0x00000008)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeMessageSize(4, getTargetServer());
+      }
+      if (((bitField0_ & 0x00000010) == 0x00000010)) {
+        size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+          .computeMessageSize(5, getDestinationRegion());
+      }
+      size += unknownFields.getSerializedSize();
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData)) {
+        return super.equals(obj);
+      }
+      org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData other = (org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData) obj;
+
+      boolean result = true;
+      result = result && (hasTransitionState() == other.hasTransitionState());
+      if (hasTransitionState()) {
+        result = result && transitionState_ == other.transitionState_;
+      }
+      result = result && (hasRegionInfo() == other.hasRegionInfo());
+      if (hasRegionInfo()) {
+        result = result && getRegionInfo()
+            .equals(other.getRegionInfo());
+      }
+      result = result && (hasForceNewPlan() == other.hasForceNewPlan());
+      if (hasForceNewPlan()) {
+        result = result && (getForceNewPlan()
+            == other.getForceNewPlan());
+      }
+      result = result && (hasTargetServer() == other.hasTargetServer());
+      if (hasTargetServer()) {
+        result = result && getTargetServer()
+            .equals(other.getTargetServer());
+      }
+      result = result && (hasDestinationRegion() == other.hasDestinationRegion());
+      if (hasDestinationRegion()) {
+        result = result && getDestinationRegion()
+            .equals(other.getDestinationRegion());
+      }
+      result = result && unknownFields.equals(other.unknownFields);
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      if (hasTransitionState()) {
+        hash = (37 * hash) + TRANSITION_STATE_FIELD_NUMBER;
+        hash = (53 * hash) + transitionState_;
+      }
+      if (hasRegionInfo()) {
+        hash = (37 * hash) + REGION_INFO_FIELD_NUMBER;
+        hash = (53 * hash) + getRegionInfo().hashCode();
+      }
+      if (hasForceNewPlan()) {
+        hash = (37 * hash) + FORCE_NEW_PLAN_FIELD_NUMBER;
+        hash = (53 * hash) + org.apache.hadoop.hbase.shaded.com.google.protobuf.Internal.hashBoolean(
+            getForceNewPlan());
+      }
+      if (hasTargetServer()) {
+        hash = (37 * hash) + TARGET_SERVER_FIELD_NUMBER;
+        hash = (53 * hash) + getTargetServer().hashCode();
+      }
+      if (hasDestinationRegion()) {
+        hash = (37 * hash) + DESTINATION_REGION_FIELD_NUMBER;
+        hash = (53 * hash) + getDestinationRegion().hashCode();
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString data)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ByteString data,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parseFrom(byte[] data)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parseFrom(
+        byte[] data,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parseFrom(
+        java.io.InputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parseDelimitedFrom(
+        java.io.InputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parseFrom(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code hbase.pb.AssignReplicaRegionAsPrimaryStateData}
+     */
+    public static final class Builder extends
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:hbase.pb.AssignReplicaRegionAsPrimaryStateData)
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateDataOrBuilder {
+      public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.internal_static_hbase_pb_AssignReplicaRegionAsPrimaryStateData_descriptor;
+      }
+
+      protected org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.internal_static_hbase_pb_AssignReplicaRegionAsPrimaryStateData_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData.class, org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData.Builder.class);
+      }
+
+      // Construct using org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+          getRegionInfoFieldBuilder();
+          getTargetServerFieldBuilder();
+          getDestinationRegionFieldBuilder();
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        transitionState_ = 1;
+        bitField0_ = (bitField0_ & ~0x00000001);
+        if (regionInfoBuilder_ == null) {
+          regionInfo_ = null;
+        } else {
+          regionInfoBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000002);
+        forceNewPlan_ = false;
+        bitField0_ = (bitField0_ & ~0x00000004);
+        if (targetServerBuilder_ == null) {
+          targetServer_ = null;
+        } else {
+          targetServerBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000008);
+        if (destinationRegionBuilder_ == null) {
+          destinationRegion_ = null;
+        } else {
+          destinationRegionBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000010);
+        return this;
+      }
+
+      public org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.internal_static_hbase_pb_AssignReplicaRegionAsPrimaryStateData_descriptor;
+      }
+
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData getDefaultInstanceForType() {
+        return org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData.getDefaultInstance();
+      }
+
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData build() {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData buildPartial() {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData result = new org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData(this);
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
+        if (((from_bitField0_ & 0x00000001) == 0x00000001)) {
+          to_bitField0_ |= 0x00000001;
+        }
+        result.transitionState_ = transitionState_;
+        if (((from_bitField0_ & 0x00000002) == 0x00000002)) {
+          to_bitField0_ |= 0x00000002;
+        }
+        if (regionInfoBuilder_ == null) {
+          result.regionInfo_ = regionInfo_;
+        } else {
+          result.regionInfo_ = regionInfoBuilder_.build();
+        }
+        if (((from_bitField0_ & 0x00000004) == 0x00000004)) {
+          to_bitField0_ |= 0x00000004;
+        }
+        result.forceNewPlan_ = forceNewPlan_;
+        if (((from_bitField0_ & 0x00000008) == 0x00000008)) {
+          to_bitField0_ |= 0x00000008;
+        }
+        if (targetServerBuilder_ == null) {
+          result.targetServer_ = targetServer_;
+        } else {
+          result.targetServer_ = targetServerBuilder_.build();
+        }
+        if (((from_bitField0_ & 0x00000010) == 0x00000010)) {
+          to_bitField0_ |= 0x00000010;
+        }
+        if (destinationRegionBuilder_ == null) {
+          result.destinationRegion_ = destinationRegion_;
+        } else {
+          result.destinationRegion_ = destinationRegionBuilder_.build();
+        }
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(org.apache.hadoop.hbase.shaded.com.google.protobuf.Message other) {
+        if (other instanceof org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData) {
+          return mergeFrom((org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData other) {
+        if (other == org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData.getDefaultInstance()) return this;
+        if (other.hasTransitionState()) {
+          setTransitionState(other.getTransitionState());
+        }
+        if (other.hasRegionInfo()) {
+          mergeRegionInfo(other.getRegionInfo());
+        }
+        if (other.hasForceNewPlan()) {
+          setForceNewPlan(other.getForceNewPlan());
+        }
+        if (other.hasTargetServer()) {
+          mergeTargetServer(other.getTargetServer());
+        }
+        if (other.hasDestinationRegion()) {
+          mergeDestinationRegion(other.getDestinationRegion());
+        }
+        this.mergeUnknownFields(other.unknownFields);
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        if (!hasTransitionState()) {
+          return false;
+        }
+        if (!hasRegionInfo()) {
+          return false;
+        }
+        if (!hasDestinationRegion()) {
+          return false;
+        }
+        if (!getRegionInfo().isInitialized()) {
+          return false;
+        }
+        if (hasTargetServer()) {
+          if (!getTargetServer().isInitialized()) {
+            return false;
+          }
+        }
+        if (!getDestinationRegion().isInitialized()) {
+          return false;
+        }
+        return true;
+      }
+
+      public Builder mergeFrom(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+      private int bitField0_;
+
+      private int transitionState_ = 1;
+      /**
+       * <code>required .hbase.pb.RegionTransitionState transition_state = 1;</code>
+       */
+      public boolean hasTransitionState() {
+        return ((bitField0_ & 0x00000001) == 0x00000001);
+      }
+      /**
+       * <code>required .hbase.pb.RegionTransitionState transition_state = 1;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState getTransitionState() {
+        org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState result = org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState.valueOf(transitionState_);
+        return result == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState.REGION_TRANSITION_QUEUE : result;
+      }
+      /**
+       * <code>required .hbase.pb.RegionTransitionState transition_state = 1;</code>
+       */
+      public Builder setTransitionState(org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState value) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        bitField0_ |= 0x00000001;
+        transitionState_ = value.getNumber();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>required .hbase.pb.RegionTransitionState transition_state = 1;</code>
+       */
+      public Builder clearTransitionState() {
+        bitField0_ = (bitField0_ & ~0x00000001);
+        transitionState_ = 1;
+        onChanged();
+        return this;
+      }
+
+      private org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo regionInfo_ = null;
+      private org.apache.hadoop.hbase.shaded.com.google.protobuf.SingleFieldBuilderV3<
+          org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder> regionInfoBuilder_;
+      /**
+       * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+       */
+      public boolean hasRegionInfo() {
+        return ((bitField0_ & 0x00000002) == 0x00000002);
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo getRegionInfo() {
+        if (regionInfoBuilder_ == null) {
+          return regionInfo_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.getDefaultInstance() : regionInfo_;
+        } else {
+          return regionInfoBuilder_.getMessage();
+        }
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+       */
+      public Builder setRegionInfo(org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo value) {
+        if (regionInfoBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          regionInfo_ = value;
+          onChanged();
+        } else {
+          regionInfoBuilder_.setMessage(value);
+        }
+        bitField0_ |= 0x00000002;
+        return this;
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+       */
+      public Builder setRegionInfo(
+          org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder builderForValue) {
+        if (regionInfoBuilder_ == null) {
+          regionInfo_ = builderForValue.build();
+          onChanged();
+        } else {
+          regionInfoBuilder_.setMessage(builderForValue.build());
+        }
+        bitField0_ |= 0x00000002;
+        return this;
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+       */
+      public Builder mergeRegionInfo(org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo value) {
+        if (regionInfoBuilder_ == null) {
+          if (((bitField0_ & 0x00000002) == 0x00000002) &&
+              regionInfo_ != null &&
+              regionInfo_ != org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.getDefaultInstance()) {
+            regionInfo_ =
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.newBuilder(regionInfo_).mergeFrom(value).buildPartial();
+          } else {
+            regionInfo_ = value;
+          }
+          onChanged();
+        } else {
+          regionInfoBuilder_.mergeFrom(value);
+        }
+        bitField0_ |= 0x00000002;
+        return this;
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+       */
+      public Builder clearRegionInfo() {
+        if (regionInfoBuilder_ == null) {
+          regionInfo_ = null;
+          onChanged();
+        } else {
+          regionInfoBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000002);
+        return this;
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder getRegionInfoBuilder() {
+        bitField0_ |= 0x00000002;
+        onChanged();
+        return getRegionInfoFieldBuilder().getBuilder();
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder getRegionInfoOrBuilder() {
+        if (regionInfoBuilder_ != null) {
+          return regionInfoBuilder_.getMessageOrBuilder();
+        } else {
+          return regionInfo_ == null ?
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.getDefaultInstance() : regionInfo_;
+        }
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo region_info = 2;</code>
+       */
+      private org.apache.hadoop.hbase.shaded.com.google.protobuf.SingleFieldBuilderV3<
+          org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder> 
+          getRegionInfoFieldBuilder() {
+        if (regionInfoBuilder_ == null) {
+          regionInfoBuilder_ = new org.apache.hadoop.hbase.shaded.com.google.protobuf.SingleFieldBuilderV3<
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder>(
+                  getRegionInfo(),
+                  getParentForChildren(),
+                  isClean());
+          regionInfo_ = null;
+        }
+        return regionInfoBuilder_;
+      }
+
+      private boolean forceNewPlan_ ;
+      /**
+       * <code>optional bool force_new_plan = 3 [default = false];</code>
+       */
+      public boolean hasForceNewPlan() {
+        return ((bitField0_ & 0x00000004) == 0x00000004);
+      }
+      /**
+       * <code>optional bool force_new_plan = 3 [default = false];</code>
+       */
+      public boolean getForceNewPlan() {
+        return forceNewPlan_;
+      }
+      /**
+       * <code>optional bool force_new_plan = 3 [default = false];</code>
+       */
+      public Builder setForceNewPlan(boolean value) {
+        bitField0_ |= 0x00000004;
+        forceNewPlan_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional bool force_new_plan = 3 [default = false];</code>
+       */
+      public Builder clearForceNewPlan() {
+        bitField0_ = (bitField0_ & ~0x00000004);
+        forceNewPlan_ = false;
+        onChanged();
+        return this;
+      }
+
+      private org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName targetServer_ = null;
+      private org.apache.hadoop.hbase.shaded.com.google.protobuf.SingleFieldBuilderV3<
+          org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerNameOrBuilder> targetServerBuilder_;
+      /**
+       * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+       */
+      public boolean hasTargetServer() {
+        return ((bitField0_ & 0x00000008) == 0x00000008);
+      }
+      /**
+       * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName getTargetServer() {
+        if (targetServerBuilder_ == null) {
+          return targetServer_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.getDefaultInstance() : targetServer_;
+        } else {
+          return targetServerBuilder_.getMessage();
+        }
+      }
+      /**
+       * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+       */
+      public Builder setTargetServer(org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName value) {
+        if (targetServerBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          targetServer_ = value;
+          onChanged();
+        } else {
+          targetServerBuilder_.setMessage(value);
+        }
+        bitField0_ |= 0x00000008;
+        return this;
+      }
+      /**
+       * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+       */
+      public Builder setTargetServer(
+          org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.Builder builderForValue) {
+        if (targetServerBuilder_ == null) {
+          targetServer_ = builderForValue.build();
+          onChanged();
+        } else {
+          targetServerBuilder_.setMessage(builderForValue.build());
+        }
+        bitField0_ |= 0x00000008;
+        return this;
+      }
+      /**
+       * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+       */
+      public Builder mergeTargetServer(org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName value) {
+        if (targetServerBuilder_ == null) {
+          if (((bitField0_ & 0x00000008) == 0x00000008) &&
+              targetServer_ != null &&
+              targetServer_ != org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.getDefaultInstance()) {
+            targetServer_ =
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.newBuilder(targetServer_).mergeFrom(value).buildPartial();
+          } else {
+            targetServer_ = value;
+          }
+          onChanged();
+        } else {
+          targetServerBuilder_.mergeFrom(value);
+        }
+        bitField0_ |= 0x00000008;
+        return this;
+      }
+      /**
+       * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+       */
+      public Builder clearTargetServer() {
+        if (targetServerBuilder_ == null) {
+          targetServer_ = null;
+          onChanged();
+        } else {
+          targetServerBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000008);
+        return this;
+      }
+      /**
+       * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.Builder getTargetServerBuilder() {
+        bitField0_ |= 0x00000008;
+        onChanged();
+        return getTargetServerFieldBuilder().getBuilder();
+      }
+      /**
+       * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerNameOrBuilder getTargetServerOrBuilder() {
+        if (targetServerBuilder_ != null) {
+          return targetServerBuilder_.getMessageOrBuilder();
+        } else {
+          return targetServer_ == null ?
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.getDefaultInstance() : targetServer_;
+        }
+      }
+      /**
+       * <code>optional .hbase.pb.ServerName target_server = 4;</code>
+       */
+      private org.apache.hadoop.hbase.shaded.com.google.protobuf.SingleFieldBuilderV3<
+          org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerNameOrBuilder> 
+          getTargetServerFieldBuilder() {
+        if (targetServerBuilder_ == null) {
+          targetServerBuilder_ = new org.apache.hadoop.hbase.shaded.com.google.protobuf.SingleFieldBuilderV3<
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerNameOrBuilder>(
+                  getTargetServer(),
+                  getParentForChildren(),
+                  isClean());
+          targetServer_ = null;
+        }
+        return targetServerBuilder_;
+      }
+
+      private org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo destinationRegion_ = null;
+      private org.apache.hadoop.hbase.shaded.com.google.protobuf.SingleFieldBuilderV3<
+          org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder> destinationRegionBuilder_;
+      /**
+       * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+       */
+      public boolean hasDestinationRegion() {
+        return ((bitField0_ & 0x00000010) == 0x00000010);
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo getDestinationRegion() {
+        if (destinationRegionBuilder_ == null) {
+          return destinationRegion_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.getDefaultInstance() : destinationRegion_;
+        } else {
+          return destinationRegionBuilder_.getMessage();
+        }
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+       */
+      public Builder setDestinationRegion(org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo value) {
+        if (destinationRegionBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          destinationRegion_ = value;
+          onChanged();
+        } else {
+          destinationRegionBuilder_.setMessage(value);
+        }
+        bitField0_ |= 0x00000010;
+        return this;
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+       */
+      public Builder setDestinationRegion(
+          org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder builderForValue) {
+        if (destinationRegionBuilder_ == null) {
+          destinationRegion_ = builderForValue.build();
+          onChanged();
+        } else {
+          destinationRegionBuilder_.setMessage(builderForValue.build());
+        }
+        bitField0_ |= 0x00000010;
+        return this;
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+       */
+      public Builder mergeDestinationRegion(org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo value) {
+        if (destinationRegionBuilder_ == null) {
+          if (((bitField0_ & 0x00000010) == 0x00000010) &&
+              destinationRegion_ != null &&
+              destinationRegion_ != org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.getDefaultInstance()) {
+            destinationRegion_ =
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.newBuilder(destinationRegion_).mergeFrom(value).buildPartial();
+          } else {
+            destinationRegion_ = value;
+          }
+          onChanged();
+        } else {
+          destinationRegionBuilder_.mergeFrom(value);
+        }
+        bitField0_ |= 0x00000010;
+        return this;
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+       */
+      public Builder clearDestinationRegion() {
+        if (destinationRegionBuilder_ == null) {
+          destinationRegion_ = null;
+          onChanged();
+        } else {
+          destinationRegionBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000010);
+        return this;
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder getDestinationRegionBuilder() {
+        bitField0_ |= 0x00000010;
+        onChanged();
+        return getDestinationRegionFieldBuilder().getBuilder();
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+       */
+      public org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder getDestinationRegionOrBuilder() {
+        if (destinationRegionBuilder_ != null) {
+          return destinationRegionBuilder_.getMessageOrBuilder();
+        } else {
+          return destinationRegion_ == null ?
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.getDefaultInstance() : destinationRegion_;
+        }
+      }
+      /**
+       * <code>required .hbase.pb.RegionInfo destination_region = 5;</code>
+       */
+      private org.apache.hadoop.hbase.shaded.com.google.protobuf.SingleFieldBuilderV3<
+          org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder> 
+          getDestinationRegionFieldBuilder() {
+        if (destinationRegionBuilder_ == null) {
+          destinationRegionBuilder_ = new org.apache.hadoop.hbase.shaded.com.google.protobuf.SingleFieldBuilderV3<
+              org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo.Builder, org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfoOrBuilder>(
+                  getDestinationRegion(),
+                  getParentForChildren(),
+                  isClean());
+          destinationRegion_ = null;
+        }
+        return destinationRegionBuilder_;
+      }
+      public final Builder setUnknownFields(
+          final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet unknownFields) {
+        return super.setUnknownFields(unknownFields);
+      }
+
+      public final Builder mergeUnknownFields(
+          final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet unknownFields) {
+        return super.mergeUnknownFields(unknownFields);
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:hbase.pb.AssignReplicaRegionAsPrimaryStateData)
+    }
+
+    // @@protoc_insertion_point(class_scope:hbase.pb.AssignReplicaRegionAsPrimaryStateData)
+    private static final org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData();
+    }
+
+    public static org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    @java.lang.Deprecated public static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<AssignReplicaRegionAsPrimaryStateData>
+        PARSER = new org.apache.hadoop.hbase.shaded.com.google.protobuf.AbstractParser<AssignReplicaRegionAsPrimaryStateData>() {
+      public AssignReplicaRegionAsPrimaryStateData parsePartialFrom(
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedInputStream input,
+          org.apache.hadoop.hbase.shaded.com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException {
+          return new AssignReplicaRegionAsPrimaryStateData(input, extensionRegistry);
+      }
+    };
+
+    public static org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<AssignReplicaRegionAsPrimaryStateData> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public org.apache.hadoop.hbase.shaded.com.google.protobuf.Parser<AssignReplicaRegionAsPrimaryStateData> getParserForType() {
+      return PARSER;
+    }
+
+    public org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignReplicaRegionAsPrimaryStateData getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   public interface UnassignRegionStateDataOrBuilder extends
       // @@protoc_insertion_point(interface_extends:hbase.pb.UnassignRegionStateData)
       org.apache.hadoop.hbase.shaded.com.google.protobuf.MessageOrBuilder {
@@ -30822,6 +32029,11 @@ public final class MasterProcedureProtos {
     org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_hbase_pb_AssignRegionStateData_fieldAccessorTable;
   private static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
+    internal_static_hbase_pb_AssignReplicaRegionAsPrimaryStateData_descriptor;
+  private static final 
+    org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_hbase_pb_AssignReplicaRegionAsPrimaryStateData_fieldAccessorTable;
+  private static final org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor
     internal_static_hbase_pb_UnassignRegionStateData_descriptor;
   private static final 
     org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
@@ -30950,153 +32162,159 @@ public final class MasterProcedureProtos {
       "ansitionState\022)\n\013region_info\030\002 \002(\0132\024.hba" +
       "se.pb.RegionInfo\022\035\n\016force_new_plan\030\003 \001(\010" +
       ":\005false\022+\n\rtarget_server\030\004 \001(\0132\024.hbase.p",
-      "b.ServerName\"\365\001\n\027UnassignRegionStateData" +
-      "\0229\n\020transition_state\030\001 \002(\0162\037.hbase.pb.Re" +
-      "gionTransitionState\022)\n\013region_info\030\002 \002(\013" +
-      "2\024.hbase.pb.RegionInfo\0220\n\022destination_se" +
-      "rver\030\003 \001(\0132\024.hbase.pb.ServerName\022,\n\016host" +
-      "ing_server\030\005 \001(\0132\024.hbase.pb.ServerName\022\024" +
-      "\n\005force\030\004 \001(\010:\005false\"\237\001\n\023MoveRegionState" +
-      "Data\022)\n\013region_info\030\001 \001(\0132\024.hbase.pb.Reg" +
-      "ionInfo\022+\n\rsource_server\030\002 \002(\0132\024.hbase.p" +
-      "b.ServerName\0220\n\022destination_server\030\003 \002(\013",
-      "2\024.hbase.pb.ServerName\">\n\021GCRegionStateD" +
-      "ata\022)\n\013region_info\030\001 \002(\0132\024.hbase.pb.Regi" +
-      "onInfo\"\226\001\n\030GCMergedRegionsStateData\022&\n\010p" +
-      "arent_a\030\001 \002(\0132\024.hbase.pb.RegionInfo\022&\n\010p" +
-      "arent_b\030\002 \002(\0132\024.hbase.pb.RegionInfo\022*\n\014m" +
-      "erged_child\030\003 \002(\0132\024.hbase.pb.RegionInfo*" +
-      "\330\001\n\020CreateTableState\022\036\n\032CREATE_TABLE_PRE" +
-      "_OPERATION\020\001\022 \n\034CREATE_TABLE_WRITE_FS_LA" +
-      "YOUT\020\002\022\034\n\030CREATE_TABLE_ADD_TO_META\020\003\022\037\n\033" +
-      "CREATE_TABLE_ASSIGN_REGIONS\020\004\022\"\n\036CREATE_",
-      "TABLE_UPDATE_DESC_CACHE\020\005\022\037\n\033CREATE_TABL" +
-      "E_POST_OPERATION\020\006*\207\002\n\020ModifyTableState\022" +
-      "\030\n\024MODIFY_TABLE_PREPARE\020\001\022\036\n\032MODIFY_TABL" +
-      "E_PRE_OPERATION\020\002\022(\n$MODIFY_TABLE_UPDATE" +
-      "_TABLE_DESCRIPTOR\020\003\022&\n\"MODIFY_TABLE_REMO" +
-      "VE_REPLICA_COLUMN\020\004\022!\n\035MODIFY_TABLE_DELE" +
-      "TE_FS_LAYOUT\020\005\022\037\n\033MODIFY_TABLE_POST_OPER" +
-      "ATION\020\006\022#\n\037MODIFY_TABLE_REOPEN_ALL_REGIO" +
-      "NS\020\007*\212\002\n\022TruncateTableState\022 \n\034TRUNCATE_" +
-      "TABLE_PRE_OPERATION\020\001\022#\n\037TRUNCATE_TABLE_",
-      "REMOVE_FROM_META\020\002\022\"\n\036TRUNCATE_TABLE_CLE" +
-      "AR_FS_LAYOUT\020\003\022#\n\037TRUNCATE_TABLE_CREATE_" +
-      "FS_LAYOUT\020\004\022\036\n\032TRUNCATE_TABLE_ADD_TO_MET" +
-      "A\020\005\022!\n\035TRUNCATE_TABLE_ASSIGN_REGIONS\020\006\022!" +
-      "\n\035TRUNCATE_TABLE_POST_OPERATION\020\007*\337\001\n\020De" +
-      "leteTableState\022\036\n\032DELETE_TABLE_PRE_OPERA" +
-      "TION\020\001\022!\n\035DELETE_TABLE_REMOVE_FROM_META\020" +
-      "\002\022 \n\034DELETE_TABLE_CLEAR_FS_LAYOUT\020\003\022\"\n\036D" +
-      "ELETE_TABLE_UPDATE_DESC_CACHE\020\004\022!\n\035DELET" +
-      "E_TABLE_UNASSIGN_REGIONS\020\005\022\037\n\033DELETE_TAB",
-      "LE_POST_OPERATION\020\006*\320\001\n\024CreateNamespaceS" +
-      "tate\022\034\n\030CREATE_NAMESPACE_PREPARE\020\001\022%\n!CR" +
-      "EATE_NAMESPACE_CREATE_DIRECTORY\020\002\022)\n%CRE" +
-      "ATE_NAMESPACE_INSERT_INTO_NS_TABLE\020\003\022\036\n\032" +
-      "CREATE_NAMESPACE_UPDATE_ZK\020\004\022(\n$CREATE_N" +
-      "AMESPACE_SET_NAMESPACE_QUOTA\020\005*z\n\024Modify" +
-      "NamespaceState\022\034\n\030MODIFY_NAMESPACE_PREPA" +
-      "RE\020\001\022$\n MODIFY_NAMESPACE_UPDATE_NS_TABLE" +
-      "\020\002\022\036\n\032MODIFY_NAMESPACE_UPDATE_ZK\020\003*\332\001\n\024D" +
-      "eleteNamespaceState\022\034\n\030DELETE_NAMESPACE_",
-      "PREPARE\020\001\022)\n%DELETE_NAMESPACE_DELETE_FRO" +
-      "M_NS_TABLE\020\002\022#\n\037DELETE_NAMESPACE_REMOVE_" +
-      "FROM_ZK\020\003\022\'\n#DELETE_NAMESPACE_DELETE_DIR" +
-      "ECTORIES\020\004\022+\n\'DELETE_NAMESPACE_REMOVE_NA" +
-      "MESPACE_QUOTA\020\005*\331\001\n\024AddColumnFamilyState" +
-      "\022\035\n\031ADD_COLUMN_FAMILY_PREPARE\020\001\022#\n\037ADD_C" +
-      "OLUMN_FAMILY_PRE_OPERATION\020\002\022-\n)ADD_COLU" +
-      "MN_FAMILY_UPDATE_TABLE_DESCRIPTOR\020\003\022$\n A" +
-      "DD_COLUMN_FAMILY_POST_OPERATION\020\004\022(\n$ADD" +
-      "_COLUMN_FAMILY_REOPEN_ALL_REGIONS\020\005*\353\001\n\027",
-      "ModifyColumnFamilyState\022 \n\034MODIFY_COLUMN" +
-      "_FAMILY_PREPARE\020\001\022&\n\"MODIFY_COLUMN_FAMIL" +
-      "Y_PRE_OPERATION\020\002\0220\n,MODIFY_COLUMN_FAMIL" +
-      "Y_UPDATE_TABLE_DESCRIPTOR\020\003\022\'\n#MODIFY_CO" +
-      "LUMN_FAMILY_POST_OPERATION\020\004\022+\n\'MODIFY_C" +
-      "OLUMN_FAMILY_REOPEN_ALL_REGIONS\020\005*\226\002\n\027De" +
-      "leteColumnFamilyState\022 \n\034DELETE_COLUMN_F" +
-      "AMILY_PREPARE\020\001\022&\n\"DELETE_COLUMN_FAMILY_" +
-      "PRE_OPERATION\020\002\0220\n,DELETE_COLUMN_FAMILY_" +
-      "UPDATE_TABLE_DESCRIPTOR\020\003\022)\n%DELETE_COLU",
-      "MN_FAMILY_DELETE_FS_LAYOUT\020\004\022\'\n#DELETE_C" +
-      "OLUMN_FAMILY_POST_OPERATION\020\005\022+\n\'DELETE_" +
-      "COLUMN_FAMILY_REOPEN_ALL_REGIONS\020\006*\350\001\n\020E" +
-      "nableTableState\022\030\n\024ENABLE_TABLE_PREPARE\020" +
-      "\001\022\036\n\032ENABLE_TABLE_PRE_OPERATION\020\002\022)\n%ENA" +
-      "BLE_TABLE_SET_ENABLING_TABLE_STATE\020\003\022$\n " +
-      "ENABLE_TABLE_MARK_REGIONS_ONLINE\020\004\022(\n$EN" +
-      "ABLE_TABLE_SET_ENABLED_TABLE_STATE\020\005\022\037\n\033" +
-      "ENABLE_TABLE_POST_OPERATION\020\006*\362\001\n\021Disabl" +
-      "eTableState\022\031\n\025DISABLE_TABLE_PREPARE\020\001\022\037",
-      "\n\033DISABLE_TABLE_PRE_OPERATION\020\002\022+\n\'DISAB" +
-      "LE_TABLE_SET_DISABLING_TABLE_STATE\020\003\022&\n\"" +
-      "DISABLE_TABLE_MARK_REGIONS_OFFLINE\020\004\022*\n&" +
-      "DISABLE_TABLE_SET_DISABLED_TABLE_STATE\020\005" +
-      "\022 \n\034DISABLE_TABLE_POST_OPERATION\020\006*\206\002\n\022C" +
-      "loneSnapshotState\022 \n\034CLONE_SNAPSHOT_PRE_" +
-      "OPERATION\020\001\022\"\n\036CLONE_SNAPSHOT_WRITE_FS_L" +
-      "AYOUT\020\002\022\036\n\032CLONE_SNAPSHOT_ADD_TO_META\020\003\022" +
-      "!\n\035CLONE_SNAPSHOT_ASSIGN_REGIONS\020\004\022$\n CL" +
-      "ONE_SNAPSHOT_UPDATE_DESC_CACHE\020\005\022!\n\035CLON",
-      "E_SNAPSHOT_POST_OPERATION\020\006\022\036\n\032CLONE_SNA" +
-      "PHOST_RESTORE_ACL\020\007*\322\001\n\024RestoreSnapshotS" +
-      "tate\022\"\n\036RESTORE_SNAPSHOT_PRE_OPERATION\020\001" +
-      "\022,\n(RESTORE_SNAPSHOT_UPDATE_TABLE_DESCRI" +
-      "PTOR\020\002\022$\n RESTORE_SNAPSHOT_WRITE_FS_LAYO" +
-      "UT\020\003\022 \n\034RESTORE_SNAPSHOT_UPDATE_META\020\004\022 " +
-      "\n\034RESTORE_SNAPSHOT_RESTORE_ACL\020\005*\376\001\n\033Dis" +
-      "patchMergingRegionsState\022$\n DISPATCH_MER" +
-      "GING_REGIONS_PREPARE\020\001\022*\n&DISPATCH_MERGI" +
-      "NG_REGIONS_PRE_OPERATION\020\002\0223\n/DISPATCH_M",
-      "ERGING_REGIONS_MOVE_REGION_TO_SAME_RS\020\003\022" +
-      "+\n\'DISPATCH_MERGING_REGIONS_DO_MERGE_IN_" +
-      "RS\020\004\022+\n\'DISPATCH_MERGING_REGIONS_POST_OP" +
-      "ERATION\020\005*\222\003\n\025SplitTableRegionState\022\036\n\032S" +
-      "PLIT_TABLE_REGION_PREPARE\020\001\022$\n SPLIT_TAB" +
-      "LE_REGION_PRE_OPERATION\020\002\022*\n&SPLIT_TABLE" +
-      "_REGION_CLOSE_PARENT_REGION\020\003\022.\n*SPLIT_T" +
-      "ABLE_REGION_CREATE_DAUGHTER_REGIONS\020\004\0220\n" +
-      ",SPLIT_TABLE_REGION_PRE_OPERATION_BEFORE" +
-      "_PONR\020\005\022\"\n\036SPLIT_TABLE_REGION_UPDATE_MET",
-      "A\020\006\022/\n+SPLIT_TABLE_REGION_PRE_OPERATION_" +
-      "AFTER_PONR\020\007\022)\n%SPLIT_TABLE_REGION_OPEN_" +
-      "CHILD_REGIONS\020\010\022%\n!SPLIT_TABLE_REGION_PO" +
-      "ST_OPERATION\020\t*\245\004\n\026MergeTableRegionsStat" +
-      "e\022\037\n\033MERGE_TABLE_REGIONS_PREPARE\020\001\022%\n!ME" +
-      "RGE_TABLE_REGIONS_PRE_OPERATION\020\002\022.\n*MER" +
-      "GE_TABLE_REGIONS_MOVE_REGION_TO_SAME_RS\020" +
-      "\003\022+\n\'MERGE_TABLE_REGIONS_PRE_MERGE_OPERA" +
-      "TION\020\004\022/\n+MERGE_TABLE_REGIONS_SET_MERGIN" +
-      "G_TABLE_STATE\020\005\022%\n!MERGE_TABLE_REGIONS_C",
-      "LOSE_REGIONS\020\006\022,\n(MERGE_TABLE_REGIONS_CR" +
-      "EATE_MERGED_REGION\020\007\0222\n.MERGE_TABLE_REGI" +
-      "ONS_PRE_MERGE_COMMIT_OPERATION\020\010\022#\n\037MERG" +
-      "E_TABLE_REGIONS_UPDATE_META\020\t\0223\n/MERGE_T" +
-      "ABLE_REGIONS_POST_MERGE_COMMIT_OPERATION" +
-      "\020\n\022*\n&MERGE_TABLE_REGIONS_OPEN_MERGED_RE" +
-      "GION\020\013\022&\n\"MERGE_TABLE_REGIONS_POST_OPERA" +
-      "TION\020\014*\234\002\n\020ServerCrashState\022\026\n\022SERVER_CR" +
-      "ASH_START\020\001\022\035\n\031SERVER_CRASH_PROCESS_META" +
-      "\020\002\022\034\n\030SERVER_CRASH_GET_REGIONS\020\003\022\036\n\032SERV",
-      "ER_CRASH_NO_SPLIT_LOGS\020\004\022\033\n\027SERVER_CRASH" +
-      "_SPLIT_LOGS\020\005\022#\n\037SERVER_CRASH_PREPARE_LO" +
-      "G_REPLAY\020\006\022\027\n\023SERVER_CRASH_ASSIGN\020\010\022\037\n\033S" +
-      "ERVER_CRASH_WAIT_ON_ASSIGN\020\t\022\027\n\023SERVER_C" +
-      "RASH_FINISH\020d*r\n\025RegionTransitionState\022\033" +
-      "\n\027REGION_TRANSITION_QUEUE\020\001\022\036\n\032REGION_TR" +
-      "ANSITION_DISPATCH\020\002\022\034\n\030REGION_TRANSITION" +
-      "_FINISH\020\003*C\n\017MoveRegionState\022\030\n\024MOVE_REG" +
-      "ION_UNASSIGN\020\001\022\026\n\022MOVE_REGION_ASSIGN\020\002*[" +
-      "\n\rGCRegionState\022\025\n\021GC_REGION_PREPARE\020\001\022\025",
-      "\n\021GC_REGION_ARCHIVE\020\002\022\034\n\030GC_REGION_PURGE" +
-      "_METADATA\020\003*o\n\024GCMergedRegionsState\022\035\n\031G" +
-      "C_MERGED_REGIONS_PREPARE\020\001\022\033\n\027GC_MERGED_" +
-      "REGIONS_PURGE\020\002\022\033\n\027GC_REGION_EDIT_METADA" +
-      "TA\020\003BR\n1org.apache.hadoop.hbase.shaded.p" +
-      "rotobuf.generatedB\025MasterProcedureProtos" +
-      "H\001\210\001\001\240\001\001"
+      "b.ServerName\"\213\002\n%AssignReplicaRegionAsPr" +
+      "imaryStateData\0229\n\020transition_state\030\001 \002(\016" +
+      "2\037.hbase.pb.RegionTransitionState\022)\n\013reg" +
+      "ion_info\030\002 \002(\0132\024.hbase.pb.RegionInfo\022\035\n\016" +
+      "force_new_plan\030\003 \001(\010:\005false\022+\n\rtarget_se" +
+      "rver\030\004 \001(\0132\024.hbase.pb.ServerName\0220\n\022dest" +
+      "ination_region\030\005 \002(\0132\024.hbase.pb.RegionIn" +
+      "fo\"\365\001\n\027UnassignRegionStateData\0229\n\020transi" +
+      "tion_state\030\001 \002(\0162\037.hbase.pb.RegionTransi" +
+      "tionState\022)\n\013region_info\030\002 \002(\0132\024.hbase.p",
+      "b.RegionInfo\0220\n\022destination_server\030\003 \001(\013" +
+      "2\024.hbase.pb.ServerName\022,\n\016hosting_server" +
+      "\030\005 \001(\0132\024.hbase.pb.ServerName\022\024\n\005force\030\004 " +
+      "\001(\010:\005false\"\237\001\n\023MoveRegionStateData\022)\n\013re" +
+      "gion_info\030\001 \001(\0132\024.hbase.pb.RegionInfo\022+\n" +
+      "\rsource_server\030\002 \002(\0132\024.hbase.pb.ServerNa" +
+      "me\0220\n\022destination_server\030\003 \002(\0132\024.hbase.p" +
+      "b.ServerName\">\n\021GCRegionStateData\022)\n\013reg" +
+      "ion_info\030\001 \002(\0132\024.hbase.pb.RegionInfo\"\226\001\n" +
+      "\030GCMergedRegionsStateData\022&\n\010parent_a\030\001 ",
+      "\002(\0132\024.hbase.pb.RegionInfo\022&\n\010parent_b\030\002 " +
+      "\002(\0132\024.hbase.pb.RegionInfo\022*\n\014merged_chil" +
+      "d\030\003 \002(\0132\024.hbase.pb.RegionInfo*\330\001\n\020Create" +
+      "TableState\022\036\n\032CREATE_TABLE_PRE_OPERATION" +
+      "\020\001\022 \n\034CREATE_TABLE_WRITE_FS_LAYOUT\020\002\022\034\n\030" +
+      "CREATE_TABLE_ADD_TO_META\020\003\022\037\n\033CREATE_TAB" +
+      "LE_ASSIGN_REGIONS\020\004\022\"\n\036CREATE_TABLE_UPDA" +
+      "TE_DESC_CACHE\020\005\022\037\n\033CREATE_TABLE_POST_OPE" +
+      "RATION\020\006*\207\002\n\020ModifyTableState\022\030\n\024MODIFY_" +
+      "TABLE_PREPARE\020\001\022\036\n\032MODIFY_TABLE_PRE_OPER",
+      "ATION\020\002\022(\n$MODIFY_TABLE_UPDATE_TABLE_DES" +
+      "CRIPTOR\020\003\022&\n\"MODIFY_TABLE_REMOVE_REPLICA" +
+      "_COLUMN\020\004\022!\n\035MODIFY_TABLE_DELETE_FS_LAYO" +
+      "UT\020\005\022\037\n\033MODIFY_TABLE_POST_OPERATION\020\006\022#\n" +
+      "\037MODIFY_TABLE_REOPEN_ALL_REGIONS\020\007*\212\002\n\022T" +
+      "runcateTableState\022 \n\034TRUNCATE_TABLE_PRE_" +
+      "OPERATION\020\001\022#\n\037TRUNCATE_TABLE_REMOVE_FRO" +
+      "M_META\020\002\022\"\n\036TRUNCATE_TABLE_CLEAR_FS_LAYO" +
+      "UT\020\003\022#\n\037TRUNCATE_TABLE_CREATE_FS_LAYOUT\020" +
+      "\004\022\036\n\032TRUNCATE_TABLE_ADD_TO_META\020\005\022!\n\035TRU",
+      "NCATE_TABLE_ASSIGN_REGIONS\020\006\022!\n\035TRUNCATE" +
+      "_TABLE_POST_OPERATION\020\007*\337\001\n\020DeleteTableS" +
+      "tate\022\036\n\032DELETE_TABLE_PRE_OPERATION\020\001\022!\n\035" +
+      "DELETE_TABLE_REMOVE_FROM_META\020\002\022 \n\034DELET" +
+      "E_TABLE_CLEAR_FS_LAYOUT\020\003\022\"\n\036DELETE_TABL" +
+      "E_UPDATE_DESC_CACHE\020\004\022!\n\035DELETE_TABLE_UN" +
+      "ASSIGN_REGIONS\020\005\022\037\n\033DELETE_TABLE_POST_OP" +
+      "ERATION\020\006*\320\001\n\024CreateNamespaceState\022\034\n\030CR" +
+      "EATE_NAMESPACE_PREPARE\020\001\022%\n!CREATE_NAMES" +
+      "PACE_CREATE_DIRECTORY\020\002\022)\n%CREATE_NAMESP",
+      "ACE_INSERT_INTO_NS_TABLE\020\003\022\036\n\032CREATE_NAM" +
+      "ESPACE_UPDATE_ZK\020\004\022(\n$CREATE_NAMESPACE_S" +
+      "ET_NAMESPACE_QUOTA\020\005*z\n\024ModifyNamespaceS" +
+      "tate\022\034\n\030MODIFY_NAMESPACE_PREPARE\020\001\022$\n MO" +
+      "DIFY_NAMESPACE_UPDATE_NS_TABLE\020\002\022\036\n\032MODI" +
+      "FY_NAMESPACE_UPDATE_ZK\020\003*\332\001\n\024DeleteNames" +
+      "paceState\022\034\n\030DELETE_NAMESPACE_PREPARE\020\001\022" +
+      ")\n%DELETE_NAMESPACE_DELETE_FROM_NS_TABLE" +
+      "\020\002\022#\n\037DELETE_NAMESPACE_REMOVE_FROM_ZK\020\003\022" +
+      "\'\n#DELETE_NAMESPACE_DELETE_DIRECTORIES\020\004",
+      "\022+\n\'DELETE_NAMESPACE_REMOVE_NAMESPACE_QU" +
+      "OTA\020\005*\331\001\n\024AddColumnFamilyState\022\035\n\031ADD_CO" +
+      "LUMN_FAMILY_PREPARE\020\001\022#\n\037ADD_COLUMN_FAMI" +
+      "LY_PRE_OPERATION\020\002\022-\n)ADD_COLUMN_FAMILY_" +
+      "UPDATE_TABLE_DESCRIPTOR\020\003\022$\n ADD_COLUMN_" +
+      "FAMILY_POST_OPERATION\020\004\022(\n$ADD_COLUMN_FA" +
+      "MILY_REOPEN_ALL_REGIONS\020\005*\353\001\n\027ModifyColu" +
+      "mnFamilyState\022 \n\034MODIFY_COLUMN_FAMILY_PR" +
+      "EPARE\020\001\022&\n\"MODIFY_COLUMN_FAMILY_PRE_OPER" +
+      "ATION\020\002\0220\n,MODIFY_COLUMN_FAMILY_UPDATE_T",
+      "ABLE_DESCRIPTOR\020\003\022\'\n#MODIFY_COLUMN_FAMIL" +
+      "Y_POST_OPERATION\020\004\022+\n\'MODIFY_COLUMN_FAMI" +
+      "LY_REOPEN_ALL_REGIONS\020\005*\226\002\n\027DeleteColumn" +
+      "FamilyState\022 \n\034DELETE_COLUMN_FAMILY_PREP" +
+      "ARE\020\001\022&\n\"DELETE_COLUMN_FAMILY_PRE_OPERAT" +
+      "ION\020\002\0220\n,DELETE_COLUMN_FAMILY_UPDATE_TAB" +
+      "LE_DESCRIPTOR\020\003\022)\n%DELETE_COLUMN_FAMILY_" +
+      "DELETE_FS_LAYOUT\020\004\022\'\n#DELETE_COLUMN_FAMI" +
+      "LY_POST_OPERATION\020\005\022+\n\'DELETE_COLUMN_FAM" +
+      "ILY_REOPEN_ALL_REGIONS\020\006*\350\001\n\020EnableTable",
+      "State\022\030\n\024ENABLE_TABLE_PREPARE\020\001\022\036\n\032ENABL" +
+      "E_TABLE_PRE_OPERATION\020\002\022)\n%ENABLE_TABLE_" +
+      "SET_ENABLING_TABLE_STATE\020\003\022$\n ENABLE_TAB" +
+      "LE_MARK_REGIONS_ONLINE\020\004\022(\n$ENABLE_TABLE" +
+      "_SET_ENABLED_TABLE_STATE\020\005\022\037\n\033ENABLE_TAB" +
+      "LE_POST_OPERATION\020\006*\362\001\n\021DisableTableStat" +
+      "e\022\031\n\025DISABLE_TABLE_PREPARE\020\001\022\037\n\033DISABLE_" +
+      "TABLE_PRE_OPERATION\020\002\022+\n\'DISABLE_TABLE_S" +
+      "ET_DISABLING_TABLE_STATE\020\003\022&\n\"DISABLE_TA" +
+      "BLE_MARK_REGIONS_OFFLINE\020\004\022*\n&DISABLE_TA",
+      "BLE_SET_DISABLED_TABLE_STATE\020\005\022 \n\034DISABL" +
+      "E_TABLE_POST_OPERATION\020\006*\206\002\n\022CloneSnapsh" +
+      "otState\022 \n\034CLONE_SNAPSHOT_PRE_OPERATION\020" +
+      "\001\022\"\n\036CLONE_SNAPSHOT_WRITE_FS_LAYOUT\020\002\022\036\n" +
+      "\032CLONE_SNAPSHOT_ADD_TO_META\020\003\022!\n\035CLONE_S" +
+      "NAPSHOT_ASSIGN_REGIONS\020\004\022$\n CLONE_SNAPSH" +
+      "OT_UPDATE_DESC_CACHE\020\005\022!\n\035CLONE_SNAPSHOT" +
+      "_POST_OPERATION\020\006\022\036\n\032CLONE_SNAPHOST_REST" +
+      "ORE_ACL\020\007*\322\001\n\024RestoreSnapshotState\022\"\n\036RE" +
+      "STORE_SNAPSHOT_PRE_OPERATION\020\001\022,\n(RESTOR",
+      "E_SNAPSHOT_UPDATE_TABLE_DESCRIPTOR\020\002\022$\n " +
+      "RESTORE_SNAPSHOT_WRITE_FS_LAYOUT\020\003\022 \n\034RE" +
+      "STORE_SNAPSHOT_UPDATE_META\020\004\022 \n\034RESTORE_" +
+      "SNAPSHOT_RESTORE_ACL\020\005*\376\001\n\033DispatchMergi" +
+      "ngRegionsState\022$\n DISPATCH_MERGING_REGIO" +
+      "NS_PREPARE\020\001\022*\n&DISPATCH_MERGING_REGIONS" +
+      "_PRE_OPERATION\020\002\0223\n/DISPATCH_MERGING_REG" +
+      "IONS_MOVE_REGION_TO_SAME_RS\020\003\022+\n\'DISPATC" +
+      "H_MERGING_REGIONS_DO_MERGE_IN_RS\020\004\022+\n\'DI" +
+      "SPATCH_MERGING_REGIONS_POST_OPERATION\020\005*",
+      "\222\003\n\025SplitTableRegionState\022\036\n\032SPLIT_TABLE" +
+      "_REGION_PREPARE\020\001\022$\n SPLIT_TABLE_REGION_" +
+      "PRE_OPERATION\020\002\022*\n&SPLIT_TABLE_REGION_CL" +
+      "OSE_PARENT_REGION\020\003\022.\n*SPLIT_TABLE_REGIO" +
+      "N_CREATE_DAUGHTER_REGIONS\020\004\0220\n,SPLIT_TAB" +
+      "LE_REGION_PRE_OPERATION_BEFORE_PONR\020\005\022\"\n" +
+      "\036SPLIT_TABLE_REGION_UPDATE_META\020\006\022/\n+SPL" +
+      "IT_TABLE_REGION_PRE_OPERATION_AFTER_PONR" +
+      "\020\007\022)\n%SPLIT_TABLE_REGION_OPEN_CHILD_REGI" +
+      "ONS\020\010\022%\n!SPLIT_TABLE_REGION_POST_OPERATI",
+      "ON\020\t*\245\004\n\026MergeTableRegionsState\022\037\n\033MERGE" +
+      "_TABLE_REGIONS_PREPARE\020\001\022%\n!MERGE_TABLE_" +
+      "REGIONS_PRE_OPERATION\020\002\022.\n*MERGE_TABLE_R" +
+      "EGIONS_MOVE_REGION_TO_SAME_RS\020\003\022+\n\'MERGE" +
+      "_TABLE_REGIONS_PRE_MERGE_OPERATION\020\004\022/\n+" +
+      "MERGE_TABLE_REGIONS_SET_MERGING_TABLE_ST" +
+      "ATE\020\005\022%\n!MERGE_TABLE_REGIONS_CLOSE_REGIO" +
+      "NS\020\006\022,\n(MERGE_TABLE_REGIONS_CREATE_MERGE" +
+      "D_REGION\020\007\0222\n.MERGE_TABLE_REGIONS_PRE_ME" +
+      "RGE_COMMIT_OPERATION\020\010\022#\n\037MERGE_TABLE_RE",
+      "GIONS_UPDATE_META\020\t\0223\n/MERGE_TABLE_REGIO" +
+      "NS_POST_MERGE_COMMIT_OPERATION\020\n\022*\n&MERG" +
+      "E_TABLE_REGIONS_OPEN_MERGED_REGION\020\013\022&\n\"" +
+      "MERGE_TABLE_REGIONS_POST_OPERATION\020\014*\234\002\n" +
+      "\020ServerCrashState\022\026\n\022SERVER_CRASH_START\020" +
+      "\001\022\035\n\031SERVER_CRASH_PROCESS_META\020\002\022\034\n\030SERV" +
+      "ER_CRASH_GET_REGIONS\020\003\022\036\n\032SERVER_CRASH_N" +
+      "O_SPLIT_LOGS\020\004\022\033\n\027SERVER_CRASH_SPLIT_LOG" +
+      "S\020\005\022#\n\037SERVER_CRASH_PREPARE_LOG_REPLAY\020\006" +
+      "\022\027\n\023SERVER_CRASH_ASSIGN\020\010\022\037\n\033SERVER_CRAS",
+      "H_WAIT_ON_ASSIGN\020\t\022\027\n\023SERVER_CRASH_FINIS" +
+      "H\020d*r\n\025RegionTransitionState\022\033\n\027REGION_T" +
+      "RANSITION_QUEUE\020\001\022\036\n\032REGION_TRANSITION_D" +
+      "ISPATCH\020\002\022\034\n\030REGION_TRANSITION_FINISH\020\003*" +
+      "C\n\017MoveRegionState\022\030\n\024MOVE_REGION_UNASSI" +
+      "GN\020\001\022\026\n\022MOVE_REGION_ASSIGN\020\002*[\n\rGCRegion" +
+      "State\022\025\n\021GC_REGION_PREPARE\020\001\022\025\n\021GC_REGIO" +
+      "N_ARCHIVE\020\002\022\034\n\030GC_REGION_PURGE_METADATA\020" +
+      "\003*o\n\024GCMergedRegionsState\022\035\n\031GC_MERGED_R" +
+      "EGIONS_PREPARE\020\001\022\033\n\027GC_MERGED_REGIONS_PU",
+      "RGE\020\002\022\033\n\027GC_REGION_EDIT_METADATA\020\003BR\n1or" +
+      "g.apache.hadoop.hbase.shaded.protobuf.ge" +
+      "neratedB\025MasterProcedureProtosH\001\210\001\001\240\001\001"
     };
     org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -31233,26 +32451,32 @@ public final class MasterProcedureProtos {
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_hbase_pb_AssignRegionStateData_descriptor,
         new java.lang.String[] { "TransitionState", "RegionInfo", "ForceNewPlan", "TargetServer", });
-    internal_static_hbase_pb_UnassignRegionStateData_descriptor =
+    internal_static_hbase_pb_AssignReplicaRegionAsPrimaryStateData_descriptor =
       getDescriptor().getMessageTypes().get(20);
+    internal_static_hbase_pb_AssignReplicaRegionAsPrimaryStateData_fieldAccessorTable = new
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_hbase_pb_AssignReplicaRegionAsPrimaryStateData_descriptor,
+        new java.lang.String[] { "TransitionState", "RegionInfo", "ForceNewPlan", "TargetServer", "DestinationRegion", });
+    internal_static_hbase_pb_UnassignRegionStateData_descriptor =
+      getDescriptor().getMessageTypes().get(21);
     internal_static_hbase_pb_UnassignRegionStateData_fieldAccessorTable = new
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_hbase_pb_UnassignRegionStateData_descriptor,
         new java.lang.String[] { "TransitionState", "RegionInfo", "DestinationServer", "HostingServer", "Force", });
     internal_static_hbase_pb_MoveRegionStateData_descriptor =
-      getDescriptor().getMessageTypes().get(21);
+      getDescriptor().getMessageTypes().get(22);
     internal_static_hbase_pb_MoveRegionStateData_fieldAccessorTable = new
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_hbase_pb_MoveRegionStateData_descriptor,
         new java.lang.String[] { "RegionInfo", "SourceServer", "DestinationServer", });
     internal_static_hbase_pb_GCRegionStateData_descriptor =
-      getDescriptor().getMessageTypes().get(22);
+      getDescriptor().getMessageTypes().get(23);
     internal_static_hbase_pb_GCRegionStateData_fieldAccessorTable = new
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_hbase_pb_GCRegionStateData_descriptor,
         new java.lang.String[] { "RegionInfo", });
     internal_static_hbase_pb_GCMergedRegionsStateData_descriptor =
-      getDescriptor().getMessageTypes().get(23);
+      getDescriptor().getMessageTypes().get(24);
     internal_static_hbase_pb_GCMergedRegionsStateData_fieldAccessorTable = new
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_hbase_pb_GCMergedRegionsStateData_descriptor,

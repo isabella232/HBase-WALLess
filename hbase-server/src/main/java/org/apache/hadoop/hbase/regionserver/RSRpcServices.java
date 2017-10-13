@@ -115,6 +115,7 @@ import org.apache.hadoop.hbase.regionserver.Leases.Lease;
 import org.apache.hadoop.hbase.regionserver.Leases.LeaseStillHeldException;
 import org.apache.hadoop.hbase.regionserver.Region.Operation;
 import org.apache.hadoop.hbase.regionserver.ScannerContext.LimitScope;
+import org.apache.hadoop.hbase.regionserver.handler.ConvertReplicaToPrimaryRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.OpenMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.OpenPriorityRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.OpenRegionHandler;
@@ -438,6 +439,8 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       this.scannerName = n;
     }
 
+    // TODO when the replica region is converted to be primary, the scans may continue now. It may
+    // be ok only or should be expire them?
     @Override
     public void leaseExpired() {
       RegionScannerHolder rsh = scanners.remove(this.scannerName);
@@ -1920,6 +1923,8 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
 
     for (RegionOpenInfo regionOpenInfo : request.getOpenInfoList()) {
       final HRegionInfo region = HRegionInfo.convert(regionOpenInfo.getRegion());
+      HRegionInfo destinationRegionInfo = regionOpenInfo.hasDestinationRegion()
+          ? HRegionInfo.convert(regionOpenInfo.getDestinationRegion()) : null;
       HTableDescriptor htd;
       try {
         String encodedName = region.getEncodedName();
@@ -1934,6 +1939,14 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           //throw new IOException(error);
           builder.addOpeningState(RegionOpeningState.OPENED);
           continue;
+        }
+        if (destinationRegionInfo != null
+            && regionServer.getFromOnlineRegions(destinationRegionInfo.getEncodedName()) == null) {
+          String error = "Received OPEN with destination region:"
+              + destinationRegionInfo.getRegionNameAsString()
+              + ", which is not online in this server";
+          LOG.warn(error);
+          throw new IOException(error);
         }
         LOG.info("Open " + region.getRegionNameAsString());
 
@@ -1991,6 +2004,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           // If there is no action in progress, we can submit a specific handler.
           // Need to pass the expected version in the constructor.
           if (region.isMetaRegion()) {
+            // TODO META is not replicated now? Do we need to?
             regionServer.service.submit(new OpenMetaHandler(
               regionServer, regionServer, region, htd, masterSystemTime));
           } else {
@@ -1998,7 +2012,13 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
               regionServer.updateRegionFavoredNodesMapping(region.getEncodedName(),
                   regionOpenInfo.getFavoredNodesList());
             }
-            if (htd.getPriority() >= HConstants.ADMIN_QOS || region.getTable().isSystemTable()) {
+            // Converting a secondary region into primary (via open channel) is less time taking and
+            // an imp op. So lets handle that as Priority op.
+            if (destinationRegionInfo != null) {
+              regionServer.service.submit(new ConvertReplicaToPrimaryRegionHandler(regionServer,
+                  regionServer, region, destinationRegionInfo, htd, masterSystemTime));
+            } else if (htd.getPriority() >= HConstants.ADMIN_QOS
+                || region.getTable().isSystemTable()) {
               regionServer.service.submit(new OpenPriorityRegionHandler(
                 regionServer, regionServer, region, htd, masterSystemTime));
             } else {

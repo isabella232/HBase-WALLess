@@ -63,7 +63,7 @@ public class HBaseConfiguration extends Configuration {
   }
 
   private static void checkDefaultsVersion(Configuration conf) {
-    if (conf.getBoolean("hbase.defaults.for.version.skip", Boolean.FALSE)) return;
+    if (conf.getBoolean("hbase.defaults.for.version.skip", Boolean.TRUE)) return;
     String defaultsVersion = conf.get("hbase.defaults.for.version");
     String thisVersion = VersionInfo.getVersion();
     if (!thisVersion.equals(defaultsVersion)) {

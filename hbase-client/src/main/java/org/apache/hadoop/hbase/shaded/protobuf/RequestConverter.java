@@ -1581,6 +1581,11 @@ public final class RequestConverter {
   public static RegionOpenInfo buildRegionOpenInfo(
       final HRegionInfo region,
       final List<ServerName> favoredNodes, Boolean openForReplay) {
+    return buildRegionOpenInfo(region, null, favoredNodes, openForReplay);
+  }
+
+  public static RegionOpenInfo buildRegionOpenInfo(HRegionInfo region,
+      HRegionInfo destinationRegion, List<ServerName> favoredNodes, Boolean openForReplay) {
     RegionOpenInfo.Builder builder = RegionOpenInfo.newBuilder();
     builder.setRegion(HRegionInfo.convert(region));
     if (favoredNodes != null) {
@@ -1588,8 +1593,11 @@ public final class RequestConverter {
         builder.addFavoredNodes(ProtobufUtil.toServerName(server));
       }
     }
-    if(openForReplay != null) {
+    if (openForReplay != null) {
       builder.setOpenForDistributedLogReplay(openForReplay);
+    }
+    if (destinationRegion != null) {
+      builder.setDestinationRegion(HRegionInfo.convert(destinationRegion));
     }
     return builder.build();
   }
