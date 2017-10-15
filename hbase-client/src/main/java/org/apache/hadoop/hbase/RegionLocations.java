@@ -349,7 +349,7 @@ public class RegionLocations {
     StringBuilder builder = new StringBuilder("[");
     for (HRegionLocation loc : locations) {
       if (builder.length() > 1) {
-        builder.append(", ");
+        builder.append(" ; ");
       }
       builder.append(loc == null ? "null" : loc);
     }

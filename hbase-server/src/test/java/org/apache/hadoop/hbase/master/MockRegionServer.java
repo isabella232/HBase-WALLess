@@ -760,7 +760,7 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
   }
 
   @Override
-  public boolean reportReplicaRegionHealthChange(HRegionInfo region, boolean good) {
+  public boolean reportReplicaRegionHealthChange(List<HRegionInfo> regions, boolean good) {
     // TODO Auto-generated method stub
     return false;
   }

@@ -375,6 +375,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   @VisibleForTesting
   private volatile boolean throwError;
 
+  // Those replicas whose health is marked as BAD already
+  private Set<Integer> badReplicas = new HashSet<>();
+
   /**
    * @return The smallest mvcc readPoint across all the scanners in this
    * region. Writes older than this readPoint, are included in every
@@ -2638,6 +2641,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     synchronized (this) {
       if (failedReplicaList != null && !failedReplicaList.isEmpty()
           && RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
+        // TODO why this check of isDefaultReplica? We would need removal of the BAD replica
+        // locations even in other replicas
         RegionLocations temp = locations;
         // There could be some mutations which will still work with the old locations. (Should we
         // not make that happen)??
@@ -2659,6 +2664,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // an RPC to the respective primary region to update the locations alone so that further operatons
         // can start using the replica that is marked GOOD again.
         locations = temp;
+        // TODO - This create call with change the ReplicationThread used for this Replicator even.
+        // That is really needed? May be, we should just update the locations info in the Replicator?
         createRegionReplicator();
       } else {
         // these are other type of exception.
@@ -8287,6 +8294,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   private void checkHealthStatus() throws BadReplicaException {
+    if (RegionReplicaUtil.isDefaultReplica(getRegionInfo())) return;
+    // TODO every region check with on every op! This includes a synchronized call and will be a
+    // killer for perf. Do we really need this. We should remove this.
     synchronized (writestate) {
       if (writestate.badReplica) {
         LOG.warn("Region " + this.getRegionInfo() + " found in BAD health");
@@ -8316,7 +8326,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
-  public void createRegionReplicator() {
+  private void createRegionReplicator() {
     int replicationThreadIndex = 0;
     if (regionReplicator == null) {
       replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
@@ -8324,10 +8334,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       replicationThreadIndex = regionReplicator.getReplicationThreadIndex();
     }
     if (LOG.isDebugEnabled()) {
-      LOG.debug("The number of locations " + locations.size());
-      for (int i = 0; i < locations.size(); i++) {
-        LOG.debug("The location is " + locations.getRegionLocation(i));
-      }
+      LOG.debug("The locations are " + locations);
     }
     regionReplicator =
         new RegionReplicaReplicator(this.getRegionInfo(), locations, replicationThreadIndex);
@@ -8631,10 +8638,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     if (response.getFailedReplicasCount() > 0) {
       updateLocationOnException(response.getFailedReplicasList());
       // only primary should do this
-      if (this.getRegionInfo().getReplicaId() == RegionReplicaUtil.DEFAULT_REPLICA_ID) {
+      if (RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
         // mark the replicas as bad in META
-        markBadReplicasInMETA(response);
-        if (response.getFailedReplicasCount() > this.getTableDesc().getMinWriteReplica()) {
+        markBadReplicasInMETA(response.getFailedReplicasList());
+        // TODO
+        // ReplicasCommitted include this region write count also (?)
+        if (response.getReplicasCommitted() < this.getTableDesc().getMinWriteReplica()) {
           throw new IOException(
               "Minimum write replica not satisfied " + this.getTableDesc().getMinWriteReplica());
         }
@@ -8642,15 +8651,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
-  private void markBadReplicasInMETA(ReplicateMemstoreResponse response) {
-    List<Integer> failedReplicasList = response.getFailedReplicasList();
-    for (int replicaId : failedReplicasList) {
-      // TODO : make it sync here. Only one update should go here.
-      HRegionInfo regionInfoForReplica =
-          RegionReplicaUtil.getRegionInfoForReplica(this.getRegionInfo(), replicaId);
-      LOG.warn("Marking " + regionInfoForReplica + " as bad in META");
-      this.getRegionServerServices().reportReplicaRegionHealthChange(regionInfoForReplica, false);
+  private synchronized void markBadReplicasInMETA(List<Integer> failedReplicas) {
+    List<HRegionInfo> finalFailedList = new ArrayList<>(failedReplicas.size());
+    for (int replicaId : failedReplicas) {
+      if (!this.badReplicas.contains(replicaId)) {
+        finalFailedList
+            .add(RegionReplicaUtil.getRegionInfoForReplica(this.getRegionInfo(), replicaId));
+      }
     }
+    LOG.info("Marking " + finalFailedList + " replica regions as BAD health in META");
+    this.getRegionServerServices().reportReplicaRegionHealthChange(finalFailedList, false);
   }
 
   /**

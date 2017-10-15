@@ -499,7 +499,6 @@ public class HRegionServer extends HasThread implements
   private RegionServerSpaceQuotaManager rsSpaceQuotaManager;
 
   protected MemstoreReplicator memstoreReplicator;
-  private Set<HRegionInfo> healthBadRegions = new HashSet<>(); 
 
   /**
    * Nonce manager. Nonces are used to make operations like increment and append idempotent
@@ -3791,22 +3790,18 @@ public class HRegionServer extends HasThread implements
   }
 
   @Override
-  public boolean reportReplicaRegionHealthChange(HRegionInfo region, boolean goodHealth) {
+  public boolean reportReplicaRegionHealthChange(List<HRegionInfo> regions, boolean goodHealth) {
     if (this.rrssStub == null) return false;
-    synchronized (region) {
-      if (!this.healthBadRegions.contains(region)) {
-        RegionReplicaHealthChangeRequest.Builder builder = RegionReplicaHealthChangeRequest
-            .newBuilder();
-        builder.addRegionInfo(HRegionInfo.convert(region));
-        builder.setGoodState(goodHealth);
-        try {
-          this.rrssStub.healthChange(null, builder.build());
-          this.healthBadRegions.add(region);
-        } catch (ServiceException e) {
-          e.printStackTrace();
-          return false;
-        }
-      }
+    RegionReplicaHealthChangeRequest.Builder builder = RegionReplicaHealthChangeRequest
+        .newBuilder();
+    for (HRegionInfo region : regions) {
+      builder.addRegionInfo(HRegionInfo.convert(region));
+    }
+    builder.setGoodState(goodHealth);
+    try {
+      this.rrssStub.healthChange(null, builder.build());
+    } catch (ServiceException e) {
+      return false;
     }
     return true;
   }
