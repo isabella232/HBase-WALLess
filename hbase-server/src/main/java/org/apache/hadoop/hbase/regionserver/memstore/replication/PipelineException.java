@@ -15,23 +15,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hadoop.hbase;
+package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
+import org.apache.hadoop.hbase.HBaseIOException;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
-import org.apache.hadoop.hbase.client.DoNotRetryRegionException;
 
-/**
- * When we find a BAD replica
- */
-@InterfaceAudience.Public
-public class BadReplicaException extends DoNotRetryRegionException {
-  private static final long serialVersionUID = 6907047686199321701L;
+@InterfaceAudience.Private
+public class PipelineException extends HBaseIOException {
 
-  public BadReplicaException() {
+  private static final long serialVersionUID = 1860907912130191821L;
+
+  public PipelineException() {
     super();
   }
 
-  public BadReplicaException(String s) {
+  public PipelineException(String s) {
     super(s);
+  }
+
+  public PipelineException(Throwable t) {
+    super(t);
   }
 }

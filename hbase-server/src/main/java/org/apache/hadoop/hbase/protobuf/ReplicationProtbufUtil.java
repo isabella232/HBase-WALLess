@@ -175,7 +175,7 @@ public class ReplicationProtbufUtil {
 
   public static Pair<MemstoreReplicaProtos.ReplicateMemstoreRequest, List<Cell>>
       buildReplicateMemstoreEntryRequest(final MemstoreReplicationEntry[] entries,
-          byte[] encodedRegionName, List<Integer> replicaIds) {
+          byte[] encodedRegionName, List<Integer> pipeline) {
     // Accumulate all the Cells seen in here.
     List<Cell> allCells = new ArrayList<>();
     int size = 0;
@@ -197,7 +197,7 @@ public class ReplicationProtbufUtil {
     }
     reqBuilder.setEncodedRegionName(UnsafeByteOperations.unsafeWrap(encodedRegionName));
     reqBuilder.setReplicasOffered(replicasOffsered);
-    for (int replicaId : replicaIds) {
+    for (int replicaId : pipeline) {
       reqBuilder.addReplicas(replicaId);
     }
     return new Pair<>(reqBuilder.build(), allCells);

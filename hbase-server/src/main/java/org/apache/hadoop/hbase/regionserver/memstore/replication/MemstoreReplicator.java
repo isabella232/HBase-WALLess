@@ -31,15 +31,30 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.R
 
 @InterfaceAudience.Private
 public interface MemstoreReplicator {
+  
+  /**
+   * Called by primary Region to replicate to its replicas. 
+   */
   ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
       MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicaReplicator)
       throws IOException, InterruptedException, ExecutionException;
 
+  /**
+   * Called by a replica region to replicate to its next replicas. Note that we get the
+   * ReplicateMemstoreRequest request directly here not the Key and Edits as in above API.
+   */
   ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
       RegionReplicaReplicator regionReplicaReplicator)
       throws IOException, InterruptedException, ExecutionException;
 
   //TODO : Shall we return our own CompletedFuture here and wait on the Future explicitly??
+  /**
+   * An async way of replicate to replicas. Used to pass the Meta cells like the flush markers and
+   * compaction markers. This is called by primary only. In a replica region, to replicate to itse
+   * next replicas, we can make use of the API which takes the ReplicateMemstoreRequest itself. Any
+   * way we want the primary region only should NOT wait on a sync call for the op (like
+   * flush/compaction)
+   */
   CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
       RegionReplicaReplicator regionReplicaReplicator)

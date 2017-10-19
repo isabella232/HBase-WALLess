@@ -3798,6 +3798,15 @@ public class HRegionServer extends HasThread implements
       builder.addRegionInfo(HRegionInfo.convert(region));
     }
     builder.setGoodState(goodHealth);
+    // TODO - Need to handle the failure cases here. To be given to a chore service which will
+    // retry?
+    // What is HM went down before processing this fully?
+    // What if META is not available to mark these Regions as BAD?
+    // We need a controlled #retries?
+    // Need fail the writes? - May be not. Then what if the retries also exceeded? This happens in
+    // same handler thread as that of write. So we can not make it to wait for long
+    // Second thought - We need fail the write too. Because there is no src of truth then abt
+    // BAD replicas if primary region also get failed
     try {
       this.rrssStub.healthChange(null, builder.build());
     } catch (ServiceException e) {

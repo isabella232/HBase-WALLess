@@ -75,7 +75,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.BadReplicaException;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellComparator;
 import org.apache.hadoop.hbase.CellScanner;
@@ -144,6 +143,7 @@ import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.Write
 import org.apache.hadoop.hbase.regionserver.ScannerContext.LimitScope;
 import org.apache.hadoop.hbase.regionserver.ScannerContext.NextState;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionContext;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.BadReplicaException;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
@@ -371,12 +371,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   // Used for testing.
   private volatile Long timeoutForWriteLock = null;
 
-  private volatile RegionLocations locations;
   @VisibleForTesting
   private volatile boolean throwError;
-
-  // Those replicas whose health is marked as BAD already
-  private Set<Integer> badReplicas = new HashSet<>();
 
   /**
    * @return The smallest mvcc readPoint across all the scanners in this
@@ -832,7 +828,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         this.recovering = true;
         recoveringRegions.put(encodedName, this);
       }
-      this.memstoreReplicator =  rsServices.getMemstoreReplicator();
+      initMemstoreReplication(rsServices);
     } else {
       this.metricsRegionWrapper = null;
       this.metricsRegion = null;
@@ -866,6 +862,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     } else {
       this.regionUnassigner = null;
     }
+  }
+
+  private void initMemstoreReplication(RegionServerServices rsServices) {
+    this.memstoreReplicator = rsServices.getMemstoreReplicator();
+    int replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
+    this.regionReplicator = new RegionReplicaReplicator(this.conf, this.getRegionInfo(),
+        this.htableDescriptor.getMinWriteReplica(), replicationThreadIndex);
   }
 
   void setHTableSpecificConf() {
@@ -2440,6 +2443,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // If we really find the start_flush has failed then the replica to which it failed should be immediately
       // marked bad. But before we could mark it as bad and there is a read that happens to the replica then it 
       // could be a problem.
+      // TODO - To mark as BAD
       processAsyncResponse(result.flushReplicaResponse);
     }
 
@@ -2447,6 +2451,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       FlushResult flushResult = internalFlushCacheAndCommit(wal, status, result, storesToFlush);
       CompletableFuture<ReplicateMemstoreResponse> replicateMemstoreResponse = flushResult.getReplicateMemstoreResponse();
       if(replicateMemstoreResponse != null) {
+        // TODO
         processAsyncResponse(replicateMemstoreResponse);
       }
       return flushResult;
@@ -2455,16 +2460,17 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
-  private void
-      processAsyncResponse(CompletableFuture<ReplicateMemstoreResponse> replicateMemstoreResponse) {
+  private void processAsyncResponse(
+      CompletableFuture<ReplicateMemstoreResponse> replicateMemstoreResponse) {
     replicateMemstoreResponse.whenComplete((r, e) -> {
       if (e != null) {
         replicateMemstoreResponse.completeExceptionally(e);
-        try {
-          updateLocationOnException(null);
-        } catch (IOException e1) {
-          throw new RuntimeException(e1);
-        }
+        //try {
+       // TODO - To mark as BAD
+          //updateLocationOnException(null);
+        //} catch (IOException e1) {
+         // throw new RuntimeException(e1);
+        //}
       } else {
         replicateMemstoreResponse.complete(r);
       }
@@ -2638,7 +2644,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   private void updateLocationOnException(List<Integer> failedReplicaList) throws IOException {
-    synchronized (this) {
+    /*synchronized (this) {
       if (failedReplicaList != null && !failedReplicaList.isEmpty()
           && RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
         // TODO why this check of isDefaultReplica? We would need removal of the BAD replica
@@ -2671,7 +2677,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // these are other type of exception.
         locations = null;
       }
-    }
+    }*/
   }
 
   /**
@@ -3775,10 +3781,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // replication to all the replicas. End the mvcc in case of exception
       return response;
     } catch (InterruptedException e) {
-      updateLocationOnException(null);
+      //updateLocationOnException(null);
       throw new IOException(e);
     } catch (ExecutionException e) {
-      updateLocationOnException(null);
+      //updateLocationOnException(null);
       throw new IOException(e);
     }
   }
@@ -8283,10 +8289,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       if (coprocessorHost != null) {
         coprocessorHost.postStartRegionOperation(op);
       }
-      if (op != Operation.REPLAY_BATCH_MUTATE) {
-        // The update region location would have already happened when the replication had to be done
-        updateRegionLocation();
-      }
     } catch (Exception e) {
       lock.readLock().unlock();
       throw new IOException(e);
@@ -8303,41 +8305,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         throw new BadReplicaException("Region " + this.getRegionInfo() + " found in BAD health");
       }
     }
-  }
-
-  // TODO this is some what ugly what is happening here. startRegionOperation doing this?!
-  // Can we do this on the real replicate request time?
-  private void updateRegionLocation()
-      throws IOException, RetriesExhaustedException, DoNotRetryIOException, InterruptedIOException {
-    // update the region locations here.
-    if (this.locations == null) {
-      synchronized (this) {
-        if (locations == null) {
-          // this will throw an exception
-          ClusterConnection connection =
-              (ClusterConnection) ConnectionFactory.createConnection(this.conf);
-          // never use cache here
-          locations = RegionAdminServiceCallable.getRegionLocations(connection,
-            this.getRegionInfo().getTable(), this.getRegionInfo().getStartKey(), false,
-            this.getRegionInfo().getReplicaId());
-          createRegionReplicator();
-        }
-      }
-    }
-  }
-
-  private void createRegionReplicator() {
-    int replicationThreadIndex = 0;
-    if (regionReplicator == null) {
-      replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
-    } else {
-      replicationThreadIndex = regionReplicator.getReplicationThreadIndex();
-    }
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("The locations are " + locations);
-    }
-    regionReplicator =
-        new RegionReplicaReplicator(this.getRegionInfo(), locations, replicationThreadIndex);
   }
 
   @Override
@@ -8619,7 +8586,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   public ReplicateMemstoreResponse replicateMemstore(ReplicateMemstoreRequest request,
       List<Cell> allCells) throws Exception {
-    updateRegionLocation();
     try {
       ReplicateMemstoreResponse response =
           this.memstoreReplicator.replicate(request, allCells, this.regionReplicator);
@@ -8628,7 +8594,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
       return response;
     } catch (TimeoutIOException | InterruptedException | ExecutionException e) {
-      updateLocationOnException(null);
+      //updateLocationOnException(null);
       throw e;
     }
   }
@@ -8636,31 +8602,41 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private void checkIfMinWriteReplicSatisfied(ReplicateMemstoreResponse response)
       throws IOException {
     if (response.getFailedReplicasCount() > 0) {
-      updateLocationOnException(response.getFailedReplicasList());
+      //updateLocationOnException(response.getFailedReplicasList());
+      List<Integer> failedReplicas = response.getFailedReplicasList();
+      List<Integer> newFailedReplicas = this.regionReplicator
+          .processBadReplicas(response.getFailedReplicasList());
       // only primary should do this
       if (RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
-        // mark the replicas as bad in META
-        markBadReplicasInMETA(response.getFailedReplicasList());
-        // TODO
-        // ReplicasCommitted include this region write count also (?)
+        if (newFailedReplicas.size() > 0) {
+          // mark the replicas as bad in META
+          if (markBadReplicasInMETA(newFailedReplicas)) {
+            this.regionReplicator.onReplicasBadInMeta(newFailedReplicas);
+          }
+        }
+        // TODO ReplicasCommitted include this region write count also (?)
+        // TODO we need to rollback writes from the successful replicas.
+        // TODO Throwing these IOE will make client to rety na?
         if (response.getReplicasCommitted() < this.getTableDesc().getMinWriteReplica()) {
           throw new IOException(
               "Minimum write replica not satisfied " + this.getTableDesc().getMinWriteReplica());
+        }
+        if (!this.regionReplicator.isReplicasBadInMeta(failedReplicas)) {
+          throw new IOException();
         }
       }
     }
   }
 
-  private synchronized void markBadReplicasInMETA(List<Integer> failedReplicas) {
-    List<HRegionInfo> finalFailedList = new ArrayList<>(failedReplicas.size());
+  private boolean markBadReplicasInMETA(List<Integer> failedReplicas) {
+    List<HRegionInfo> failedReplicaRegionInfos = new ArrayList<>(failedReplicas.size());
     for (int replicaId : failedReplicas) {
-      if (!this.badReplicas.contains(replicaId)) {
-        finalFailedList
-            .add(RegionReplicaUtil.getRegionInfoForReplica(this.getRegionInfo(), replicaId));
-      }
+      failedReplicaRegionInfos
+          .add(RegionReplicaUtil.getRegionInfoForReplica(this.getRegionInfo(), replicaId));
     }
-    LOG.info("Marking " + finalFailedList + " replica regions as BAD health in META");
-    this.getRegionServerServices().reportReplicaRegionHealthChange(finalFailedList, false);
+    LOG.info("Marking " + failedReplicaRegionInfos + " regions as BAD health in META");
+    return this.getRegionServerServices().reportReplicaRegionHealthChange(failedReplicaRegionInfos,
+        false);
   }
 
   /**
