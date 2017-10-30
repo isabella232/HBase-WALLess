@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
@@ -37,6 +39,7 @@ import org.apache.hadoop.hbase.util.Pair;
 @InterfaceAudience.Private
 public class AssignReplicaAsPrimaryRegionProcedure extends AssignProcedure {
 
+  private static final Log LOG = LogFactory.getLog(AssignReplicaAsPrimaryRegionProcedure.class);
   private HRegionInfo destinationRegion;// The replica region which is going to be converted as the
                                         // primary. This in other terms that on the destination
                                         // server we are doing a partial kind of region open
@@ -79,7 +82,10 @@ public class AssignReplicaAsPrimaryRegionProcedure extends AssignProcedure {
     // The core assign flow will wait on the Procedure for this Region node. So just mark this ready
     // so that this wait will get passed
     // 'env.getProcedureScheduler().waitEvent(regionNode.getProcedureEvent(), this))'
-    env.getProcedureScheduler().markEventReady(regionNode.getProcedureEvent());
+    LOG.info("Start " + this + "; " + regionNode.toShortString() + "; forceNewPlan="
+        + this.forceNewPlan + ", retain=" + retain);
+    //env.getProcedureScheduler().markEventReady(regionNode.getProcedureEvent());
+    env.getProcedureScheduler().wakeEvents(1, regionNode.getProcedureEvent());
   }
 
   @Override
@@ -113,6 +119,15 @@ public class AssignReplicaAsPrimaryRegionProcedure extends AssignProcedure {
     // This success may have been after we failed open a few times. Be sure to cleanup any
     // failed open references. See #incrementAndCheckMaxAttempts and where it is called.
     env.getAssignmentManager().getRegionStates().removeFromFailedOpen(regionNode.getRegionInfo());
+    // TODO : Shall we add a new state for this so that on failure this assign alone is done once again
+    // rather than other steps??
     return new AssignProcedure(this.destinationRegion, true);
+  }
+
+  @Override
+  protected void postFinish(MasterProcedureEnv env, RegionStateNode regionNode) {
+    // Only for this procedure we do this because we don't want the parent to be exeecuted once
+    // again.
+    this.transitionState = RegionTransitionState.PRIMARY_REGION_REPLICA_SWTICH_OVER;
   }
 }

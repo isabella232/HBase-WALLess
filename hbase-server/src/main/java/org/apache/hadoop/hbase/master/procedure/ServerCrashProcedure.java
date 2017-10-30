@@ -187,8 +187,9 @@ implements ServerProcedureInterface {
           }
           handleRIT(env, regionsOnCrashedServer);
           AssignmentManager am = env.getAssignmentManager();
+          // now assuming that the regions here have some replicas in another server
           addChildProcedure(am.
-              createAssignProcedures(am.getOrderedRegions(regionsOnCrashedServer), true));
+              createAssignProcedures(am.getOrderedRegions(regionsOnCrashedServer), true, true));
         }
         setNextState(ServerCrashState.SERVER_CRASH_FINISH);
         break;

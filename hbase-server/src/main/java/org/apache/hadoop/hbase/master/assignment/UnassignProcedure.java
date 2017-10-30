@@ -197,6 +197,10 @@ public class UnassignProcedure extends RegionTransitionProcedure {
   }
 
   @Override
+  protected void postFinish(MasterProcedureEnv env, RegionStateNode regionNode) {
+  }
+
+  @Override
   public RemoteOperation remoteCallBuild(final MasterProcedureEnv env, final ServerName serverName) {
     assert serverName.equals(getRegionState(env).getRegionLocation());
     return new RegionCloseOperation(this, getRegionInfo(), this.destinationServer);

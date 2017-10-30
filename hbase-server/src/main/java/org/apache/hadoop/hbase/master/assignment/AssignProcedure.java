@@ -33,7 +33,7 @@ import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
 import org.apache.hadoop.hbase.master.RegionState.State;
 import org.apache.hadoop.hbase.master.assignment.RegionStates.RegionStateNode;
 import org.apache.hadoop.hbase.master.procedure.MasterProcedureEnv;
-import org.apache.hadoop.hbase.master.procedure.RSProcedureDispatcher.RegionOpenOperation;
+import org.apache.hadoop.hbase.master.procedure.RSProcedureDispatcher.NormalRegionOpenOperation;
 import org.apache.hadoop.hbase.procedure2.Procedure;
 import org.apache.hadoop.hbase.procedure2.ProcedureMetrics;
 import org.apache.hadoop.hbase.procedure2.ProcedureSuspendedException;
@@ -71,7 +71,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 public class AssignProcedure extends RegionTransitionProcedure {
   private static final Log LOG = LogFactory.getLog(AssignProcedure.class);
 
-  private boolean forceNewPlan = false;
+  protected boolean forceNewPlan = false;
 
   /**
    * Gets set as desired target on move, merge, etc., when we want to go to a particular server.
@@ -144,11 +144,14 @@ public class AssignProcedure extends RegionTransitionProcedure {
   }
 
   @Override
+  protected void postFinish(MasterProcedureEnv env, RegionStateNode regionNode) {
+  }
+
+  @Override
   protected boolean startTransition(final MasterProcedureEnv env, final RegionStateNode regionNode)
       throws IOException {
     // If the region is already open we can't do much...
     if (regionNode.isInState(State.OPEN) && isServerOnline(env, regionNode)) {
-      LOG.info("Assigned, not reassigning; " + this + "; " + regionNode.toShortString());
       return false;
     }
     // If the region is SPLIT, we can't assign it. But state might be CLOSED, rather than
@@ -233,6 +236,7 @@ public class AssignProcedure extends RegionTransitionProcedure {
 
     // Transition regionNode State. Set it to OPENING. Update hbase:meta, and add
     // region to list of regions on the target regionserver. Need to UNDO if failure!
+    LOG.info("Marking region "+regionNode.getRegionInfo() + "  AS OPENING");
     env.getAssignmentManager().markRegionAsOpening(regionNode);
 
     // TODO: Requires a migration to be open by the RS?
@@ -322,7 +326,7 @@ public class AssignProcedure extends RegionTransitionProcedure {
   @Override
   public RemoteOperation remoteCallBuild(final MasterProcedureEnv env, final ServerName serverName) {
     assert serverName.equals(getRegionState(env).getRegionLocation());
-    return new RegionOpenOperation(this, getRegionInfo(),
+    return new NormalRegionOpenOperation(this, getRegionInfo(),
         env.getAssignmentManager().getFavoredNodes(getRegionInfo()), false);
   }
 

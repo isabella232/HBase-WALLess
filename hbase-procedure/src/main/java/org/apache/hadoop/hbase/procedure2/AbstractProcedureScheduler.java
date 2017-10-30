@@ -228,6 +228,7 @@ public abstract class AbstractProcedureScheduler implements ProcedureScheduler {
     }
   }
 
+  //TODO : remove unsused
   public void markEventReady(final ProcedureEvent event) {
     final boolean traceEnabled = LOG.isTraceEnabled();
     synchronized (event) {

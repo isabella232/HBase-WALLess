@@ -2361,6 +2361,10 @@ public final class MasterProcedureProtos {
      * <code>REGION_TRANSITION_FINISH = 3;</code>
      */
     REGION_TRANSITION_FINISH(3),
+    /**
+     * <code>PRIMARY_REGION_REPLICA_SWTICH_OVER = 4;</code>
+     */
+    PRIMARY_REGION_REPLICA_SWTICH_OVER(4),
     ;
 
     /**
@@ -2375,6 +2379,10 @@ public final class MasterProcedureProtos {
      * <code>REGION_TRANSITION_FINISH = 3;</code>
      */
     public static final int REGION_TRANSITION_FINISH_VALUE = 3;
+    /**
+     * <code>PRIMARY_REGION_REPLICA_SWTICH_OVER = 4;</code>
+     */
+    public static final int PRIMARY_REGION_REPLICA_SWTICH_OVER_VALUE = 4;
 
 
     public final int getNumber() {
@@ -2394,6 +2402,7 @@ public final class MasterProcedureProtos {
         case 1: return REGION_TRANSITION_QUEUE;
         case 2: return REGION_TRANSITION_DISPATCH;
         case 3: return REGION_TRANSITION_FINISH;
+        case 4: return PRIMARY_REGION_REPLICA_SWTICH_OVER;
         default: return null;
       }
     }
@@ -32303,18 +32312,19 @@ public final class MasterProcedureProtos {
       "S\020\005\022#\n\037SERVER_CRASH_PREPARE_LOG_REPLAY\020\006" +
       "\022\027\n\023SERVER_CRASH_ASSIGN\020\010\022\037\n\033SERVER_CRAS",
       "H_WAIT_ON_ASSIGN\020\t\022\027\n\023SERVER_CRASH_FINIS" +
-      "H\020d*r\n\025RegionTransitionState\022\033\n\027REGION_T" +
-      "RANSITION_QUEUE\020\001\022\036\n\032REGION_TRANSITION_D" +
-      "ISPATCH\020\002\022\034\n\030REGION_TRANSITION_FINISH\020\003*" +
-      "C\n\017MoveRegionState\022\030\n\024MOVE_REGION_UNASSI" +
-      "GN\020\001\022\026\n\022MOVE_REGION_ASSIGN\020\002*[\n\rGCRegion" +
-      "State\022\025\n\021GC_REGION_PREPARE\020\001\022\025\n\021GC_REGIO" +
-      "N_ARCHIVE\020\002\022\034\n\030GC_REGION_PURGE_METADATA\020" +
-      "\003*o\n\024GCMergedRegionsState\022\035\n\031GC_MERGED_R" +
-      "EGIONS_PREPARE\020\001\022\033\n\027GC_MERGED_REGIONS_PU",
-      "RGE\020\002\022\033\n\027GC_REGION_EDIT_METADATA\020\003BR\n1or" +
-      "g.apache.hadoop.hbase.shaded.protobuf.ge" +
-      "neratedB\025MasterProcedureProtosH\001\210\001\001\240\001\001"
+      "H\020d*\232\001\n\025RegionTransitionState\022\033\n\027REGION_" +
+      "TRANSITION_QUEUE\020\001\022\036\n\032REGION_TRANSITION_" +
+      "DISPATCH\020\002\022\034\n\030REGION_TRANSITION_FINISH\020\003" +
+      "\022&\n\"PRIMARY_REGION_REPLICA_SWTICH_OVER\020\004" +
+      "*C\n\017MoveRegionState\022\030\n\024MOVE_REGION_UNASS" +
+      "IGN\020\001\022\026\n\022MOVE_REGION_ASSIGN\020\002*[\n\rGCRegio" +
+      "nState\022\025\n\021GC_REGION_PREPARE\020\001\022\025\n\021GC_REGI" +
+      "ON_ARCHIVE\020\002\022\034\n\030GC_REGION_PURGE_METADATA" +
+      "\020\003*o\n\024GCMergedRegionsState\022\035\n\031GC_MERGED_",
+      "REGIONS_PREPARE\020\001\022\033\n\027GC_MERGED_REGIONS_P" +
+      "URGE\020\002\022\033\n\027GC_REGION_EDIT_METADATA\020\003BR\n1o" +
+      "rg.apache.hadoop.hbase.shaded.protobuf.g" +
+      "eneratedB\025MasterProcedureProtosH\001\210\001\001\240\001\001"
     };
     org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {

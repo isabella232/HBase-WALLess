@@ -48,6 +48,7 @@ import org.apache.hadoop.hbase.RegionStateListener;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
+import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.TableState;
 import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
 import org.apache.hadoop.hbase.master.balancer.FavoredStochasticBalancer;
@@ -534,10 +535,40 @@ public class AssignmentManager implements ServerListener {
     if (regionInfo.isEmpty()) return null;
     final AssignProcedure[] procs = new AssignProcedure[regionInfo.size()];
     int index = 0;
-    for (HRegionInfo hri: regionInfo) {
+    for (HRegionInfo hri : regionInfo) {
       procs[index++] = createAssignProcedure(hri, forceNewPlan);
     }
     return procs;
+  }
+
+  public AssignProcedure[] createAssignProcedures(final Collection<HRegionInfo> regionInfo,
+      final boolean forceNewPlan, final boolean assignReplicaAsPrimary) {
+    if (regionInfo.isEmpty()) return null;
+    final AssignProcedure[] procs = new AssignProcedure[regionInfo.size()];
+    int index = 0;
+    for (HRegionInfo hri : regionInfo) {
+      if (assignReplicaAsPrimary) {
+        if (RegionReplicaUtil.isDefaultReplica(hri)) {
+          Pair<HRegionInfo, ServerName> nextReplicaRegion = this.getNextReplicaRegion(hri);
+          if (nextReplicaRegion.getFirst() != null & nextReplicaRegion.getSecond() != null) {
+            procs[index++] = createAssignReplicaasPrimaryProcedure(hri,
+              nextReplicaRegion.getSecond(), nextReplicaRegion.getFirst());
+            continue;
+          }
+        }
+      }
+      procs[index++] = createAssignProcedure(hri, forceNewPlan);
+    }
+    return procs;
+  }
+
+  private AssignProcedure createAssignReplicaasPrimaryProcedure(HRegionInfo hri,
+      ServerName destinationServer, HRegionInfo destinationRegion) {
+    // this will be called only for primary.. Let the caller take care of it
+    AssignProcedure proc =
+        new AssignReplicaAsPrimaryRegionProcedure(hri, destinationServer, destinationRegion);
+    proc.setOwner(getProcedureEnvironment().getRequestUser().getShortName());
+    return proc;
   }
 
   // Needed for the following method so it can type the created Array we return

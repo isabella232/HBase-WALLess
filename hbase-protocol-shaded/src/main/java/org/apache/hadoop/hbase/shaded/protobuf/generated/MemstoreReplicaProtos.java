@@ -693,14 +693,26 @@ public final class MemstoreReplicaProtos {
         int index);
 
     /**
+     * <pre>
+     * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+     * </pre>
+     *
      * <code>repeated uint32 replicas = 4;</code>
      */
     java.util.List<java.lang.Integer> getReplicasList();
     /**
+     * <pre>
+     * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+     * </pre>
+     *
      * <code>repeated uint32 replicas = 4;</code>
      */
     int getReplicasCount();
     /**
+     * <pre>
+     * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+     * </pre>
+     *
      * <code>repeated uint32 replicas = 4;</code>
      */
     int getReplicas(int index);
@@ -890,6 +902,10 @@ public final class MemstoreReplicaProtos {
     public static final int REPLICAS_FIELD_NUMBER = 4;
     private java.util.List<java.lang.Integer> replicas_;
     /**
+     * <pre>
+     * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+     * </pre>
+     *
      * <code>repeated uint32 replicas = 4;</code>
      */
     public java.util.List<java.lang.Integer>
@@ -897,12 +913,20 @@ public final class MemstoreReplicaProtos {
       return replicas_;
     }
     /**
+     * <pre>
+     * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+     * </pre>
+     *
      * <code>repeated uint32 replicas = 4;</code>
      */
     public int getReplicasCount() {
       return replicas_.size();
     }
     /**
+     * <pre>
+     * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+     * </pre>
+     *
      * <code>repeated uint32 replicas = 4;</code>
      */
     public int getReplicas(int index) {
@@ -1649,6 +1673,10 @@ public final class MemstoreReplicaProtos {
          }
       }
       /**
+       * <pre>
+       * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+       * </pre>
+       *
        * <code>repeated uint32 replicas = 4;</code>
        */
       public java.util.List<java.lang.Integer>
@@ -1656,18 +1684,30 @@ public final class MemstoreReplicaProtos {
         return java.util.Collections.unmodifiableList(replicas_);
       }
       /**
+       * <pre>
+       * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+       * </pre>
+       *
        * <code>repeated uint32 replicas = 4;</code>
        */
       public int getReplicasCount() {
         return replicas_.size();
       }
       /**
+       * <pre>
+       * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+       * </pre>
+       *
        * <code>repeated uint32 replicas = 4;</code>
        */
       public int getReplicas(int index) {
         return replicas_.get(index);
       }
       /**
+       * <pre>
+       * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+       * </pre>
+       *
        * <code>repeated uint32 replicas = 4;</code>
        */
       public Builder setReplicas(
@@ -1678,6 +1718,10 @@ public final class MemstoreReplicaProtos {
         return this;
       }
       /**
+       * <pre>
+       * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+       * </pre>
+       *
        * <code>repeated uint32 replicas = 4;</code>
        */
       public Builder addReplicas(int value) {
@@ -1687,6 +1731,10 @@ public final class MemstoreReplicaProtos {
         return this;
       }
       /**
+       * <pre>
+       * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+       * </pre>
+       *
        * <code>repeated uint32 replicas = 4;</code>
        */
       public Builder addAllReplicas(
@@ -1698,6 +1746,10 @@ public final class MemstoreReplicaProtos {
         return this;
       }
       /**
+       * <pre>
+       * It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+       * </pre>
+       *
        * <code>repeated uint32 replicas = 4;</code>
        */
       public Builder clearReplicas() {

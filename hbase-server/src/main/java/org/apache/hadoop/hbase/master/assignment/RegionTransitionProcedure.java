@@ -32,6 +32,7 @@ import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
 import org.apache.hadoop.hbase.master.assignment.RegionStates.RegionStateNode;
 import org.apache.hadoop.hbase.master.procedure.MasterProcedureEnv;
 import org.apache.hadoop.hbase.master.procedure.TableProcedureInterface;
+import org.apache.hadoop.hbase.master.procedure.RSProcedureDispatcher.ReplicaToPrimaryRegionConvertOperation;
 import org.apache.hadoop.hbase.procedure2.Procedure;
 import org.apache.hadoop.hbase.procedure2.ProcedureSuspendedException;
 import org.apache.hadoop.hbase.procedure2.RemoteProcedureDispatcher.RemoteOperation;
@@ -63,7 +64,7 @@ public abstract class RegionTransitionProcedure
 
   protected final AtomicBoolean aborted = new AtomicBoolean(false);
 
-  private RegionTransitionState transitionState =
+  protected RegionTransitionState transitionState =
       RegionTransitionState.REGION_TRANSITION_QUEUE;
   private HRegionInfo regionInfo;
   private volatile boolean lock = false;
@@ -289,7 +290,32 @@ public abstract class RegionTransitionProcedure
             // 3. wait assignment response. completion/failure
             Procedure subProc = finishTransition(env, regionNode);
             am.removeRegionInTransition(regionNode, this);
+            postFinish(env, regionNode);
             return subProc == null ? null : new Procedure[] {subProc};
+
+          case PRIMARY_REGION_REPLICA_SWTICH_OVER:
+            /**
+             * Why we need this?
+             * So in a normal Assignprocedure case we always return the same AssignProcedure after every step is executed.
+             * So the ProcedureExecutor executes it in the same loop and does not use the scheduler.
+             * In case AssignReplicaAsPrimaryRegionProcedure, after finishTransition we create an AssignProcedure once again.
+             * So in this case the parent (AssignReplicaAsPrimaryRegionProcedure) proc and the child proc (AssignProcedure)
+             * are put back to the scheduler's stack. The child proc execution is completed and after which the parent is again executed.
+             * So when the parent proc was last exectured (before putting back to the stack) it has REGION_TRANSITION_FINISH as the state
+             * and so it will try to once again execute from that state and by doing so we create inconsistency and other issues.
+             * In order to avoid that once REGION_TRANSITION_FINISH is done we move the state to PRIMARY_REGION_REPLICA_SWTICH_OVER
+             * in AssignReplicaAsPrimaryRegionProcedure. So when evern the parent proc is reexecuted it will have the new state
+             * PRIMARY_REGION_REPLICA_SWTICH_OVER and in that state we just remove the regionNode from the AM's memory.
+             * This step is again super important because when the parent proc reexecutes the regionNode in question is assigned the 
+             * AssignReplicaAsPrimaryRegionProcedure. (a region can have only one proc at any point of time no two procs can run
+             * at same time). So if we don remove the regionNode's procs, if suppose we want to disable the table and this regionNode
+             * will already have the  AssignReplicaAsPrimaryRegionProcedure set on it. So we need to clear them before we complete
+             * this AssignReplicaAsPrimaryRegionProcedure. (like done in REGION_TRANSITION_FINISH).
+             */
+            // The node has to be removed again because again this will be executed as parent procedure (AssignReplicaProcedure)
+            am.removeRegionInTransition(regionNode, this);
+           LOG.info("The region "+regionNode.getRegionInfo() + " has been switched over ");
+           return null;
         }
       } while (retry);
     } catch (IOException e) {
@@ -300,6 +326,7 @@ public abstract class RegionTransitionProcedure
     return new Procedure[] {this};
   }
 
+  protected abstract void postFinish(MasterProcedureEnv env, RegionStateNode regionNode);
   @Override
   protected void rollback(final MasterProcedureEnv env) {
     if (isRollbackSupported(transitionState)) {
