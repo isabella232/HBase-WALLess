@@ -73,7 +73,7 @@ import org.apache.hadoop.hbase.regionserver.memstore.replication.PipelineExcepti
  */
 public class RegionReplicaReplicator {
   private final Configuration conf;
-  private final HRegionInfo curRegion;
+  private HRegionInfo curRegion;
   private final int minNonPrimaryWriteReplicas;
   private volatile HRegionLocation[] regionLocations;
   private List<MemstoreReplicationEntry> entryBuffer;
@@ -97,7 +97,7 @@ public class RegionReplicaReplicator {
     this.minNonPrimaryWriteReplicas = minWriteReplicas - 1;
     this.entryBuffer = new ArrayList<>();
     this.replicationThreadIndex = replicationThreadIndex;
-    if (RegionReplicaUtil.isDefaultReplica(currentRegion)) {
+    if (RegionReplicaUtil.isDefaultReplica(this.curRegion)) {
       badReplicas = new HashSet<>();
       badReplicasInMeta = new HashSet<>();
     }
@@ -153,23 +153,6 @@ public class RegionReplicaReplicator {
 
   public int getReplicationThreadIndex() {
     return this.replicationThreadIndex;
-  }
-
-  private void loadRegionLocationFromMeta() throws IOException {
-    // The replica id been passed have not much relevance than some checks. We will get all replica
-    // loactions for this region. Not using the RegionLocation cache. We are on a fresh cluster
-    // connection here. We will call this only once for a region and use that throughout unless we
-    // have some replica region move. That anyway will be under our control and there is no point
-    // in using cached location then.
-/*    if (this.locations == null) {
-      synchronized (this) {
-        if (this.locations == null) {
-          this.locations = RegionAdminServiceCallable.getRegionLocations(connection,
-              this.curRegion.getTable(), this.curRegion.getStartKey(), false,
-              this.curRegion.getReplicaId());
-        }
-      }
-    }*/
   }
 
   public List<Integer> processBadReplicas(List<Integer> replicas) {
@@ -332,6 +315,22 @@ public class RegionReplicaReplicator {
           }
         }
       }
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  public void convertAsPrimaryRegion(HRegionInfo primaryRegion) {
+    Lock lock = this.lock.writeLock();
+    lock.lock();
+    assert !(RegionReplicaUtil.isDefaultReplica(this.curRegion));
+    assert RegionReplicaUtil.isDefaultReplica(primaryRegion);
+    try {
+      this.curRegion = primaryRegion;
+      this.badReplicas = new HashSet<>();
+      this.badReplicasInMeta = new HashSet<>();
+      this.regionLocations = null;// Lets reload location from META. Any way we have done changes to
+                                  // the region replica ids.
     } finally {
       lock.unlock();
     }

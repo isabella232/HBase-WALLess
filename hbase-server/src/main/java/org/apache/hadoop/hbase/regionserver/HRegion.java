@@ -8662,5 +8662,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
     this.fs.convertAsPrimaryRegion();
     this.writestate.setReadOnly(false);
+    this.regionReplicator.convertAsPrimaryRegion(getRegionInfo());
   }
 }
