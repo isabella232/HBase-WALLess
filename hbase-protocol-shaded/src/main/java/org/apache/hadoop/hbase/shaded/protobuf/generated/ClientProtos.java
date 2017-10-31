@@ -20514,6 +20514,34 @@ public final class ClientProtos {
      * <code>optional .hbase.pb.Cursor cursor = 12;</code>
      */
     org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.CursorOrBuilder getCursorOrBuilder();
+
+    /**
+     * <pre>
+     * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+     * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+     * </pre>
+     *
+     * <code>repeated uint32 good_replica_ids = 13;</code>
+     */
+    java.util.List<java.lang.Integer> getGoodReplicaIdsList();
+    /**
+     * <pre>
+     * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+     * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+     * </pre>
+     *
+     * <code>repeated uint32 good_replica_ids = 13;</code>
+     */
+    int getGoodReplicaIdsCount();
+    /**
+     * <pre>
+     * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+     * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+     * </pre>
+     *
+     * <code>repeated uint32 good_replica_ids = 13;</code>
+     */
+    int getGoodReplicaIds(int index);
   }
   /**
    * <pre>
@@ -20543,6 +20571,7 @@ public final class ClientProtos {
       moreResultsInRegion_ = false;
       heartbeatMessage_ = false;
       mvccReadPoint_ = 0L;
+      goodReplicaIds_ = java.util.Collections.emptyList();
     }
 
     @java.lang.Override
@@ -20685,6 +20714,27 @@ public final class ClientProtos {
               bitField0_ |= 0x00000100;
               break;
             }
+            case 104: {
+              if (!((mutable_bitField0_ & 0x00001000) == 0x00001000)) {
+                goodReplicaIds_ = new java.util.ArrayList<java.lang.Integer>();
+                mutable_bitField0_ |= 0x00001000;
+              }
+              goodReplicaIds_.add(input.readUInt32());
+              break;
+            }
+            case 106: {
+              int length = input.readRawVarint32();
+              int limit = input.pushLimit(length);
+              if (!((mutable_bitField0_ & 0x00001000) == 0x00001000) && input.getBytesUntilLimit() > 0) {
+                goodReplicaIds_ = new java.util.ArrayList<java.lang.Integer>();
+                mutable_bitField0_ |= 0x00001000;
+              }
+              while (input.getBytesUntilLimit() > 0) {
+                goodReplicaIds_.add(input.readUInt32());
+              }
+              input.popLimit(limit);
+              break;
+            }
           }
         }
       } catch (org.apache.hadoop.hbase.shaded.com.google.protobuf.InvalidProtocolBufferException e) {
@@ -20701,6 +20751,9 @@ public final class ClientProtos {
         }
         if (((mutable_bitField0_ & 0x00000040) == 0x00000040)) {
           partialFlagPerResult_ = java.util.Collections.unmodifiableList(partialFlagPerResult_);
+        }
+        if (((mutable_bitField0_ & 0x00001000) == 0x00001000)) {
+          goodReplicaIds_ = java.util.Collections.unmodifiableList(goodReplicaIds_);
         }
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -21106,6 +21159,43 @@ public final class ClientProtos {
       return cursor_ == null ? org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.Cursor.getDefaultInstance() : cursor_;
     }
 
+    public static final int GOOD_REPLICA_IDS_FIELD_NUMBER = 13;
+    private java.util.List<java.lang.Integer> goodReplicaIds_;
+    /**
+     * <pre>
+     * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+     * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+     * </pre>
+     *
+     * <code>repeated uint32 good_replica_ids = 13;</code>
+     */
+    public java.util.List<java.lang.Integer>
+        getGoodReplicaIdsList() {
+      return goodReplicaIds_;
+    }
+    /**
+     * <pre>
+     * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+     * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+     * </pre>
+     *
+     * <code>repeated uint32 good_replica_ids = 13;</code>
+     */
+    public int getGoodReplicaIdsCount() {
+      return goodReplicaIds_.size();
+    }
+    /**
+     * <pre>
+     * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+     * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+     * </pre>
+     *
+     * <code>repeated uint32 good_replica_ids = 13;</code>
+     */
+    public int getGoodReplicaIds(int index) {
+      return goodReplicaIds_.get(index);
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -21153,6 +21243,9 @@ public final class ClientProtos {
       }
       if (((bitField0_ & 0x00000100) == 0x00000100)) {
         output.writeMessage(12, getCursor());
+      }
+      for (int i = 0; i < goodReplicaIds_.size(); i++) {
+        output.writeUInt32(13, goodReplicaIds_.get(i));
       }
       unknownFields.writeTo(output);
     }
@@ -21216,6 +21309,15 @@ public final class ClientProtos {
       if (((bitField0_ & 0x00000100) == 0x00000100)) {
         size += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
           .computeMessageSize(12, getCursor());
+      }
+      {
+        int dataSize = 0;
+        for (int i = 0; i < goodReplicaIds_.size(); i++) {
+          dataSize += org.apache.hadoop.hbase.shaded.com.google.protobuf.CodedOutputStream
+            .computeUInt32SizeNoTag(goodReplicaIds_.get(i));
+        }
+        size += dataSize;
+        size += 1 * getGoodReplicaIdsList().size();
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -21285,6 +21387,8 @@ public final class ClientProtos {
         result = result && getCursor()
             .equals(other.getCursor());
       }
+      result = result && getGoodReplicaIdsList()
+          .equals(other.getGoodReplicaIdsList());
       result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
@@ -21349,6 +21453,10 @@ public final class ClientProtos {
       if (hasCursor()) {
         hash = (37 * hash) + CURSOR_FIELD_NUMBER;
         hash = (53 * hash) + getCursor().hashCode();
+      }
+      if (getGoodReplicaIdsCount() > 0) {
+        hash = (37 * hash) + GOOD_REPLICA_IDS_FIELD_NUMBER;
+        hash = (53 * hash) + getGoodReplicaIdsList().hashCode();
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -21513,6 +21621,8 @@ public final class ClientProtos {
           cursorBuilder_.clear();
         }
         bitField0_ = (bitField0_ & ~0x00000800);
+        goodReplicaIds_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00001000);
         return this;
       }
 
@@ -21600,6 +21710,11 @@ public final class ClientProtos {
         } else {
           result.cursor_ = cursorBuilder_.build();
         }
+        if (((bitField0_ & 0x00001000) == 0x00001000)) {
+          goodReplicaIds_ = java.util.Collections.unmodifiableList(goodReplicaIds_);
+          bitField0_ = (bitField0_ & ~0x00001000);
+        }
+        result.goodReplicaIds_ = goodReplicaIds_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -21714,6 +21829,16 @@ public final class ClientProtos {
         }
         if (other.hasCursor()) {
           mergeCursor(other.getCursor());
+        }
+        if (!other.goodReplicaIds_.isEmpty()) {
+          if (goodReplicaIds_.isEmpty()) {
+            goodReplicaIds_ = other.goodReplicaIds_;
+            bitField0_ = (bitField0_ & ~0x00001000);
+          } else {
+            ensureGoodReplicaIdsIsMutable();
+            goodReplicaIds_.addAll(other.goodReplicaIds_);
+          }
+          onChanged();
         }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
@@ -22996,6 +23121,107 @@ public final class ClientProtos {
           cursor_ = null;
         }
         return cursorBuilder_;
+      }
+
+      private java.util.List<java.lang.Integer> goodReplicaIds_ = java.util.Collections.emptyList();
+      private void ensureGoodReplicaIdsIsMutable() {
+        if (!((bitField0_ & 0x00001000) == 0x00001000)) {
+          goodReplicaIds_ = new java.util.ArrayList<java.lang.Integer>(goodReplicaIds_);
+          bitField0_ |= 0x00001000;
+         }
+      }
+      /**
+       * <pre>
+       * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+       * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+       * </pre>
+       *
+       * <code>repeated uint32 good_replica_ids = 13;</code>
+       */
+      public java.util.List<java.lang.Integer>
+          getGoodReplicaIdsList() {
+        return java.util.Collections.unmodifiableList(goodReplicaIds_);
+      }
+      /**
+       * <pre>
+       * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+       * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+       * </pre>
+       *
+       * <code>repeated uint32 good_replica_ids = 13;</code>
+       */
+      public int getGoodReplicaIdsCount() {
+        return goodReplicaIds_.size();
+      }
+      /**
+       * <pre>
+       * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+       * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+       * </pre>
+       *
+       * <code>repeated uint32 good_replica_ids = 13;</code>
+       */
+      public int getGoodReplicaIds(int index) {
+        return goodReplicaIds_.get(index);
+      }
+      /**
+       * <pre>
+       * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+       * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+       * </pre>
+       *
+       * <code>repeated uint32 good_replica_ids = 13;</code>
+       */
+      public Builder setGoodReplicaIds(
+          int index, int value) {
+        ensureGoodReplicaIdsIsMutable();
+        goodReplicaIds_.set(index, value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+       * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+       * </pre>
+       *
+       * <code>repeated uint32 good_replica_ids = 13;</code>
+       */
+      public Builder addGoodReplicaIds(int value) {
+        ensureGoodReplicaIdsIsMutable();
+        goodReplicaIds_.add(value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+       * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+       * </pre>
+       *
+       * <code>repeated uint32 good_replica_ids = 13;</code>
+       */
+      public Builder addAllGoodReplicaIds(
+          java.lang.Iterable<? extends java.lang.Integer> values) {
+        ensureGoodReplicaIdsIsMutable();
+        org.apache.hadoop.hbase.shaded.com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, goodReplicaIds_);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * the list of good replicas as told by the primary. To be used when the primary fails while doing a
+       * scan (note this is possible only after atleast 1 RPC is successful with the primary)
+       * </pre>
+       *
+       * <code>repeated uint32 good_replica_ids = 13;</code>
+       */
+      public Builder clearGoodReplicaIds() {
+        goodReplicaIds_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00001000);
+        onChanged();
+        return this;
       }
       public final Builder setUnknownFields(
           final org.apache.hadoop.hbase.shaded.com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -42031,7 +42257,7 @@ public final class ClientProtos {
       "t_handles_partials\030\007 \001(\010\022!\n\031client_handl" +
       "es_heartbeats\030\010 \001(\010\022\032\n\022track_scan_metric" +
       "s\030\t \001(\010\022\024\n\005renew\030\n \001(\010:\005false\022\030\n\rlimit_o" +
-      "f_rows\030\013 \001(\r:\0010\"\025\n\006Cursor\022\013\n\003row\030\001 \001(\014\"\330" +
+      "f_rows\030\013 \001(\r:\0010\"\025\n\006Cursor\022\013\n\003row\030\001 \001(\014\"\362" +
       "\002\n\014ScanResponse\022\030\n\020cells_per_result\030\001 \003(" +
       "\r\022\022\n\nscanner_id\030\002 \001(\004\022\024\n\014more_results\030\003 " +
       "\001(\010\022\013\n\003ttl\030\004 \001(\r\022!\n\007results\030\005 \003(\0132\020.hbas" +
@@ -42040,82 +42266,83 @@ public final class ClientProtos {
       "egion\030\010 \001(\010\022\031\n\021heartbeat_message\030\t \001(\010\022+",
       "\n\014scan_metrics\030\n \001(\0132\025.hbase.pb.ScanMetr" +
       "ics\022\032\n\017mvcc_read_point\030\013 \001(\004:\0010\022 \n\006curso" +
-      "r\030\014 \001(\0132\020.hbase.pb.Cursor\"\240\002\n\024BulkLoadHF" +
-      "ileRequest\022)\n\006region\030\001 \002(\0132\031.hbase.pb.Re" +
-      "gionSpecifier\022>\n\013family_path\030\002 \003(\0132).hba" +
-      "se.pb.BulkLoadHFileRequest.FamilyPath\022\026\n" +
-      "\016assign_seq_num\030\003 \001(\010\022+\n\010fs_token\030\004 \001(\0132" +
-      "\031.hbase.pb.DelegationToken\022\022\n\nbulk_token" +
-      "\030\005 \001(\t\022\030\n\tcopy_file\030\006 \001(\010:\005false\032*\n\nFami" +
-      "lyPath\022\016\n\006family\030\001 \002(\014\022\014\n\004path\030\002 \002(\t\"\'\n\025",
-      "BulkLoadHFileResponse\022\016\n\006loaded\030\001 \002(\010\"V\n" +
-      "\017DelegationToken\022\022\n\nidentifier\030\001 \001(\014\022\020\n\010" +
-      "password\030\002 \001(\014\022\014\n\004kind\030\003 \001(\t\022\017\n\007service\030" +
-      "\004 \001(\t\"l\n\026PrepareBulkLoadRequest\022\'\n\ntable" +
-      "_name\030\001 \002(\0132\023.hbase.pb.TableName\022)\n\006regi" +
-      "on\030\002 \001(\0132\031.hbase.pb.RegionSpecifier\"-\n\027P" +
-      "repareBulkLoadResponse\022\022\n\nbulk_token\030\001 \002" +
-      "(\t\"W\n\026CleanupBulkLoadRequest\022\022\n\nbulk_tok" +
-      "en\030\001 \002(\t\022)\n\006region\030\002 \001(\0132\031.hbase.pb.Regi" +
-      "onSpecifier\"\031\n\027CleanupBulkLoadResponse\"a",
-      "\n\026CoprocessorServiceCall\022\013\n\003row\030\001 \002(\014\022\024\n" +
-      "\014service_name\030\002 \002(\t\022\023\n\013method_name\030\003 \002(\t" +
-      "\022\017\n\007request\030\004 \002(\014\"B\n\030CoprocessorServiceR" +
-      "esult\022&\n\005value\030\001 \001(\0132\027.hbase.pb.NameByte" +
-      "sPair\"v\n\031CoprocessorServiceRequest\022)\n\006re" +
-      "gion\030\001 \002(\0132\031.hbase.pb.RegionSpecifier\022.\n" +
-      "\004call\030\002 \002(\0132 .hbase.pb.CoprocessorServic" +
-      "eCall\"o\n\032CoprocessorServiceResponse\022)\n\006r" +
-      "egion\030\001 \002(\0132\031.hbase.pb.RegionSpecifier\022&" +
-      "\n\005value\030\002 \002(\0132\027.hbase.pb.NameBytesPair\"\226",
-      "\001\n\006Action\022\r\n\005index\030\001 \001(\r\022)\n\010mutation\030\002 \001" +
-      "(\0132\027.hbase.pb.MutationProto\022\032\n\003get\030\003 \001(\013" +
-      "2\r.hbase.pb.Get\0226\n\014service_call\030\004 \001(\0132 ." +
-      "hbase.pb.CoprocessorServiceCall\"k\n\014Regio" +
-      "nAction\022)\n\006region\030\001 \002(\0132\031.hbase.pb.Regio" +
-      "nSpecifier\022\016\n\006atomic\030\002 \001(\010\022 \n\006action\030\003 \003" +
-      "(\0132\020.hbase.pb.Action\"c\n\017RegionLoadStats\022" +
-      "\027\n\014memstoreLoad\030\001 \001(\005:\0010\022\030\n\rheapOccupanc" +
-      "y\030\002 \001(\005:\0010\022\035\n\022compactionPressure\030\003 \001(\005:\001" +
-      "0\"j\n\024MultiRegionLoadStats\022)\n\006region\030\001 \003(",
-      "\0132\031.hbase.pb.RegionSpecifier\022\'\n\004stat\030\002 \003" +
-      "(\0132\031.hbase.pb.RegionLoadStats\"\336\001\n\021Result" +
-      "OrException\022\r\n\005index\030\001 \001(\r\022 \n\006result\030\002 \001" +
-      "(\0132\020.hbase.pb.Result\022*\n\texception\030\003 \001(\0132" +
-      "\027.hbase.pb.NameBytesPair\022:\n\016service_resu" +
-      "lt\030\004 \001(\0132\".hbase.pb.CoprocessorServiceRe" +
-      "sult\0220\n\tloadStats\030\005 \001(\0132\031.hbase.pb.Regio" +
-      "nLoadStatsB\002\030\001\"x\n\022RegionActionResult\0226\n\021" +
-      "resultOrException\030\001 \003(\0132\033.hbase.pb.Resul" +
-      "tOrException\022*\n\texception\030\002 \001(\0132\027.hbase.",
-      "pb.NameBytesPair\"x\n\014MultiRequest\022,\n\014regi" +
-      "onAction\030\001 \003(\0132\026.hbase.pb.RegionAction\022\022" +
-      "\n\nnonceGroup\030\002 \001(\004\022&\n\tcondition\030\003 \001(\0132\023." +
-      "hbase.pb.Condition\"\226\001\n\rMultiResponse\0228\n\022" +
-      "regionActionResult\030\001 \003(\0132\034.hbase.pb.Regi" +
-      "onActionResult\022\021\n\tprocessed\030\002 \001(\010\0228\n\020reg" +
-      "ionStatistics\030\003 \001(\0132\036.hbase.pb.MultiRegi" +
-      "onLoadStats*\'\n\013Consistency\022\n\n\006STRONG\020\000\022\014" +
-      "\n\010TIMELINE\020\0012\263\005\n\rClientService\0222\n\003Get\022\024." +
-      "hbase.pb.GetRequest\032\025.hbase.pb.GetRespon",
-      "se\022;\n\006Mutate\022\027.hbase.pb.MutateRequest\032\030." +
-      "hbase.pb.MutateResponse\0225\n\004Scan\022\025.hbase." +
-      "pb.ScanRequest\032\026.hbase.pb.ScanResponse\022P" +
-      "\n\rBulkLoadHFile\022\036.hbase.pb.BulkLoadHFile" +
-      "Request\032\037.hbase.pb.BulkLoadHFileResponse" +
-      "\022V\n\017PrepareBulkLoad\022 .hbase.pb.PrepareBu" +
-      "lkLoadRequest\032!.hbase.pb.PrepareBulkLoad" +
-      "Response\022V\n\017CleanupBulkLoad\022 .hbase.pb.C" +
-      "leanupBulkLoadRequest\032!.hbase.pb.Cleanup" +
-      "BulkLoadResponse\022X\n\013ExecService\022#.hbase.",
-      "pb.CoprocessorServiceRequest\032$.hbase.pb." +
-      "CoprocessorServiceResponse\022d\n\027ExecRegion" +
-      "ServerService\022#.hbase.pb.CoprocessorServ" +
-      "iceRequest\032$.hbase.pb.CoprocessorService" +
-      "Response\0228\n\005Multi\022\026.hbase.pb.MultiReques" +
-      "t\032\027.hbase.pb.MultiResponseBI\n1org.apache" +
-      ".hadoop.hbase.shaded.protobuf.generatedB" +
-      "\014ClientProtosH\001\210\001\001\240\001\001"
+      "r\030\014 \001(\0132\020.hbase.pb.Cursor\022\030\n\020good_replic" +
+      "a_ids\030\r \003(\r\"\240\002\n\024BulkLoadHFileRequest\022)\n\006" +
+      "region\030\001 \002(\0132\031.hbase.pb.RegionSpecifier\022" +
+      ">\n\013family_path\030\002 \003(\0132).hbase.pb.BulkLoad" +
+      "HFileRequest.FamilyPath\022\026\n\016assign_seq_nu" +
+      "m\030\003 \001(\010\022+\n\010fs_token\030\004 \001(\0132\031.hbase.pb.Del" +
+      "egationToken\022\022\n\nbulk_token\030\005 \001(\t\022\030\n\tcopy" +
+      "_file\030\006 \001(\010:\005false\032*\n\nFamilyPath\022\016\n\006fami",
+      "ly\030\001 \002(\014\022\014\n\004path\030\002 \002(\t\"\'\n\025BulkLoadHFileR" +
+      "esponse\022\016\n\006loaded\030\001 \002(\010\"V\n\017DelegationTok" +
+      "en\022\022\n\nidentifier\030\001 \001(\014\022\020\n\010password\030\002 \001(\014" +
+      "\022\014\n\004kind\030\003 \001(\t\022\017\n\007service\030\004 \001(\t\"l\n\026Prepa" +
+      "reBulkLoadRequest\022\'\n\ntable_name\030\001 \002(\0132\023." +
+      "hbase.pb.TableName\022)\n\006region\030\002 \001(\0132\031.hba" +
+      "se.pb.RegionSpecifier\"-\n\027PrepareBulkLoad" +
+      "Response\022\022\n\nbulk_token\030\001 \002(\t\"W\n\026CleanupB" +
+      "ulkLoadRequest\022\022\n\nbulk_token\030\001 \002(\t\022)\n\006re" +
+      "gion\030\002 \001(\0132\031.hbase.pb.RegionSpecifier\"\031\n",
+      "\027CleanupBulkLoadResponse\"a\n\026CoprocessorS" +
+      "erviceCall\022\013\n\003row\030\001 \002(\014\022\024\n\014service_name\030" +
+      "\002 \002(\t\022\023\n\013method_name\030\003 \002(\t\022\017\n\007request\030\004 " +
+      "\002(\014\"B\n\030CoprocessorServiceResult\022&\n\005value" +
+      "\030\001 \001(\0132\027.hbase.pb.NameBytesPair\"v\n\031Copro" +
+      "cessorServiceRequest\022)\n\006region\030\001 \002(\0132\031.h" +
+      "base.pb.RegionSpecifier\022.\n\004call\030\002 \002(\0132 ." +
+      "hbase.pb.CoprocessorServiceCall\"o\n\032Copro" +
+      "cessorServiceResponse\022)\n\006region\030\001 \002(\0132\031." +
+      "hbase.pb.RegionSpecifier\022&\n\005value\030\002 \002(\0132",
+      "\027.hbase.pb.NameBytesPair\"\226\001\n\006Action\022\r\n\005i" +
+      "ndex\030\001 \001(\r\022)\n\010mutation\030\002 \001(\0132\027.hbase.pb." +
+      "MutationProto\022\032\n\003get\030\003 \001(\0132\r.hbase.pb.Ge" +
+      "t\0226\n\014service_call\030\004 \001(\0132 .hbase.pb.Copro" +
+      "cessorServiceCall\"k\n\014RegionAction\022)\n\006reg" +
+      "ion\030\001 \002(\0132\031.hbase.pb.RegionSpecifier\022\016\n\006" +
+      "atomic\030\002 \001(\010\022 \n\006action\030\003 \003(\0132\020.hbase.pb." +
+      "Action\"c\n\017RegionLoadStats\022\027\n\014memstoreLoa" +
+      "d\030\001 \001(\005:\0010\022\030\n\rheapOccupancy\030\002 \001(\005:\0010\022\035\n\022" +
+      "compactionPressure\030\003 \001(\005:\0010\"j\n\024MultiRegi",
+      "onLoadStats\022)\n\006region\030\001 \003(\0132\031.hbase.pb.R" +
+      "egionSpecifier\022\'\n\004stat\030\002 \003(\0132\031.hbase.pb." +
+      "RegionLoadStats\"\336\001\n\021ResultOrException\022\r\n" +
+      "\005index\030\001 \001(\r\022 \n\006result\030\002 \001(\0132\020.hbase.pb." +
+      "Result\022*\n\texception\030\003 \001(\0132\027.hbase.pb.Nam" +
+      "eBytesPair\022:\n\016service_result\030\004 \001(\0132\".hba" +
+      "se.pb.CoprocessorServiceResult\0220\n\tloadSt" +
+      "ats\030\005 \001(\0132\031.hbase.pb.RegionLoadStatsB\002\030\001" +
+      "\"x\n\022RegionActionResult\0226\n\021resultOrExcept" +
+      "ion\030\001 \003(\0132\033.hbase.pb.ResultOrException\022*",
+      "\n\texception\030\002 \001(\0132\027.hbase.pb.NameBytesPa" +
+      "ir\"x\n\014MultiRequest\022,\n\014regionAction\030\001 \003(\013" +
+      "2\026.hbase.pb.RegionAction\022\022\n\nnonceGroup\030\002" +
+      " \001(\004\022&\n\tcondition\030\003 \001(\0132\023.hbase.pb.Condi" +
+      "tion\"\226\001\n\rMultiResponse\0228\n\022regionActionRe" +
+      "sult\030\001 \003(\0132\034.hbase.pb.RegionActionResult" +
+      "\022\021\n\tprocessed\030\002 \001(\010\0228\n\020regionStatistics\030" +
+      "\003 \001(\0132\036.hbase.pb.MultiRegionLoadStats*\'\n" +
+      "\013Consistency\022\n\n\006STRONG\020\000\022\014\n\010TIMELINE\020\0012\263" +
+      "\005\n\rClientService\0222\n\003Get\022\024.hbase.pb.GetRe",
+      "quest\032\025.hbase.pb.GetResponse\022;\n\006Mutate\022\027" +
+      ".hbase.pb.MutateRequest\032\030.hbase.pb.Mutat" +
+      "eResponse\0225\n\004Scan\022\025.hbase.pb.ScanRequest" +
+      "\032\026.hbase.pb.ScanResponse\022P\n\rBulkLoadHFil" +
+      "e\022\036.hbase.pb.BulkLoadHFileRequest\032\037.hbas" +
+      "e.pb.BulkLoadHFileResponse\022V\n\017PrepareBul" +
+      "kLoad\022 .hbase.pb.PrepareBulkLoadRequest\032" +
+      "!.hbase.pb.PrepareBulkLoadResponse\022V\n\017Cl" +
+      "eanupBulkLoad\022 .hbase.pb.CleanupBulkLoad" +
+      "Request\032!.hbase.pb.CleanupBulkLoadRespon",
+      "se\022X\n\013ExecService\022#.hbase.pb.Coprocessor" +
+      "ServiceRequest\032$.hbase.pb.CoprocessorSer" +
+      "viceResponse\022d\n\027ExecRegionServerService\022" +
+      "#.hbase.pb.CoprocessorServiceRequest\032$.h" +
+      "base.pb.CoprocessorServiceResponse\0228\n\005Mu" +
+      "lti\022\026.hbase.pb.MultiRequest\032\027.hbase.pb.M" +
+      "ultiResponseBI\n1org.apache.hadoop.hbase." +
+      "shaded.protobuf.generatedB\014ClientProtosH" +
+      "\001\210\001\001\240\001\001"
     };
     org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -42235,7 +42462,7 @@ public final class ClientProtos {
     internal_static_hbase_pb_ScanResponse_fieldAccessorTable = new
       org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_hbase_pb_ScanResponse_descriptor,
-        new java.lang.String[] { "CellsPerResult", "ScannerId", "MoreResults", "Ttl", "Results", "Stale", "PartialFlagPerResult", "MoreResultsInRegion", "HeartbeatMessage", "ScanMetrics", "MvccReadPoint", "Cursor", });
+        new java.lang.String[] { "CellsPerResult", "ScannerId", "MoreResults", "Ttl", "Results", "Stale", "PartialFlagPerResult", "MoreResultsInRegion", "HeartbeatMessage", "ScanMetrics", "MvccReadPoint", "Cursor", "GoodReplicaIds", });
     internal_static_hbase_pb_BulkLoadHFileRequest_descriptor =
       getDescriptor().getMessageTypes().get(15);
     internal_static_hbase_pb_BulkLoadHFileRequest_fieldAccessorTable = new

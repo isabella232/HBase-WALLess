@@ -373,6 +373,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   @VisibleForTesting
   private volatile boolean throwError;
+  
+  @VisibleForTesting
+  private volatile boolean throwErrorOnScan;
 
   /**
    * @return The smallest mvcc readPoint across all the scanners in this
@@ -670,6 +673,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private byte[] explicitSplitPoint = null;
 
   private final MultiVersionConcurrencyControl mvcc = new MultiVersionConcurrencyControl();
+
+  private Object maxSeqNoLock = new Object();
+  // can this be volatile only??
+  private AtomicLong currentMaxSeqNo = new AtomicLong(-1l);
 
   // Coprocessor host
   private RegionCoprocessorHost coprocessorHost;
@@ -3283,6 +3290,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   public void throwErrorOnMemstoreReplay (boolean throwError) {
     this.throwError = throwError;
   }
+
+  @VisibleForTesting
+  public void throwErrorOnScan (boolean throwError) {
+    this.throwErrorOnScan = throwError;
+  }
   
   public Action batchReplayForMemstoreReplication(NavigableMap<byte[], Collection<Cell>> familyMaps,
       int replicasOffered, long maxSeqId) throws IOException {
@@ -3393,6 +3405,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
     public ReplayRegionAction(long seqNo, Action memstoreAction) {
       this.seqNo = seqNo;
+      // we need to sync here?? Or volatile is enough??
+      synchronized (maxSeqNoLock) {
+        if (seqNo > currentMaxSeqNo.get()) {
+          // get the max seqId while preparing the action. The MVCC has to some how
+          // catch up to this maxseqNo and it need not happen in increasing order.
+          // so the reads to replica regions needs to wait for the mvcc to catch up to this
+          // max seqNo
+          currentMaxSeqNo.set(seqNo);
+        }
+      }
       this.memstoreAction = memstoreAction;
     }
 
@@ -6180,6 +6202,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     private final long maxResultSize;
     private final ScannerContext defaultScannerContext;
     private final FilterWrapper filter;
+    private List<Integer> goodReplicas;
 
     @Override
     public HRegionInfo getRegionInfo() {
@@ -6217,16 +6240,47 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       long mvccReadPoint = PackagePrivateFieldAccessor.getMvccReadPoint(scan);
       synchronized (scannerReadPoints) {
         if (mvccReadPoint > 0) {
+          // wait for mvcc point to catch up if it is a replica region
+          if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
+            catchUpMvcc(mvccReadPoint);
+          }
           this.readPt = mvccReadPoint;
         } else if (nonce == HConstants.NO_NONCE || rsServices == null
             || rsServices.getNonceManager() == null) {
-          this.readPt = getReadPoint(isolationLevel);
+          // if it is a replica we won't have the read pt. This is the case when there were no RPC
+          // that
+          // was successful in primary
+          if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
+            long tempMvcc = currentMaxSeqNo.get();
+            if (tempMvcc != -1) {
+              catchUpMvcc(tempMvcc);
+              this.readPt = tempMvcc;
+            } else {
+              this.readPt = getReadPoint(isolationLevel);
+            }
+          } else {
+            this.readPt = getReadPoint(isolationLevel);
+          }
         } else {
           this.readPt = rsServices.getNonceManager().getMvccFromOperationContext(nonceGroup, nonce);
         }
         scannerReadPoints.put(this, this.readPt);
       }
+      if (regionReplicator != null) {
+        goodReplicas = regionReplicator.getCurrentPiplineForReads();
+      }
       initializeScanners(scan, additionalScanners);
+    }
+
+    private void catchUpMvcc(long mvccReadPoint) {
+      while (mvcc.getReadPoint() < mvccReadPoint) {
+        try {
+          // is it better to go with wait and notify mechanism??
+          Thread.sleep(200);
+        } catch (InterruptedException e) {
+          // TODO : throw exception??
+        }
+      }
     }
 
     protected void initializeScanners(Scan scan, List<KeyValueScanner> additionalScanners)
@@ -6351,6 +6405,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
       startRegionOperation(Operation.SCAN);
       readRequestsCount.increment();
+      if(throwErrorOnScan) {
+        throw new IOException("Throw error on scan");
+      }
       try {
         return nextRaw(outResults, scannerContext);
       } finally {
@@ -8248,7 +8305,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   @edu.umd.cs.findbugs.annotations.SuppressWarnings(value="SF_SWITCH_FALLTHROUGH",
     justification="Intentional")
   public void startRegionOperation(Operation op) throws IOException {
-    checkHealthStatus();
+   // checkHealthStatus();
     switch (op) {
       case GET:  // read operations
       case SCAN:
@@ -8292,18 +8349,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     } catch (Exception e) {
       lock.readLock().unlock();
       throw new IOException(e);
-    }
-  }
-
-  private void checkHealthStatus() throws BadReplicaException {
-    if (RegionReplicaUtil.isDefaultReplica(getRegionInfo())) return;
-    // TODO every region check with on every op! This includes a synchronized call and will be a
-    // killer for perf. Do we really need this. We should remove this.
-    synchronized (writestate) {
-      if (writestate.badReplica) {
-        LOG.warn("Region " + this.getRegionInfo() + " found in BAD health");
-        throw new BadReplicaException("Region " + this.getRegionInfo() + " found in BAD health");
-      }
     }
   }
 
@@ -8643,6 +8688,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * Marks the health of this region replica
    * @param health
    */
+  // TODO : Remove this if we are not going to use it.
   public void markHealthStatus(boolean health) {
     assert !RegionReplicaUtil.isDefaultReplica(this.getRegionInfo());
     synchronized (writestate) {

@@ -124,4 +124,8 @@ public interface RegionScanner extends InternalScanner, Shipper {
   default void shipped() throws IOException {
     // do nothing
   }
+
+  default List<Integer> getGoodReplicas() {
+    return null;
+  }
 }

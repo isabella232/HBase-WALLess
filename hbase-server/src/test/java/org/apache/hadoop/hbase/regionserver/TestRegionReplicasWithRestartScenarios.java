@@ -41,6 +41,7 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.RegionLocator;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.RetriesExhaustedException;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.regionserver.TestRegionReplicasWith3Replicas.OpenedIn;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.BadReplicaException;
@@ -188,7 +189,7 @@ public class TestRegionReplicasWithRestartScenarios {
         table.get(get);
         fail("Test should have got an exception");
       } catch (Exception e) {
-        assertTrue(e instanceof DoNotRetryIOException);
+        assertTrue(e instanceof RetriesExhaustedException);
       }
       // again trying to write - this time tertiary should be avoided if the cache was actually cleared
       data = Bytes.toBytes(String.valueOf(101));
@@ -250,7 +251,7 @@ public class TestRegionReplicasWithRestartScenarios {
       } catch (Exception e) {
         // If users get this issue. They should actually try to refresh the cache or
         // create a new connection
-        assertTrue(e instanceof BadReplicaException);
+        assertTrue(e instanceof RetriesExhaustedException);
       }
 
       for (RegionServerThread rs : HTU.getMiniHBaseCluster().getRegionServerThreads()) {
@@ -322,11 +323,13 @@ public class TestRegionReplicasWithRestartScenarios {
       get.setReplicaId(1);
       try {
         table.get(get);
+        // TODO : fix this case. So reads should fail as secondary has got error
+        // now there is no pipeline updation that happens
         fail("Test should have got an exception");
       } catch (Exception e) {
         // If users get this issue. They should actually try to refresh the cache or
         // create a new connection
-        assertTrue(e instanceof BadReplicaException);
+        assertTrue(e instanceof RetriesExhaustedException);
       }
       // again trying to write - this time tertiary should be avoided if the cache was actually
       // cleared

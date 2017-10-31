@@ -245,6 +245,21 @@ public class RegionReplicaReplicator {
     }
   }
 
+  // TODO : Just adding for completion.
+  public List<Integer> getCurrentPiplineForReads() {
+    Lock lock = this.lock.readLock();
+    lock.lock();
+    try {
+      if (pipeline != null) {
+        return new ArrayList<>(this.pipeline);
+      } else {
+        return null;
+      }
+    } finally {
+      lock.unlock();
+    }
+  }
+  
   public List<Integer> createPipeline() throws PipelineException {
     // This should be called only when this is Primary Region
     assert RegionReplicaUtil.isDefaultReplica(curRegion);
@@ -258,6 +273,8 @@ public class RegionReplicaReplicator {
     // META is not yet updated, more writes might get committed. There is chance that this META
     // update might not happen before this primary itself going down. Then META says a real BAD
     // replica as good and that might get selected as new primary. Then we might loose some data!
+    // How ever still there is a chance that before this count is updated we will have pending writes already
+    // in process. That will still go on. So any temp glitch will make writes successful.
     if (this.badCountToBeCommittedInMeta.get() != 0) {
       throw new PipelineException();
     }

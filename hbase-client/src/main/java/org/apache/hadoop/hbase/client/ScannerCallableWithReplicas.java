@@ -22,7 +22,9 @@ import com.google.common.annotations.VisibleForTesting;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
@@ -37,6 +39,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.DoNotRetryIOException;
 import org.apache.hadoop.hbase.HRegionInfo;
+import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.RegionLocations;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
@@ -146,27 +149,9 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
     //
     // Since RegionReplication is a table attribute, it wont change as long as table is enabled,
     // it just needs to be set once.
-
+   // TODO : add scan related test cases
     if (regionReplication <= 0) {
-      RegionLocations rl = null;
-      try {
-        rl = RpcRetryingCallerWithReadReplicas.getRegionLocations(true,
-            RegionReplicaUtil.DEFAULT_REPLICA_ID, cConnection, tableName,
-            currentScannerCallable.getRow());
-      } catch (RetriesExhaustedException | DoNotRetryIOException e) {
-        // We cannot get the primary replica region location, it is possible that the region server
-        // hosting meta table is down, it needs to proceed to try cached replicas directly.
-        if (cConnection instanceof ConnectionImplementation) {
-          rl = ((ConnectionImplementation) cConnection)
-              .getCachedLocation(tableName, currentScannerCallable.getRow());
-          if (rl == null) {
-            throw e;
-          }
-        } else {
-          // For completeness
-          throw e;
-        }
-      }
+      RegionLocations rl = getRegionLocations(true);
       regionReplication = rl.size();
     }
     // allocate a boundedcompletion pool of some multiple of number of replicas.
@@ -180,56 +165,65 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
     replicaSwitched.set(false);
     // submit call for the primary replica.
     addCallsForCurrentReplica(cs);
-    int startIndex = 0;
-
+    // The algo works like this for SCans
+    // 1) First hit the primary and wait for the timeBeforeReplicas.
+    // 2) if we have a result from 1) return the result.
+    // 3) if we have no result from 1), there are two cases
+    //      3a 1) if the previous scan RPC was  successful and if it has the goodReplicas in it use those good replicas and continue the scan
+    //      3a 2) while doing this set the read pt that we got from the scan.
+    //      3a 3) if we get the result. Return back. If not read the good replicas from the META and try for the result.
+    //      
+    //      3b 1) if there was no successful RPC first hit the region replicas that is available with the callable.
+    //      3b 2) if we get the result return the result. 
+    //      3c 3)  If not read the good replicas from the META and try for the result.
+    //  4) if the there is only one region replica just wait till the timeout is expired to see if the primary returns a result back
     try {
       // wait for the timeout to see whether the primary responds back
-      Future<Pair<Result[], ScannerCallable>> f = cs.poll(timeBeforeReplicas,
-          TimeUnit.MICROSECONDS); // Yes, microseconds
+      Future<Pair<Result[], ScannerCallable>> f =
+          cs.poll(timeBeforeReplicas, TimeUnit.MICROSECONDS); // Yes, microseconds
       if (f != null) {
         // After poll, if f is not null, there must be a completed task
         Pair<Result[], ScannerCallable> r = f.get();
         if (r != null && r.getSecond() != null) {
           updateCurrentlyServingReplica(r.getSecond(), r.getFirst(), done, pool);
         }
-        return r == null ? null : r.getFirst(); //great we got a response
+        return r == null ? null : r.getFirst(); // great we got a response
+      } else {
+        if (regionReplication != 1) {
+          // result not got from primary. Try with the replicas if there was a successful RPC.
+          // Use the good Replicas
+          if (currentScannerCallable != null) {
+            if (currentScannerCallable.goodReplicaIds != null) {
+              // we already have the goodReplicaIds with us.
+              addCallsForOtherReplicas(timeout, TimeUnit.MILLISECONDS, cs,
+                currentScannerCallable.goodReplicaIds);
+              f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS,
+                currentScannerCallable.goodReplicaIds);
+
+              if (f == null) {
+                f = getGoodReplicaFromMETAandRetry(timeout, cs);
+              }
+            } else {
+              // the case where the even the first RPC was not set.
+              // in that case directly go with replicas
+              addCallsForOtherReplicas(cs, 0, regionReplication - 1);
+              f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS,
+                1, regionReplication);
+              if (f == null) {
+                // probably the timeout should be adjusted
+                f = getGoodReplicaFromMETAandRetry(timeout, cs);
+              }
+            }
+          }
+        } else {
+          // when region replica is 1 wait for results from primary till timeout
+          f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS,
+            0, 1);
+        }
       }
-    } catch (ExecutionException e) {
-      // We ignore the ExecutionException and continue with the replicas
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Scan with primary region returns " + e.getCause());
-      }
-
-      // If rl's size is 1 or scan's consitency is strong, it needs to throw
-      // out the exception from the primary replica
-      if ((regionReplication == 1) || (scan.getConsistency() == Consistency.STRONG)) {
-        // Rethrow the first exception
-        RpcRetryingCallerWithReadReplicas.throwEnrichedException(e, retries);
-      }
-
-      startIndex = 1;
-    } catch (CancellationException e) {
-      throw new InterruptedIOException(e.getMessage());
-    } catch (InterruptedException e) {
-      throw new InterruptedIOException(e.getMessage());
-    }
-
-    // submit call for the all of the secondaries at once
-    int endIndex = regionReplication;
-    if (scan.getConsistency() == Consistency.STRONG) {
-      // When scan's consistency is strong, do not send to the secondaries
-      endIndex = 1;
-    } else {
-      // TODO: this may be an overkill for large region replication
-      addCallsForOtherReplicas(cs, 0, regionReplication - 1);
-    }
-
-    try {
-      Future<Pair<Result[], ScannerCallable>> f = cs.pollForFirstSuccessfullyCompletedTask(timeout,
-          TimeUnit.MILLISECONDS, startIndex, endIndex);
-
       if (f == null) {
-        throw new IOException("Failed to get result within timeout, timeout=" + timeout + "ms");
+        throw new RetriesExhaustedException(
+            "Failed to get result within timeout, timeout=" + timeout + "ms");
       }
       Pair<Result[], ScannerCallable> r = f.get();
 
@@ -237,20 +231,59 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
         updateCurrentlyServingReplica(r.getSecond(), r.getFirst(), done, pool);
       }
       return r == null ? null : r.getFirst(); // great we got an answer
-
     } catch (ExecutionException e) {
-      RpcRetryingCallerWithReadReplicas.throwEnrichedException(e, retries);
+      LOG.error("Error should not happen ", e);
     } catch (CancellationException e) {
       throw new InterruptedIOException(e.getMessage());
     } catch (InterruptedException e) {
       throw new InterruptedIOException(e.getMessage());
     } finally {
-      // We get there because we were interrupted or because one or more of the
-      // calls succeeded or failed. In all case, we stop all our tasks.
       cs.cancelAll();
     }
     LOG.error("Imposible? Arrive at an unreachable line..."); // unreachable
     throw new IOException("Imposible? Arrive at an unreachable line...");
+  }
+
+  private Future<Pair<Result[], ScannerCallable>> getGoodReplicaFromMETAandRetry(int timeout,
+      ResultBoundedCompletionService<Pair<Result[], ScannerCallable>> cs)
+      throws InterruptedIOException, IOException, InterruptedException, ExecutionException {
+    Set<Integer> updatedGoodReplicas = new HashSet<Integer>();
+    Future<Pair<Result[], ScannerCallable>> f;
+    // retry by reading GOOD replicas from META
+    RegionLocations rl = getRegionLocations(false);
+    for (HRegionLocation loc : rl.getRegionLocations()) {
+      if (!RegionReplicaUtil.isDefaultReplica(loc.getRegionInfo())) {
+        updatedGoodReplicas.add(loc.getRegionInfo().getReplicaId());
+      }
+    }
+    addCallsForOtherReplicas(timeout, TimeUnit.MILLISECONDS, cs, updatedGoodReplicas);
+    f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS,
+      updatedGoodReplicas);
+    return f;
+  }
+
+  public RegionLocations getRegionLocations(boolean useCache)
+      throws InterruptedIOException, IOException {
+    RegionLocations rl = null;
+    try {
+      rl = RpcRetryingCallerWithReadReplicas.getRegionLocations(useCache,
+          RegionReplicaUtil.DEFAULT_REPLICA_ID, cConnection, tableName,
+          currentScannerCallable.getRow());
+    } catch (RetriesExhaustedException | DoNotRetryIOException e) {
+      // We cannot get the primary replica region location, it is possible that the region server
+      // hosting meta table is down, it needs to proceed to try cached replicas directly.
+      if (cConnection instanceof ConnectionImplementation) {
+        rl = ((ConnectionImplementation) cConnection)
+            .getCachedLocation(tableName, currentScannerCallable.getRow());
+        if (rl == null) {
+          throw e;
+        }
+      } else {
+        // For completeness
+        throw e;
+      }
+    }
+    return rl;
   }
 
   private void updateCurrentlyServingReplica(ScannerCallable scanner, Result[] result,
@@ -335,6 +368,28 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
     }
   }
 
+  // Shall we pass on the call to all replicas and just wait for result from one?
+  // Or shall we do it one by one??
+  private void addCallsForOtherReplicas(int timeout, TimeUnit unit,
+      ResultBoundedCompletionService<Pair<Result[], ScannerCallable>> cs,
+      Set<Integer> goodReplicasId) {
+
+    for (int id : goodReplicasId) {
+      if (currentScannerCallable.id == id) {
+        continue; // this was already scheduled earlier
+      }
+      ScannerCallable s = currentScannerCallable.getScannerCallableForReplica(id);
+      // add the mvcc here if the scanner callable already has it. This mvcc has to be honoured
+      if (currentScannerCallable.getScan().getMvccReadPoint() > 0) {
+        // Use this mvcc on the replica also
+        s.getScan().setMvccReadPoint(currentScannerCallable.getScan().getMvccReadPoint());
+      }
+      setStartRowForReplicaCallable(s);
+      outstandingCallables.add(s);
+      RetryingRPC retryingOnReplica = new RetryingRPC(s);
+      cs.submit(retryingOnReplica, scannerTimeout, id);
+    }
+  }
   /**
    * Set the start row for the replica callable based on the state of the last result received.
    * @param callable The callable to set the start row on
@@ -373,7 +428,7 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
       this.caller = ScannerCallableWithReplicas.this.caller;
       if (scan.getConsistency() == Consistency.TIMELINE) {
         this.caller = RpcRetryingCallerFactory.instantiate(ScannerCallableWithReplicas.this.conf)
-            .<Result[]>newCaller();
+            .<Result[]> newCaller();
       }
     }
 

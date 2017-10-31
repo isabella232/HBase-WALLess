@@ -183,7 +183,51 @@ public class TestMemstoreRegionReplicaWithFailures {
       closeTertiary(tertiaryOpenedIn);
     }
   }
-  
+
+  @Test(timeout = 6000000)
+  public void testFailWriteOnSecondaryWithTimeline() throws Exception {
+    Pair<OpenedIn, OpenedIn> pair = null;
+    OpenedIn tertiaryOpenedIn = null;
+    HRegion secondaryRegion = null;
+    HRegion primaryRegion = null;
+    try {
+      pair = openSecondary();
+      tertiaryOpenedIn = openTertiary(pair);
+      secondaryRegion = (HRegion)getSecondaryRegion(pair);
+      secondaryRegion.throwErrorOnMemstoreReplay(true);
+      byte[] data = Bytes.toBytes(String.valueOf(100));
+      Put put = new Put(data);
+      put.setDurability(Durability.SKIP_WAL);
+      put.addColumn(f, null, data);
+      table.put(put);
+      // flush so that region replica can read
+      primaryRegion = (HRegion) getPrimaryRegion(pair);
+      primaryRegion.throwErrorOnScan(true);
+      // just sleeping to see if the value is visible
+      // try directly Get against region replica
+      byte[] row = Bytes.toBytes(String.valueOf(100));
+      Get get = new Get(row);
+      get.setConsistency(Consistency.TIMELINE);
+      get.setReplicaId(2);
+      Result result = table.get(get);
+      Assert.assertArrayEquals(row, result.getValue(f, null));
+      
+      row = Bytes.toBytes(String.valueOf(100));
+      get = new Get(row);
+      get.setConsistency(Consistency.TIMELINE);
+      result = table.get(get);
+      // this should some how get a result from tertiary. Lets see
+      Assert.assertArrayEquals(row, result.getValue(f, null));
+    } finally {
+      secondaryRegion.throwErrorOnMemstoreReplay(false);
+      primaryRegion.throwErrorOnScan(false);
+      HTU.deleteNumericRows(table, HConstants.CATALOG_FAMILY, 100, 101);
+      closeSecondary(pair.getSecond());
+      closeTertiary(tertiaryOpenedIn);
+      // TODO : fix - test case not shutting down
+    }
+  }
+
   private OpenedIn openTertiary(Pair<OpenedIn, OpenedIn> pair) throws Exception {
     // we know the combination
     OpenedIn tertiaryOpenedIn = null;

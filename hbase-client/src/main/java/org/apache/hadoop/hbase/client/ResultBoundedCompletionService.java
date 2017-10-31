@@ -19,6 +19,7 @@
 package org.apache.hadoop.hbase.client;
 
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -53,7 +54,7 @@ public class ResultBoundedCompletionService<V> {
   private final QueueingFuture<V>[] tasks; // all the tasks
   private final ArrayList<QueueingFuture> completedTasks; // completed tasks
   private volatile boolean cancelled = false;
-  
+
   class QueueingFuture<T> implements RunnableFuture<T> {
     private final RetryingCallable<T> future;
     private T result = null;
@@ -204,11 +205,52 @@ public class ResultBoundedCompletionService<V> {
    */
   public QueueingFuture<V> pollForFirstSuccessfullyCompletedTask(long timeout, TimeUnit unit,
       int startIndex, int endIndex)
-      throws InterruptedException, CancellationException, ExecutionException {
+      throws InterruptedException, CancellationException {
 
     QueueingFuture<V>  f;
     long start, duration;
     for (int i = startIndex; i < endIndex; i ++) {
+
+      start = EnvironmentEdgeManager.currentTime();
+      f = pollForSpecificCompletedTask(timeout, unit, i);
+      duration = EnvironmentEdgeManager.currentTime() - start;
+
+      // Even with operationTimeout less than 0, still loop through the rest as there could
+      // be other completed tasks before operationTimeout.
+      timeout -= duration;
+
+      if (f == null) {
+        // the null could be because really there was no result??
+        return null;
+      } else if (f.getExeEx() != null) {
+        // we continue here as we need to loop through all the results.
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Replica " + ((f == null) ? 0 : f.getReplicaId()) + " returns " +
+              f.getExeEx().getCause());
+        }
+
+        if (i == (endIndex - 1)) {
+          // Rethrow this exception
+          // instead of throwing Exception let us return null and let the caller handle the null cases
+          return null;
+        }
+        continue;
+      }
+
+      return f;
+    }
+
+    // impossible to reach
+    return null;
+  }
+
+  public QueueingFuture<V> pollForFirstSuccessfullyCompletedTask(long timeout, TimeUnit unit,
+      Set<Integer> goodReplicaIds)
+      throws InterruptedException, CancellationException, ExecutionException {
+
+    QueueingFuture<V>  f;
+    long start, duration;
+    for (int i = 0; i < goodReplicaIds.size();  i++) {
 
       start = EnvironmentEdgeManager.currentTime();
       f = pollForSpecificCompletedTask(timeout, unit, i);
@@ -227,13 +269,12 @@ public class ResultBoundedCompletionService<V> {
               f.getExeEx().getCause());
         }
 
-        if (i == (endIndex - 1)) {
-          // Rethrow this exception
-          throw f.getExeEx();
+        if (i == (goodReplicaIds.size() - 1)) {
+          // return null indicating results were not go and it had exception.
+          return null;
         }
         continue;
       }
-
       return f;
     }
 
@@ -255,6 +296,7 @@ public class ResultBoundedCompletionService<V> {
     }
 
     synchronized (tasks) {
+      // TODO : Revisit this logic again
       if (!cancelled && (completedTasks.size() <= index)) unit.timedWait(tasks, timeout);
       if (completedTasks.size() <= index) return null;
     }

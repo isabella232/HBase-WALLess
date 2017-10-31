@@ -169,39 +169,40 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       // Replica ids are like 0, 1, 2...
       // TODO : If a RS goes down we assign the region to the same RS. So two replicas in same RS is
       // not right. Fix it in LB.
-      for (Integer replica : pipeline) {
-        if (replica <= curRegionReplicaId) continue;
-        HRegionLocation nextRegionLocation = replicator.getRegionLocation(replica);
-        if (nextRegionLocation == null) {
-          // This can happen. Then we will have to reload from META.
-          // TODO
-        }
-        if (LOG.isDebugEnabled()) {
-          LOG.debug(
-            "Replicating from region " + replicator.getRegionLocation(curRegionReplicaId)
-                + "  to the next replica " + nextRegionLocation);
-        }
-        RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
-            rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
-            nextRegionLocation.getRegionInfo(), null, request, replicationEntries, pipeline);
-        try {
-          ReplicateMemstoreResponse response =
-              rpcRetryingCallerFactory.<ReplicateMemstoreResponse> newCaller()
-                  .callWithRetries(callable, operationTimeout);
-          // we need this because we may have a success after some failures.
-          builder.setReplicasCommitted(response.getReplicasCommitted() + 1);// Adding this write
-                                                                            // itelf as success.
-          // Since only primary takes the decision of marking the META as bad we need
-          // to pass on this information till the primary
-          for (int replicaId : response.getFailedReplicasList()) {
-            builder.addFailedReplicas(replicaId);
+      if (pipeline != null) {
+        for (Integer replica : pipeline) {
+          if (replica <= curRegionReplicaId) continue;
+          HRegionLocation nextRegionLocation = replicator.getRegionLocation(replica);
+          if (nextRegionLocation == null) {
+            // This can happen. Then we will have to reload from META.
+            // TODO
           }
-          break;// Break the inner for loop
-        } catch (IOException | RuntimeException e) {
-          // There may be other parallel handlers also trying to write to that replica.
-          builder.addFailedReplicas(replica);
-          // We should mark the future with exception only after retrying with the other Replicas
-          // so that the write is successful??
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("Replicating from region " + replicator.getRegionLocation(curRegionReplicaId)
+                + "  to the next replica " + nextRegionLocation);
+          }
+          RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
+              rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
+              nextRegionLocation.getRegionInfo(), null, request, replicationEntries, pipeline);
+          try {
+            ReplicateMemstoreResponse response =
+                rpcRetryingCallerFactory.<ReplicateMemstoreResponse> newCaller()
+                    .callWithRetries(callable, operationTimeout);
+            // we need this because we may have a success after some failures.
+            builder.setReplicasCommitted(response.getReplicasCommitted() + 1);// Adding this write
+                                                                              // itelf as success.
+            // Since only primary takes the decision of marking the META as bad we need
+            // to pass on this information till the primary
+            for (int replicaId : response.getFailedReplicasList()) {
+              builder.addFailedReplicas(replicaId);
+            }
+            break;// Break the inner for loop
+          } catch (IOException | RuntimeException e) {
+            // There may be other parallel handlers also trying to write to that replica.
+            builder.addFailedReplicas(replica);
+            // We should mark the future with exception only after retrying with the other Replicas
+            // so that the write is successful??
+          }
         }
       }
     } finally {

@@ -26,6 +26,8 @@ import static org.apache.hadoop.hbase.client.ConnectionUtils.updateServerSideMet
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -73,6 +75,7 @@ public class ScannerCallable extends ClientServiceCallable<Result[]> {
   private boolean logScannerActivity = false;
   private int logCutOffLatency = 1000;
   protected final int id;
+  protected Set<Integer> goodReplicaIds;
 
   enum MoreResults {
     YES, NO, UNKNOWN
@@ -318,10 +321,12 @@ public class ScannerCallable extends ClientServiceCallable<Result[]> {
     } catch (IOException e) {
       TableName table = getTableName();
       String tableDetails = (table == null) ? "" : (" on table: " + table.getNameAsString());
-      LOG.warn("Ignore, probably already closed. Current scan: " + getScan().toString()
-          + tableDetails, e);
+      LOG.warn(
+        "Ignore, probably already closed. Current scan: " + getScan().toString() + tableDetails, e);
     }
     this.scannerId = -1L;
+    // clear the replica ids also
+    this.goodReplicaIds = null;
   }
 
   private ScanResponse openScanner() throws IOException {
@@ -337,6 +342,15 @@ public class ScannerCallable extends ClientServiceCallable<Result[]> {
       }
       if (response.hasMvccReadPoint()) {
         this.scan.setMvccReadPoint(response.getMvccReadPoint());
+      }
+      if (response.getGoodReplicaIdsCount() > 0) {
+        // add the good replicas
+        if (goodReplicaIds == null) {
+          goodReplicaIds = new HashSet<Integer>();
+        }
+        for (int replicaid : response.getGoodReplicaIdsList()) {
+          goodReplicaIds.add(replicaid);
+        }
       }
       this.scannerId = id;
       return response;
