@@ -32,6 +32,7 @@ import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.NotServingRegionException;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Consistency;
+import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Durability;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Put;
@@ -120,8 +121,9 @@ public class TestRegionReplicasWith3Replicas {
     return HTU.getMiniHBaseCluster().getRegionServer(2);
   }
   
-  @Test(timeout = 6000000)
+  //@Test(timeout = 6000000)
   public void testSimpleFlush() throws Exception {
+    try {
     new Thread() {
       public void run() {
         for (int i = 1; i < 100; i++) {
@@ -154,6 +156,14 @@ public class TestRegionReplicasWith3Replicas {
       }
     }
     primaryRegion.flush(true);
+    } finally {
+      for (int i = 1; i < 100; i++) {
+        byte[] data = Bytes.toBytes(String.valueOf(i));
+        Delete delete = new Delete(data);
+        delete.addFamily(f);
+        table.delete(delete);
+      }
+    }
   }
 
   @Test(timeout = 6000000)
