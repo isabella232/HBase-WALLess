@@ -7,6 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -46,7 +47,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private ClusterConnection connection;
   private final int operationTimeout;
   private final ReplicationThread[] replicationThreads;
-  private final long replicationTimeoutNs;
+  private final long replicationTimeout;
   protected static final int DEFAULT_WAL_SYNC_TIMEOUT_MS = 5 * 60 * 1000;
   protected final RegionServerServices rs;
   private int threadIndex = 0;
@@ -67,8 +68,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     this.operationTimeout = this.conf.getInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT,
       HConstants.DEFAULT_HBASE_CLIENT_OPERATION_TIMEOUT);
     
-    this.replicationTimeoutNs = TimeUnit.MILLISECONDS.toNanos(this.conf
-        .getLong("hbase.regionserver.mutations.sync.timeout", DEFAULT_WAL_SYNC_TIMEOUT_MS));
+    this.replicationTimeout = this.conf.getLong("hbase.regionserver.mutations.sync.timeout",
+        DEFAULT_WAL_SYNC_TIMEOUT_MS);
 
     try {
       this.connection = (ClusterConnection) ConnectionFactory.createConnection(this.conf);
@@ -91,11 +92,23 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   public ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
       MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicator)
       throws IOException, InterruptedException, ExecutionException {
+    CompletableFuture<ReplicateMemstoreResponse> future = offerForReplicate(memstoreReplicationKey,
+        memstoreEdits, regionReplicator);
+    try {
+      return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
+    } catch (TimeoutException e) {
+      throw new TimeoutIOException(e);
+    }
+  }
+
+  private CompletableFuture<ReplicateMemstoreResponse> offerForReplicate(
+      MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
+      RegionReplicaReplicator regionReplicator) throws IOException {
     MemstoreReplicationEntry entry = new MemstoreReplicationEntry(memstoreReplicationKey,
         memstoreEdits);
-    CompletedFuture future = regionReplicator.append(entry);
+    CompletableFuture<ReplicateMemstoreResponse> future = regionReplicator.append(entry);
     offer(regionReplicator, entry);
-    return future.get(replicationTimeoutNs);
+    return future;
   }
 
   @Override
@@ -103,24 +116,21 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
       RegionReplicaReplicator regionReplicaReplicator)
       throws IOException, InterruptedException, ExecutionException {
-    // TODO This is supposed to do a async replicate op to replicas but calling the method which
-    // does complete the future !
-    return wrap(replicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator));
+    return offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator);
   }
 
-  private CompletableFuture<ReplicateMemstoreResponse>
-      wrap(ReplicateMemstoreResponse replicateMemstoreResponse) {
-    CompletableFuture<ReplicateMemstoreResponse> asyncFuture = new CompletableFuture<>();
-    return asyncFuture;
-  }
   @Override
   // directly waiting on this? Is it better to go with the rep threads here too???
   public ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
       RegionReplicaReplicator replicator)
       throws TimeoutIOException, InterruptedException, ExecutionException {
-    CompletedFuture future = new CompletedFuture();
+    CompletableFuture<ReplicateMemstoreResponse> future = new CompletableFuture<>(); 
     replicate(new RequestEntryHolder(request, allCells, future), null, replicator);
-    return future.get(replicationTimeoutNs);
+    try {
+      return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
+    } catch (TimeoutException e) {
+      throw new TimeoutIOException(e);
+    }
   }
 
 
@@ -213,10 +223,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private void markResponse(RequestEntryHolder request,
       List<MemstoreReplicationEntry> replicationEntries, ReplicateMemstoreResponse response) {
     if (request != null) {
-      request.getCompletedFuture().markResponse(response);
+      request.markResponse(response);
     } else {
       for (MemstoreReplicationEntry entry : replicationEntries) {
-        entry.getFuture().markResponse(response);
+        entry.markResponse(response);
       }
     }
   }
@@ -273,25 +283,21 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private static class RequestEntryHolder {
     private ReplicateMemstoreRequest request;
     private List<Cell> cells;
-    private CompletedFuture future;
+    private CompletableFuture<ReplicateMemstoreResponse> future;
 
     public RequestEntryHolder(ReplicateMemstoreRequest request, List<Cell> allCells,
-        CompletedFuture future) {
+        CompletableFuture<ReplicateMemstoreResponse> future) {
       this.request = request;
       this.cells = allCells;
       this.future = future;
-    }
-
-    public void setRequest(ReplicateMemstoreRequest request) {
-      this.request = request;
     }
 
     public ReplicateMemstoreRequest getRequest() {
       return this.request;
     }
 
-    public CompletedFuture getCompletedFuture() {
-      return this.future;
+    public void markResponse(ReplicateMemstoreResponse response) {
+      this.future.complete(response);
     }
 
     public List<Cell> getCells() {

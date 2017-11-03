@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -24,6 +25,7 @@ import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.CompletedFuture;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.PipelineException;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 
 // This is a per Region instance 
 //TODO better name
@@ -103,14 +105,15 @@ public class RegionReplicaReplicator {
     }
   }
 
-  // Seems no way to avoid this sync
-  public CompletedFuture append(MemstoreReplicationEntry entry) throws IOException {
-    CompletedFuture future = new CompletedFuture();
+  public CompletableFuture<ReplicateMemstoreResponse> append(MemstoreReplicationEntry entry)
+      throws IOException {
+    CompletableFuture<ReplicateMemstoreResponse> future = new CompletableFuture<>();
     entry.attachFuture(future, curSeq++);
     addToBuffer(entry);
     return future;
   }
 
+  // Seems no way to avoid this sync
   private synchronized void addToBuffer(MemstoreReplicationEntry entry) {
     this.entryBuffer.add(entry);
   }

@@ -17,13 +17,16 @@
  */
 package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
+import java.util.concurrent.CompletableFuture;
+
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 
 @InterfaceAudience.Private
 public class MemstoreReplicationEntry {
   private final MemstoreReplicationKey memstoreReplicationKey;
   private final MemstoreEdits memstoreEdits;
-  private CompletedFuture future;
+  private CompletableFuture<ReplicateMemstoreResponse> future;
   private long seq;
 
   public MemstoreReplicationEntry(MemstoreReplicationKey memstoreRepKey,
@@ -40,13 +43,13 @@ public class MemstoreReplicationEntry {
     return this.memstoreEdits;
   }
 
-  public void attachFuture(CompletedFuture future, long seq) {
+  public void attachFuture(CompletableFuture<ReplicateMemstoreResponse> future, long seq) {
     this.future = future;
     this.seq = seq;
   }
 
-  public CompletedFuture getFuture() {
-    return this.future;
+  public void markResponse(ReplicateMemstoreResponse response) {
+    this.future.complete(response);
   }
 
   public long getSeq() {

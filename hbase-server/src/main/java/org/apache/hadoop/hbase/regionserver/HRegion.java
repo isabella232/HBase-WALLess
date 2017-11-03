@@ -555,12 +555,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     final long flushOpSeqId;
     final long flushedSeqId;
     final MemstoreSize totalFlushableSize;
-    final CompletableFuture<ReplicateMemstoreResponse> flushReplicaResponse;
 
     /** Constructs an early exit case */
-    PrepareFlushResult(FlushResult result, long flushSeqId,
-        CompletableFuture<ReplicateMemstoreResponse> response) {
-      this(result, null, null, null, Math.max(0, flushSeqId), 0, 0, new MemstoreSize(), response);
+    PrepareFlushResult(FlushResult result, long flushSeqId) {
+      this(result, null, null, null, Math.max(0, flushSeqId), 0, 0, new MemstoreSize());
     }
 
     /** Constructs a successful prepare flush result */
@@ -568,18 +566,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       TreeMap<byte[], StoreFlushContext> storeFlushCtxs,
       TreeMap<byte[], List<Path>> committedFiles,
       TreeMap<byte[], MemstoreSize> storeFlushableSize, long startTime, long flushSeqId,
-        long flushedSeqId, MemstoreSize totalFlushableSize,
-        CompletableFuture<ReplicateMemstoreResponse> response) {
+        long flushedSeqId, MemstoreSize totalFlushableSize) {
       this(null, storeFlushCtxs, committedFiles, storeFlushableSize, startTime,
-        flushSeqId, flushedSeqId, totalFlushableSize, response);
+        flushSeqId, flushedSeqId, totalFlushableSize);
     }
 
     private PrepareFlushResult(FlushResult result,
         TreeMap<byte[], StoreFlushContext> storeFlushCtxs,
         TreeMap<byte[], List<Path>> committedFiles,
         TreeMap<byte[], MemstoreSize> storeFlushableSize, long startTime, long flushSeqId,
-        long flushedSeqId, MemstoreSize totalFlushableSize,
-        CompletableFuture<ReplicateMemstoreResponse> response) {
+        long flushedSeqId, MemstoreSize totalFlushableSize) {
       this.result = result;
       this.storeFlushCtxs = storeFlushCtxs;
       this.committedFiles = committedFiles;
@@ -588,7 +584,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       this.flushOpSeqId = flushSeqId;
       this.flushedSeqId = flushedSeqId;
       this.totalFlushableSize = totalFlushableSize;
-      this.flushReplicaResponse = response;
     }
 
     public FlushResult getResult() {
@@ -2445,43 +2440,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           throws IOException {
     PrepareFlushResult result =
         internalPrepareFlushCache(wal, myseqid, storesToFlush, status, writeFlushWalMarker, 1);
-    // check the status here
-    if(result.flushReplicaResponse != null) {
-      // If we really find the start_flush has failed then the replica to which it failed should be immediately
-      // marked bad. But before we could mark it as bad and there is a read that happens to the replica then it 
-      // could be a problem.
-      // TODO - To mark as BAD
-      processAsyncResponse(result.flushReplicaResponse);
-    }
-
     if (result.result == null) {
-      FlushResult flushResult = internalFlushCacheAndCommit(wal, status, result, storesToFlush);
-      CompletableFuture<ReplicateMemstoreResponse> replicateMemstoreResponse = flushResult.getReplicateMemstoreResponse();
-      if(replicateMemstoreResponse != null) {
-        // TODO
-        processAsyncResponse(replicateMemstoreResponse);
-      }
-      return flushResult;
+      return internalFlushCacheAndCommit(wal, status, result, storesToFlush);
     } else {
       return result.result; // early exit due to failure from prepare stage
     }
-  }
-
-  private void processAsyncResponse(
-      CompletableFuture<ReplicateMemstoreResponse> replicateMemstoreResponse) {
-    replicateMemstoreResponse.whenComplete((r, e) -> {
-      if (e != null) {
-        replicateMemstoreResponse.completeExceptionally(e);
-        //try {
-       // TODO - To mark as BAD
-          //updateLocationOnException(null);
-        //} catch (IOException e1) {
-         // throw new RuntimeException(e1);
-        //}
-      } else {
-        replicateMemstoreResponse.complete(r);
-      }
-    });
   }
 
   @edu.umd.cs.findbugs.annotations.SuppressWarnings(value="DLS_DEAD_LOCAL_STORE",
@@ -2520,10 +2483,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
             mvcc.completeAndWait(writeEntry);
             // Set to null so we don't complete it again down in finally block.
             writeEntry = null;
-            return new PrepareFlushResult(flushResult, myseqid, null);
+            return new PrepareFlushResult(flushResult, myseqid);
           } else {
             return new PrepareFlushResult(new FlushResultImpl(
-              FlushResult.Result.CANNOT_FLUSH_MEMSTORE_EMPTY, "Nothing to flush", false), myseqid, null);
+              FlushResult.Result.CANNOT_FLUSH_MEMSTORE_EMPTY, "Nothing to flush", false), myseqid);
           }
         }
       } finally {
@@ -2566,7 +2529,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // will be in advance of this sequence id.
     long flushedSeqId = HConstants.NO_SEQNUM;
     byte[] encodedRegionName = getRegionInfo().getEncodedNameAsBytes();
-    CompletableFuture<ReplicateMemstoreResponse> response  = null;
     boolean rpcSent = false;
     try {
       if (wal != null) {
@@ -2578,8 +2540,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           String msg = this.getRegionInfo().getEncodedName() + " flush aborted; WAL closing.";
           status.setStatus(msg);
           return new PrepareFlushResult(
-              new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH, msg, false),
-              myseqid, null);
+              new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH, msg, false), myseqid);
         }
         // Ideally wal should be null.
         flushOpSeqId = getNextSequenceId();
@@ -2606,7 +2567,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // TODO : Everything under lock. This should not be happening under the write lock!
       // Next commit will change this under lock waiting for response
       if (RegionReplicaUtil.isDefaultReplica(getRegionInfo().getReplicaId())) {
-        response = sendFlushRpc(FlushAction.START_FLUSH, flushOpSeqId, committedFiles,
+        sendFlushRpc(FlushAction.START_FLUSH, flushOpSeqId, committedFiles,
           currentReplicaIndex, flushOpSeqId);
       }
       rpcSent = true;
@@ -2621,7 +2582,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // flush in the primary.
         // I think there cannot be any error as we are not sure if the RPC has been sent
         // because we are async here.
-        sendAbortFlushRpc(wal, committedFiles, flushOpSeqId, response);
+        sendAbortFlushRpc(wal, committedFiles, flushOpSeqId);
       }
       throw ex;
     } finally {
@@ -2632,11 +2593,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     status.setStatus(s);
     doSyncOfUnflushedWALChanges(wal, getRegionInfo());
     return new PrepareFlushResult(storeFlushCtxs, committedFiles, storeFlushableSize, startTime,
-        flushOpSeqId, flushedSeqId, totalSizeOfFlushableStores, response);
+        flushOpSeqId, flushedSeqId, totalSizeOfFlushableStores);
   }
 
-  private CompletableFuture<ReplicateMemstoreResponse> sendFlushRpc(FlushAction action, long flushOpSeqId,
-      TreeMap<byte[], List<Path>> committedFiles, int currentReplicaIndex, long seqId) throws IOException {
+  private void sendFlushRpc(FlushAction action, long flushOpSeqId,
+      TreeMap<byte[], List<Path>> committedFiles, int currentReplicaIndex, long seqId)
+      throws IOException {
     // TODO : check inside a lock??
     if (!this.closing.get() && !this.closed.get()) {
       FlushDescriptor desc =
@@ -2645,9 +2607,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
       // we need a sequenceid
       kv.setSequenceId(seqId);
-      return this.replicateMetaCell(currentReplicaIndex, kv);
+      CompletableFuture<ReplicateMemstoreResponse> future = replicateMetaCell(currentReplicaIndex,
+          kv);
+      future.whenComplete((r, e) -> {// Never we would get e as we are never doing
+                                     // completeWithException.
+        List<Integer> failedReplicas = r.getFailedReplicasList();
+        // TODO should we mark these as BAD
+      });
     }
-    return null;
   }
 
   private void updateLocationOnException(List<Integer> failedReplicaList) throws IOException {
@@ -2795,7 +2762,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // be part of the current running servers state.
     boolean compactionRequested = false;
     long flushedOutputFileSize = 0;
-    CompletableFuture<ReplicateMemstoreResponse> response = null;
     try {
       // A.  Flush memstore to all the HStores.
       // Keep running vector of all store files that includes both old and the
@@ -2836,8 +2802,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       try {
         // failure of this should not mean that we should call ABORT_FLUSH because primary has already flushed
         // TODO : shall we wait for the response in this case??
-        response = sendFlushRpc(FlushAction.COMMIT_FLUSH, flushOpSeqId, committedFiles, 1,
-          writeNumber.getWriteNumber());
+        sendFlushRpc(FlushAction.COMMIT_FLUSH, flushOpSeqId, committedFiles, 1,
+            writeNumber.getWriteNumber());
       } finally {
         // complete it if the flush was sent
         mvcc.complete(writeNumber);
@@ -2851,7 +2817,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // all and sundry.
       if (!rpcSent) {
         if (wal != null) {
-          response = sendAbortFlushRpc(wal, committedFiles, flushOpSeqId, response);
+          sendAbortFlushRpc(wal, committedFiles, flushOpSeqId);
         }
         DroppedSnapshotException dse = new DroppedSnapshotException(
             "region: " + Bytes.toStringBinary(getRegionInfo().getRegionName()));
@@ -2915,17 +2881,17 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
     return new FlushResultImpl(compactionRequested ?
         FlushResult.Result.FLUSHED_COMPACTION_NEEDED :
-          FlushResult.Result.FLUSHED_NO_COMPACTION_NEEDED, flushOpSeqId, response);
+          FlushResult.Result.FLUSHED_NO_COMPACTION_NEEDED, flushOpSeqId);
   }
 
-  private CompletableFuture<ReplicateMemstoreResponse> sendAbortFlushRpc(final WAL wal,
-      TreeMap<byte[], List<Path>> committedFiles, long flushOpSeqId,
-      CompletableFuture<ReplicateMemstoreResponse> response) {
+  private void sendAbortFlushRpc(final WAL wal, TreeMap<byte[], List<Path>> committedFiles,
+      long flushOpSeqId) {
     try {
       WriteEntry writeNumber = mvcc.begin();
       try {
         // TODO : In what case should we even have this??
-        response = sendFlushRpc(FlushAction.ABORT_FLUSH, flushOpSeqId, committedFiles, 1,
+        // TODO we have to handle the actual marker async ops still hanging around?
+        sendFlushRpc(FlushAction.ABORT_FLUSH, flushOpSeqId, committedFiles, 1,
           writeNumber.getWriteNumber());
       } finally {
         // complete it if the flush was sent
@@ -2938,7 +2904,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // ignore this since we will be aborting the RS with DSE.
     }
     wal.abortCacheFlush(this.getRegionInfo().getEncodedNameAsBytes());
-    return response;
   }
 
   /**
@@ -4838,20 +4803,25 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // we need a sequenceID without which we will not be able to associate a seqId to the batch
     // when replicated
     try {
-      CellUtil.setSequenceId(kv, writeEntry.getWriteNumber());
+      kv.setSequenceId(writeEntry.getWriteNumber());
       // Should we do async or wait for the response??
-      replicateMetaCell(replicaOffered, kv);
+      CompletableFuture<ReplicateMemstoreResponse> future = replicateMetaCell(replicaOffered, kv);
+      future.whenComplete((r, e) -> {// Never we would get e as we are never doing
+                                     // completeWithException.
+        List<Integer> failedReplicas = r.getFailedReplicasList();
+        // TODO should we mark these as BAD
+      });
     } finally {
-      this.getMVCC().completeAndWait(writeEntry);
+      this.getMVCC().complete(writeEntry);
     }
   }
 
-  public CompletableFuture<ReplicateMemstoreResponse> replicateMetaCell(int currentReplicaIndex, KeyValue kv)
-      throws IOException {
+  public CompletableFuture<ReplicateMemstoreResponse> replicateMetaCell(int currentReplicaIndex,
+      Cell metaCell) throws IOException {
     MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
         this.getRegionInfo().getEncodedNameAsBytes(), currentReplicaIndex);
     MemstoreEdits memstoreEdits = new MemstoreEdits();
-    memstoreEdits.add(kv);
+    memstoreEdits.add(metaCell);
     // replicate this
     try {
       return this.memstoreReplicator.replicateAsync(memstoreReplicationKey, memstoreEdits,
