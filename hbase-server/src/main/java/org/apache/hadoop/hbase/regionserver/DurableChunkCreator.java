@@ -42,8 +42,9 @@ public class DurableChunkCreator extends ChunkCreator {
     // Do validation. but for now creating max sized allocator
     // As per Gary, pmalloc works with any size and pmem is not storage and space efficient
     NonVolatileMemAllocator allocator = new NonVolatileMemAllocator(
+      // creating twice the size of the configured memory. This works for now
         Utils.getNonVolatileMemoryAllocatorService("pmem"),
-        (long) ((globalMemStoreSize * poolSizePercentage + (2048l))),
+        (long) ((2 * globalMemStoreSize * poolSizePercentage)),
         durablePath, true);
     // This does not work with > 15G
     durableBigChunk = allocator.createChunk((long)((globalMemStoreSize * poolSizePercentage)));
@@ -77,6 +78,9 @@ public class DurableChunkCreator extends ChunkCreator {
         // TODO
       }
     }
+    // do the init here. We reset the chunk in pool.getchunk and again init() it. already this would have been inited
+    // while chunk pool was created. Fix it in trunk also
+    chunk.init();
     return chunk;
   }
 
