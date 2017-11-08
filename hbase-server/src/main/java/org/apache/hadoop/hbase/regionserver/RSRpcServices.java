@@ -157,8 +157,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.MergeRegion
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest.RegionOpenInfo;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RegionReplicaHealthUpdateRequest;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RegionReplicaHealthUpdateResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionResponse.RegionOpeningState;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.ReplicateWALEntryResponse;
@@ -216,6 +214,9 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuo
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse.TableQuotaSnapshot;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.RequestHeader;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RSRegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionNameMasterProcessingTimePair;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.BulkLoadDescriptor;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.CompactionDescriptor;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.FlushDescriptor;
@@ -242,9 +243,8 @@ import com.google.common.cache.CacheBuilder;
  */
 @InterfaceAudience.Private
 @SuppressWarnings("deprecation")
-public class RSRpcServices implements HBaseRPCErrorHandler,
-    AdminService.BlockingInterface, ClientService.BlockingInterface, PriorityFunction,
-    ConfigurationObserver {
+public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.BlockingInterface,
+    ClientService.BlockingInterface, PriorityFunction, ConfigurationObserver {
   protected static final Log LOG = LogFactory.getLog(RSRpcServices.class);
 
   /** RPC scheduler to use for the region server. */
@@ -1663,8 +1663,10 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
         boolean writeFlushWalMarker =  request.hasWriteFlushWalMarker() ?
             request.getWriteFlushWalMarker() : false;
         // Go behind the curtain so we can manage writing of the flush WAL marker
-        HRegion.FlushResultImpl flushResult =
-            (HRegion.FlushResultImpl) ((HRegion) region).flushcache(true, writeFlushWalMarker);
+        int requestingReplica = request.hasRequestingReplica() ? request.getRequestingReplica()
+            : -1;             
+        HRegion.FlushResultImpl flushResult = (HRegion.FlushResultImpl) ((HRegion) region)
+            .flushcache(true, writeFlushWalMarker, requestingReplica);
         boolean compactionNeeded = flushResult.isCompactionNeeded();
         if (compactionNeeded) {
           regionServer.compactSplitThread.requestSystemCompaction(region,
@@ -2302,20 +2304,6 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
     }
   }
 
-  @Override
-  public RegionReplicaHealthUpdateResponse updateHealthStatus(RpcController controller,
-      RegionReplicaHealthUpdateRequest request) throws ServiceException {
-    ByteString encodedRegionName = request.getEncodedRegionName();
-    try {
-      HRegion region =
-          (HRegion) regionServer.getRegionByEncodedName(encodedRegionName.toStringUtf8());
-      region.markHealthStatus(request.getHealth());
-    } catch (NotServingRegionException e) {
-      LOG.error("Region not being served by this region server "+encodedRegionName.toStringUtf8());
-      throw new ServiceException(e);
-    }
-    return RegionReplicaHealthUpdateResponse.newBuilder().build();
-  }
   private void handleMetaMarkerCell(Cell cell, HRegion region, int replicasOffered)
       throws IOException {
     CompactionDescriptor compactionDesc = WALEdit.getCompaction(cell);
@@ -3747,5 +3735,26 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
     } catch (IOException ie) {
       throw new ServiceException(ie);
     }
+  }
+
+  @Override
+  public RegionReplicaHealthChangeResponse handleBadRegions(RpcController controller,
+      RSRegionReplicaHealthChangeRequest request) throws ServiceException {
+    List<RegionNameMasterProcessingTimePair> regionAndProcessingTimeList = request
+        .getRegionNameProcessingTimePairList();
+    regionAndProcessingTimeList.forEach(regionAndProcessingTime -> {
+      try {
+        HRegion region = (HRegion) regionServer.getRegionByEncodedName(
+            regionAndProcessingTime.getEncodedRegionName().toStringUtf8());
+        if (region.markBadHealthStatus(regionAndProcessingTime.getMasterTs())) {
+          this.regionServer.triggerFlushInPrimaryRegion(region);
+        }
+      } catch (NotServingRegionException e) {
+        LOG.error("Region not being served by this region server "
+            + regionAndProcessingTime.getEncodedRegionName().toStringUtf8());
+        // TODO pass back this failure info in response.
+      }
+    });
+    return RegionReplicaHealthChangeResponse.newBuilder().build();
   }
 }

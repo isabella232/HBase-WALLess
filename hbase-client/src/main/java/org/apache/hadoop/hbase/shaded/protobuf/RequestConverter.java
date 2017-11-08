@@ -64,7 +64,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.GetRegionLo
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.GetServerInfoRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.OpenRegionRequest.RegionOpenInfo;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RegionReplicaHealthUpdateRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.RollWALWriterRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.StopServerRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.UpdateFavoredNodesRequest;
@@ -127,7 +126,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetQuotaSta
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaRegionSizesRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.GetLastFlushedSequenceIdRequest;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicationProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicationProtos.AddReplicationPeerRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicationProtos.DisableReplicationPeerRequest;
@@ -827,7 +825,7 @@ public final class RequestConverter {
   */
  public static FlushRegionRequest
      buildFlushRegionRequest(final byte[] regionName) {
-   return buildFlushRegionRequest(regionName, false, false, -1);
+   return buildFlushRegionRequest(regionName, false, false, -1, -1);
  }
 
  /**
@@ -837,11 +835,14 @@ public final class RequestConverter {
   * @return a protocol buffer FlushRegionRequest
   */
   public static FlushRegionRequest buildFlushRegionRequest(final byte[] regionName,
-      boolean writeFlushWALMarker, boolean flushReplica, long seqId) {
+      boolean writeFlushWALMarker, boolean flushReplica, long seqId, int requestingRegionReplica) {
     FlushRegionRequest.Builder builder = FlushRegionRequest.newBuilder();
     RegionSpecifier region = buildRegionSpecifier(RegionSpecifierType.REGION_NAME, regionName);
     builder.setRegion(region);
     builder.setWriteFlushWalMarker(writeFlushWALMarker);
+    if (requestingRegionReplica > 0) {
+      builder.setRequestingReplica(requestingRegionReplica);
+    }
     return builder.build();
   }
 
@@ -869,15 +870,6 @@ public final class RequestConverter {
    return builder.build();
  }
 
-  public static RegionReplicaHealthUpdateRequest buildHealthChangeRequest(HRegionInfo regionInfo,
-      boolean health) {
-    RegionReplicaHealthUpdateRequest.Builder builder =
-        RegionReplicaHealthUpdateRequest.newBuilder();
-    builder
-        .setEncodedRegionName(UnsafeByteOperations.unsafeWrap(regionInfo.getEncodedNameAsBytes()));
-    builder.setHealth(health);
-    return builder.build();
-  }
  /**
   * Create a protocol buffer OpenRegionRequest for a given region
   *

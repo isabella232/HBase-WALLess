@@ -43,42 +43,17 @@ public class FlushRegionCallable extends RegionAdminServiceCallable<FlushRegionR
   private final boolean writeFlushWalMarker;
   private boolean reload;
   private long seqId;
-
-  public FlushRegionCallable(ClusterConnection connection,
-      RpcControllerFactory rpcControllerFactory, TableName tableName, byte[] regionName,
-      byte[] regionStartKey, boolean writeFlushWalMarker) {
-    this(connection, rpcControllerFactory, tableName, regionName, regionStartKey,
-        writeFlushWalMarker, RegionReplicaUtil.DEFAULT_REPLICA_ID, -1);
-  }
+  private final int requestingRegionReplica;
 
   public FlushRegionCallable(ClusterConnection connection,
       RpcControllerFactory rpcControllerFactory, HRegionInfo regionInfo,
-      boolean writeFlushWalMarker, int replicaId, long seqId) {
-    this(connection, rpcControllerFactory, regionInfo.getTable(), regionInfo.getRegionName(),
-        regionInfo.getStartKey(), writeFlushWalMarker, replicaId, seqId);
-  }
-
-  public FlushRegionCallable(ClusterConnection connection,
-      RpcControllerFactory rpcControllerFactory, TableName tableName, byte[] regionName,
-      byte[] regionStartKey, boolean writeFlushWalMarker, int replicaId, long seqId) {
-    super(connection, rpcControllerFactory, null, tableName, regionStartKey, replicaId);
-    this.regionName = regionName;
+      boolean writeFlushWalMarker, HRegionInfo requestingRegion) {
+    super(connection, rpcControllerFactory, null, regionInfo.getTable(), regionInfo.getStartKey(),
+        RegionReplicaUtil.DEFAULT_REPLICA_ID);
+    this.regionName = regionInfo.getRegionName();
     this.writeFlushWalMarker = writeFlushWalMarker;
-    this.seqId = seqId;
-  }
-
-  public FlushRegionCallable(ClusterConnection connection,
-      RpcControllerFactory rpcControllerFactory, HRegionInfo regionInfo,
-      boolean writeFlushWalMarker) {
-    this(connection, rpcControllerFactory, regionInfo.getTable(), regionInfo.getRegionName(),
-        regionInfo.getStartKey(), writeFlushWalMarker, RegionReplicaUtil.DEFAULT_REPLICA_ID, -1);
-  }
-
-  public FlushRegionCallable(ClusterConnection connection,
-      RpcControllerFactory rpcControllerFactory, HRegionInfo regionInfo,
-      boolean writeFlushWalMarker, int replicaId) {
-    this(connection, rpcControllerFactory, regionInfo.getTable(), regionInfo.getRegionName(),
-        regionInfo.getStartKey(), writeFlushWalMarker, replicaId, -1);
+    this.seqId = -1;
+    this.requestingRegionReplica = requestingRegion.getReplicaId();
   }
 
   @Override
@@ -106,7 +81,8 @@ public class FlushRegionCallable extends RegionAdminServiceCallable<FlushRegionR
     }
 
     FlushRegionRequest request = RequestConverter.buildFlushRegionRequest(regionName,
-      writeFlushWalMarker, this.replicaId != RegionReplicaUtil.DEFAULT_REPLICA_ID, seqId);
+        writeFlushWalMarker, this.replicaId != RegionReplicaUtil.DEFAULT_REPLICA_ID, seqId,
+        this.requestingRegionReplica);
     return stub.flushRegion(controller, request);
   }
 }

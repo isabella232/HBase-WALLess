@@ -116,9 +116,9 @@ public class RegionReplicaFlushHandler extends EventHandler {
     }
     while (!region.isClosing() && !region.isClosed()
         && !server.isAborted() && !server.isStopped()) {
-      FlushRegionCallable flushCallable = new FlushRegionCallable(
-        connection, rpcControllerFactory,
-        RegionReplicaUtil.getRegionInfoForDefaultReplica(region.getRegionInfo()), true);
+      FlushRegionCallable flushCallable = new FlushRegionCallable(connection, rpcControllerFactory,
+          RegionReplicaUtil.getRegionInfoForDefaultReplica(region.getRegionInfo()), true,
+          region.getRegionInfo());
 
       // TODO: flushRegion() is a blocking call waiting for the flush to complete. Ideally we
       // do not have to wait for the whole flush here, just initiate it.

@@ -2252,7 +2252,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * because a Snapshot was not properly persisted. The region is put in closing mode, and the
    * caller MUST abort after this.
    */
-  public FlushResult flushcache(boolean forceFlushAllStores, boolean writeFlushRequestWalMarker) throws IOException {
+  public FlushResult flushcache(boolean forceFlushAllStores, boolean writeFlushRequestWalMarker)
+      throws IOException {
+    return flushcache(forceFlushAllStores, writeFlushRequestWalMarker, -1);
+  }
+  
+  FlushResult flushcache(boolean forceFlushAllStores, boolean writeFlushRequestWalMarker,
+      int requestingReplica) throws IOException {
     // fail-fast instead of waiting on the lock
     if (this.closing.get()) {
       String msg = "Skipping flush on " + this + " because closing";
@@ -2269,6 +2275,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         LOG.debug(msg);
         status.abort(msg);
         return new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH, msg, false);
+      }
+      if (requestingReplica > 0) {
+        this.regionReplicator.removeFromBadReplicas(requestingReplica);
       }
       if (coprocessorHost != null) {
         status.setStatus("Running coprocessor pre-flush hooks");
@@ -8657,14 +8666,21 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   /**
    * Marks the health of this region replica
    * @param health
+   * @param processingTs 
    */
   // TODO : Remove this if we are not going to use it.
-  public void markHealthStatus(boolean health) {
+  public boolean markBadHealthStatus(long processingTs) {
     assert !RegionReplicaUtil.isDefaultReplica(this.getRegionInfo());
-    synchronized (writestate) {
-      LOG.info("Marking " + this.getRegionInfo() + " as " + (health ? "GOOD" : "BAD"));
-      writestate.badReplica = !health;
+    if (this.regionReplicator.shouldProcessBadStatus(processingTs)) {
+      this.regionReplicator.markBadHealthStatus(processingTs);
+      LOG.info("Marking " + this.getRegionInfo() + " as BAD");
+      synchronized (writestate) {
+        writestate.badReplica = true;
+      }
+      return true;
     }
+    LOG.debug("Ignoring markBadHealthStatus RPC from master as we have already processed it.");
+    return false;
   }
 
   /**

@@ -551,7 +551,7 @@ public class AssignmentManager implements ServerListener {
         if (RegionReplicaUtil.isDefaultReplica(hri)) {
           Pair<HRegionInfo, ServerName> nextReplicaRegion = this.getNextReplicaRegion(hri);
           if (nextReplicaRegion.getFirst() != null & nextReplicaRegion.getSecond() != null) {
-            procs[index++] = createAssignReplicaasPrimaryProcedure(hri,
+            procs[index++] = createAssignReplicaAsPrimaryProcedure(hri,
               nextReplicaRegion.getSecond(), nextReplicaRegion.getFirst());
             continue;
           }
@@ -562,7 +562,7 @@ public class AssignmentManager implements ServerListener {
     return procs;
   }
 
-  private AssignProcedure createAssignReplicaasPrimaryProcedure(HRegionInfo hri,
+  private AssignProcedure createAssignReplicaAsPrimaryProcedure(HRegionInfo hri,
       ServerName destinationServer, HRegionInfo destinationRegion) {
     // this will be called only for primary.. Let the caller take care of it
     AssignProcedure proc =
@@ -1269,6 +1269,7 @@ public class AssignmentManager implements ServerListener {
 
   public void submitServerCrash(final ServerName serverName, final boolean shouldSplitWal) {
     boolean carryingMeta = master.getAssignmentManager().isCarryingMeta(serverName);
+    this.master.getRegionReplicaHealthManager().serverDown(serverName);
     ProcedureExecutor<MasterProcedureEnv> procExec = this.master.getMasterProcedureExecutor();
     procExec.submitProcedure(new ServerCrashProcedure(procExec.getEnvironment(), serverName,
       shouldSplitWal, carryingMeta));

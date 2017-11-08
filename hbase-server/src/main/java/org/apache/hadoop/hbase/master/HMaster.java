@@ -105,6 +105,7 @@ import org.apache.hadoop.hbase.master.cleaner.ReplicationMetaCleaner;
 import org.apache.hadoop.hbase.master.cleaner.ReplicationZKNodeCleaner;
 import org.apache.hadoop.hbase.master.cleaner.ReplicationZKNodeCleanerChore;
 import org.apache.hadoop.hbase.master.locking.LockManager;
+import org.apache.hadoop.hbase.master.memstore.replication.RegionReplicaHealthManager;
 import org.apache.hadoop.hbase.master.normalizer.NormalizationPlan;
 import org.apache.hadoop.hbase.master.normalizer.NormalizationPlan.PlanType;
 import org.apache.hadoop.hbase.master.normalizer.RegionNormalizer;
@@ -405,6 +406,8 @@ public class HMaster extends HRegionServer implements MasterServices {
 
   /** jetty server for master to redirect requests to regionserver infoServer */
   private Server masterJettyServer;
+
+  private RegionReplicaHealthManager replicaHealthManager;
 
   public static class RedirectServlet extends HttpServlet {
     private static final long serialVersionUID = 2894774810058302473L;
@@ -1125,6 +1128,12 @@ public class HMaster extends HRegionServer implements MasterServices {
     }
     replicationMetaCleaner = new ReplicationMetaCleaner(this, this, cleanerInterval);
     getChoreService().scheduleChore(replicationMetaCleaner);
+    // Start RegionReplicaHealthManagerChore
+    int replicaHealthManagerPeriod = conf
+        .getInt("hbase.master.region.replica.health.manager.interval", 10 * 1000);
+    this.replicaHealthManager = new RegionReplicaHealthManager(this, this,
+        replicaHealthManagerPeriod);
+    getChoreService().scheduleChore(this.replicaHealthManager);
   }
 
   @Override
@@ -3483,5 +3492,10 @@ public class HMaster extends HRegionServer implements MasterServices {
 
   public SpaceQuotaSnapshotNotifier getSpaceQuotaSnapshotNotifier() {
     return this.spaceQuotaSnapshotNotifier;
+  }
+
+  @Override
+  public RegionReplicaHealthManager getRegionReplicaHealthManager() {
+    return this.replicaHealthManager;
   }
 }

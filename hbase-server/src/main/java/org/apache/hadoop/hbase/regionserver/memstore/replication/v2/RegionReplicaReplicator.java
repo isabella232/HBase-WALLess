@@ -91,6 +91,8 @@ public class RegionReplicaReplicator {
   private Set<Integer> pipeline;
   private ReadWriteLock lock = new ReentrantReadWriteLock();
   private AtomicInteger badCountToBeCommittedInMeta = new AtomicInteger(0);
+  
+  private volatile long badReplicaLatestProcessedTime = -1L;
 
   public RegionReplicaReplicator(Configuration conf, HRegionInfo currentRegion, int minWriteReplicas,
        int replicationThreadIndex) {
@@ -221,7 +223,6 @@ public class RegionReplicaReplicator {
     }
   }
   
-  // TODO to be used
   public boolean removeFromBadReplicas(Integer replica) {
     // This should be called only when this is Primary Region
     assert RegionReplicaUtil.isDefaultReplica(curRegion);
@@ -354,5 +355,19 @@ public class RegionReplicaReplicator {
     } finally {
       lock.unlock();
     }
+  }
+
+  public synchronized void markBadHealthStatus(long ts) {
+    assert !(RegionReplicaUtil.isDefaultReplica(this.curRegion));
+    this.badReplicaLatestProcessedTime = ts;
+  }
+
+  public synchronized boolean shouldProcessBadStatus(long ts) {
+    assert !(RegionReplicaUtil.isDefaultReplica(this.curRegion));
+    if (ts > this.badReplicaLatestProcessedTime) {
+      this.badReplicaLatestProcessedTime = ts;
+      return true;
+    }
+    return false;
   }
 }

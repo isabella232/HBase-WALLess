@@ -37,6 +37,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.R
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RSRegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.*;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.RpcController;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.ServiceException;
@@ -420,8 +422,8 @@ public class TestReplicator extends TestReplicationBase {
       }
 
       @Override
-      public RegionReplicaHealthUpdateResponse updateHealthStatus(RpcController controller,
-          RegionReplicaHealthUpdateRequest request) throws ServiceException {
+      public RegionReplicaHealthChangeResponse handleBadRegions(RpcController controller,
+          RSRegionReplicaHealthChangeRequest request) throws ServiceException {
         // TODO Auto-generated method stub
         return null;
       }

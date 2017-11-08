@@ -174,8 +174,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeRequest;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeRequestOrBuilder;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.HMRegionReplicaHealthChangeRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaRegionHealthService;
 import org.apache.hadoop.hbase.trace.SpanReceiverHost;
 import org.apache.hadoop.hbase.util.Addressing;
@@ -3792,7 +3791,7 @@ public class HRegionServer extends HasThread implements
   @Override
   public boolean reportReplicaRegionHealthChange(List<HRegionInfo> regions, boolean goodHealth) {
     if (this.rrssStub == null) return false;
-    RegionReplicaHealthChangeRequest.Builder builder = RegionReplicaHealthChangeRequest
+    HMRegionReplicaHealthChangeRequest.Builder builder = HMRegionReplicaHealthChangeRequest
         .newBuilder();
     for (HRegionInfo region : regions) {
       builder.addRegionInfo(HRegionInfo.convert(region));
