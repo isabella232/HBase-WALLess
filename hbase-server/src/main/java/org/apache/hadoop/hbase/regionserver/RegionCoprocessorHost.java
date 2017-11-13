@@ -53,6 +53,7 @@ import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Increment;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.coprocessor.CoprocessorHost;
@@ -213,6 +214,11 @@ public class RegionCoprocessorHost
     this.region = region;
     this.pathPrefix = Integer.toString(this.region.getRegionInfo().hashCode());
 
+    // Do not load the region CPs for replica regions. (?)
+    if (RegionReplicaUtil.isDefaultReplica(region.getRegionInfo())) {
+      this.hasCustomPostScannerFilterRow = false;
+      return;
+    }
     // load system default cp's from configuration.
     loadSystemCoprocessors(conf, REGION_COPROCESSOR_CONF_KEY);
 
