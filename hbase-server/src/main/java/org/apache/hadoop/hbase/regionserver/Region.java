@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.Cell;
@@ -49,7 +48,6 @@ import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.Service;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.GetRegionInfoResponse.CompactionState;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.CoprocessorServiceCall;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.wal.WALSplitter.MutationReplay;
 
@@ -699,10 +697,6 @@ public interface Region extends ConfigurationObserver {
 
     /** @return True if the flush requested a compaction, else false */
     boolean isCompactionNeeded();
-   /**
-    * @return the replicate memstore response as a CompletableFuture
-    */
-    CompletableFuture<ReplicateMemstoreResponse> getReplicateMemstoreResponse();
   }
 
   /**

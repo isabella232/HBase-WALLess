@@ -110,6 +110,7 @@ import org.apache.hadoop.hbase.quotas.RegionServerSpaceQuotaManager;
 import org.apache.hadoop.hbase.quotas.SpaceQuotaSnapshot;
 import org.apache.hadoop.hbase.quotas.SpaceViolationPolicyEnforcement;
 import org.apache.hadoop.hbase.regionserver.HRegion.BatchOperation;
+import org.apache.hadoop.hbase.regionserver.HRegion.FlushResultImpl;
 import org.apache.hadoop.hbase.regionserver.HRegion.RegionScannerImpl;
 import org.apache.hadoop.hbase.regionserver.Leases.Lease;
 import org.apache.hadoop.hbase.regionserver.Leases.LeaseStillHeldException;
@@ -1652,7 +1653,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
     try {
       checkOpen();
       requestCount.increment();
-      Region region = getRegion(request.getRegion());
+      HRegion region = (HRegion) getRegion(request.getRegion());
       LOG.info("Flushing " + region.getRegionInfo().getRegionNameAsString());
       boolean shouldFlush = true;
       if (request.hasIfOlderThanTs()) {
@@ -1660,13 +1661,18 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
       }
       FlushRegionResponse.Builder builder = FlushRegionResponse.newBuilder();
       if (shouldFlush) {
+        // Go behind the curtain so we can manage writing of the flush WAL marker
         boolean writeFlushWalMarker =  request.hasWriteFlushWalMarker() ?
             request.getWriteFlushWalMarker() : false;
-        // Go behind the curtain so we can manage writing of the flush WAL marker
+        // TODO any replica region being opened, after that it calls the primary for a flush. We
+        // should check whether flush is really needed. May be this replica region is not really in
+        // bad state? Should HM pass the info whether u r in BAD state, while opening? Another way
+        // is we have the BAD status here in primary. We can make use of that to ignore this call.
         int requestingReplica = request.hasRequestingReplica() ? request.getRequestingReplica()
             : -1;             
-        HRegion.FlushResultImpl flushResult = (HRegion.FlushResultImpl) ((HRegion) region)
+        HRegion.FlushResultImpl flushResult = (HRegion.FlushResultImpl) region
             .flushcache(true, writeFlushWalMarker, requestingReplica);
+        reportReplicaGoodToMeta(region, requestingReplica, flushResult);
         boolean compactionNeeded = flushResult.isCompactionNeeded();
         if (compactionNeeded) {
           regionServer.compactSplitThread.requestSystemCompaction(region,
@@ -1686,6 +1692,15 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
       throw new ServiceException(ex);
     } catch (IOException ie) {
       throw new ServiceException(ie);
+    }
+  }
+
+  private void reportReplicaGoodToMeta(HRegion region, int requestingReplica,
+      FlushResultImpl flushResult) {
+    if (requestingReplica > 0 && !(flushResult.failedReplicas.contains(requestingReplica))) {
+      this.regionServer.reportReplicaRegionHealthGood(
+          RegionReplicaUtil.getRegionInfoForReplica(region.getRegionInfo(), requestingReplica),
+          region);
     }
   }
 
@@ -2225,7 +2240,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
       ReplicateMemstoreResponse response = null;
       try {
         response = region.replicateMemstore(request, allCells);
-      } catch (Exception e1) {
+      } catch (IOException e1) {
         LOG.error("Exception in getting the memstore response from the pipeline " + e1 + " "
             + region.getRegionInfo());
         throw new ServiceException(e1);

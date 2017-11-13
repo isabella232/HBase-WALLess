@@ -74,6 +74,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.R
  * will reload it from META.
  */
 public class RegionReplicaReplicator {
+  private static final long UNSET = -1L;
   private final Configuration conf;
   private HRegionInfo curRegion;
   private final int minNonPrimaryWriteReplicas;
@@ -91,8 +92,8 @@ public class RegionReplicaReplicator {
   private Set<Integer> pipeline;
   private ReadWriteLock lock = new ReentrantReadWriteLock();
   private AtomicInteger badCountToBeCommittedInMeta = new AtomicInteger(0);
-  
-  private volatile long badReplicaLatestProcessedTime = -1L;
+
+  private volatile long badReplicaInProgressTs = UNSET;
 
   public RegionReplicaReplicator(Configuration conf, HRegionInfo currentRegion, int minWriteReplicas,
        int replicationThreadIndex) {
@@ -250,6 +251,10 @@ public class RegionReplicaReplicator {
   }
 
   // TODO : Just adding for completion.
+  // TODO - We should not give back any replicas for which state in META is still bad. There is a
+  // time gap btw the Good state set here and in META. So that extra check is needed. Once we get
+  // the flush request from a replica (after it is up again), then itself we will add that replica
+  // into the pipeline. This is not yet ready for the reads. State is META is any way BAD still
   public List<Integer> getCurrentPiplineForReads() {
     Lock lock = this.lock.readLock();
     lock.lock();
@@ -357,15 +362,15 @@ public class RegionReplicaReplicator {
     }
   }
 
-  public synchronized void markBadHealthStatus(long ts) {
+  public synchronized void finishBadHealthProcessing() {
     assert !(RegionReplicaUtil.isDefaultReplica(this.curRegion));
-    this.badReplicaLatestProcessedTime = ts;
+    this.badReplicaInProgressTs = UNSET;
   }
 
   public synchronized boolean shouldProcessBadStatus(long ts) {
     assert !(RegionReplicaUtil.isDefaultReplica(this.curRegion));
-    if (ts > this.badReplicaLatestProcessedTime) {
-      this.badReplicaLatestProcessedTime = ts;
+    if (ts > this.badReplicaInProgressTs) {
+      this.badReplicaInProgressTs = ts;
       return true;
     }
     return false;

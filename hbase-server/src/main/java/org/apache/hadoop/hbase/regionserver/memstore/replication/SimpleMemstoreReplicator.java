@@ -90,14 +90,15 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   @Override
   public ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
-      MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicator)
-      throws IOException, InterruptedException, ExecutionException {
+      MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicator) throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future = offerForReplicate(memstoreReplicationKey,
         memstoreEdits, regionReplicator);
     try {
       return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
       throw new TimeoutIOException(e);
+    } catch (InterruptedException | ExecutionException e) {
+      throw new IOException(e);
     }
   }
 
@@ -114,22 +115,22 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   @Override
   public CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaReplicator regionReplicaReplicator)
-      throws IOException, InterruptedException, ExecutionException {
+      RegionReplicaReplicator regionReplicaReplicator) throws IOException {
     return offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator);
   }
 
   @Override
   // directly waiting on this? Is it better to go with the rep threads here too???
   public ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
-      RegionReplicaReplicator replicator)
-      throws TimeoutIOException, InterruptedException, ExecutionException {
+      RegionReplicaReplicator replicator) throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future = new CompletableFuture<>(); 
     replicate(new RequestEntryHolder(request, allCells, future), null, replicator);
     try {
       return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
       throw new TimeoutIOException(e);
+    } catch (InterruptedException | ExecutionException e) {
+      throw new IOException(e);
     }
   }
 
@@ -357,5 +358,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         return stub.replicateMemstore(controller, reqBuilder.build());
       }
     }
+  }
+
+  @Override
+  public long getReplicationTimeout() {
+    return this.replicationTimeout;
   }
 }

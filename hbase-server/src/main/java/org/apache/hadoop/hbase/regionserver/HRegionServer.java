@@ -132,6 +132,7 @@ import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RegionReplicaFlushHandler;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.ReplicaGoodStateMarkerHandler;
 import org.apache.hadoop.hbase.regionserver.throttle.FlushThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.regionserver.wal.MetricsWAL;
@@ -1939,6 +1940,8 @@ public class HRegionServer extends HasThread implements
         conf.getInt("hbase.regionserver.region.replica.flusher.threads",
           conf.getInt("hbase.regionserver.executor.openregion.threads", 3)));
     }
+    // TODO how many threads for this? Just taking 3 now
+    this.service.startExecutorService(ExecutorType.RS_REGION_REPLICA_GOOD_HEALTH_MARKER_OPS, 3);
 
     Threads.setDaemonThreadRunning(this.walRoller.getThread(), getName() + ".logRoller",
         uncaughtExceptionHandler);
@@ -3812,5 +3815,9 @@ public class HRegionServer extends HasThread implements
       return false;
     }
     return true;
+  }
+
+  public void reportReplicaRegionHealthGood(HRegionInfo replicaRegion, HRegion primaryRegion) {
+    this.service.submit(new ReplicaGoodStateMarkerHandler(this, replicaRegion, primaryRegion));
   }
 }
