@@ -29,15 +29,9 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.ScheduledChore;
 import org.apache.hadoop.hbase.ServerName;
-import org.apache.hadoop.hbase.Stoppable;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
-import org.apache.hadoop.hbase.master.MasterServices;
-import org.apache.hadoop.hbase.regionserver.RegionServerStoppedException;
-import org.apache.hadoop.hbase.shaded.com.google.protobuf.ServiceException;
-import org.apache.hadoop.hbase.shaded.com.google.protobuf.UnsafeByteOperations;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.AdminService;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RSRegionReplicaHealthChangeRequest;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionNameMasterProcessingTimePair;
+import org.apache.hadoop.hbase.executor.EventType;
+import org.apache.hadoop.hbase.master.HMaster;
 import org.apache.hadoop.hbase.util.Pair;
 
 @InterfaceAudience.Private
@@ -45,12 +39,12 @@ public class RegionReplicaHealthManager extends ScheduledChore {
 
   private static final Log LOG = LogFactory.getLog(RegionReplicaHealthManager.class.getName());
 
-  private MasterServices masterServices;
+  private HMaster master;
   private Map<HRegionInfo, Long> badRegions;
 
-  public RegionReplicaHealthManager(MasterServices master, Stoppable stoppable, int period) {
-    super("RegionReplicaHealthManagerChore", stoppable, period);
-    this.masterServices = master;
+  public RegionReplicaHealthManager(HMaster master, int period) {
+    super("RegionReplicaHealthManagerChore", master, period);
+    this.master = master;
     this.badRegions = new HashMap<>();
   }
 
@@ -62,59 +56,27 @@ public class RegionReplicaHealthManager extends ScheduledChore {
     }
     Map<ServerName, List<Pair<HRegionInfo, Long>>> serverVsRegions = groupRegionsPerRS(
         badRegionsLocal);
-    List<Pair<HRegionInfo, Long>> regionsFromDownServers = new ArrayList<>();
     serverVsRegions.forEach((sn, regions) -> {
-      try {
-        AdminService.BlockingInterface rsAdmin = this.masterServices.getServerManager()
-            .getRsAdmin(sn);
-        LOG.info(
-            "Trying to contact " + sn + " for processing of bad health replica regions " + regions);
-        // TODO - What is the socket timeout value here? If this is too long, we will make the reqs
-        // to other server to wait longer.
-        // When this chore is in run, the next schedule comes, what to do? Just cancel?
-        rsAdmin.handleBadRegions(null, buildHealthChangeReq(regions));
-      } catch (RegionServerStoppedException rsse) {
-        regionsFromDownServers.addAll(regions);
-      } catch (IOException e) {
-      } catch (ServiceException e) {
-      }
+      this.master.getExecutorService().submit(new ReplicaHealthCorrectionHandler(this, this.master,
+          EventType.M_REGION_REPLICA_GOOD_HEALTH_MARKER, sn, regions));
     });
-    // We know these regions are from a down server. So no use of repeating the RPC for them. Later
-    // we will reassign these regions to other RSs and end of it, we will add them to this
-    // 'badRegions' list and will process then.
-    if (!regionsFromDownServers.isEmpty()) {
-      LOG.info("Removing regions " + regionsFromDownServers
-          + " from processing as their servers seems to be dead by now");
-      synchronized (this) {
-        regionsFromDownServers.forEach(region -> {
-          this.badRegions.remove(region.getFirst());
-        });
-      }
+  }
+
+  public void markRegionsDown(List<HRegionInfo> regions, ServerName sn) {
+    LOG.info("Removing regions " + regions + " from processing as their server" + sn
+        + " seems to be dead by now");
+    synchronized (this) {
+      regions.forEach(region -> {
+        this.badRegions.remove(region);
+      });
     }
   }
-
-  private RSRegionReplicaHealthChangeRequest buildHealthChangeReq(
-      List<Pair<HRegionInfo, Long>> regions) {
-    RSRegionReplicaHealthChangeRequest.Builder healthChangeReqBuilder = RSRegionReplicaHealthChangeRequest
-        .newBuilder();
-    RegionNameMasterProcessingTimePair.Builder builder = RegionNameMasterProcessingTimePair
-        .newBuilder();
-    regions.forEach(regionTsPair -> {
-      builder.setEncodedRegionName(
-          UnsafeByteOperations.unsafeWrap(regionTsPair.getFirst().getEncodedNameAsBytes()));
-      builder.setMasterTs(regionTsPair.getSecond());
-      healthChangeReqBuilder.addRegionNameProcessingTimePair(builder.build());
-      builder.clear();
-    });
-    RSRegionReplicaHealthChangeRequest healthChangeReq = healthChangeReqBuilder.build();
-    return healthChangeReq;
-  }
-
+  
   private Map<ServerName, List<Pair<HRegionInfo, Long>>> groupRegionsPerRS(
       Map<HRegionInfo, Long> badRegionsLocal) {
     Map<ServerName, List<Pair<HRegionInfo, Long>>> serverVsRegions = new HashMap<>();
     badRegionsLocal.forEach((region, ts) -> {
-      ServerName rs = this.masterServices.getAssignmentManager().getRegionStates()
+      ServerName rs = this.master.getAssignmentManager().getRegionStates()
           .getRegionServerOfRegion(region);
       List<Pair<HRegionInfo, Long>> regions = serverVsRegions.get(rs);
       if (regions == null) {
@@ -128,7 +90,7 @@ public class RegionReplicaHealthManager extends ScheduledChore {
 
   public void handleBadRegions(List<HRegionInfo> regions, Long ts) throws IOException {
     LOG.info("Marking the replicas" + regions + " as BAD in META");
-    this.masterServices.getAssignmentManager().updateReplicaRegionHealth(regions, false);
+    this.master.getAssignmentManager().updateReplicaRegionHealth(regions, false);
     synchronized (this) {
       regions.forEach(region -> {
         this.badRegions.put(region, ts);
@@ -141,7 +103,7 @@ public class RegionReplicaHealthManager extends ScheduledChore {
     synchronized (this) {
       Iterator<HRegionInfo> itr = this.badRegions.keySet().iterator();
       itr.forEachRemaining(region -> {
-        ServerName rs = this.masterServices.getAssignmentManager().getRegionStates()
+        ServerName rs = this.master.getAssignmentManager().getRegionStates()
             .getRegionServerOfRegion(region);
         if (downServer.equals(rs)) {
           itr.remove();
@@ -150,9 +112,9 @@ public class RegionReplicaHealthManager extends ScheduledChore {
     }
   }
 
-  public void markAsGoodRegions(List<HRegionInfo> regions) throws IOException {
+  public void markRegionsGood(List<HRegionInfo> regions) throws IOException {
     LOG.info("Marking the replicas" + regions + " as GOOD in META");
-    this.masterServices.getAssignmentManager().updateReplicaRegionHealth(regions, true);
+    this.master.getAssignmentManager().updateReplicaRegionHealth(regions, true);
     synchronized (this) {
       regions.forEach(region -> {
         this.badRegions.remove(region);

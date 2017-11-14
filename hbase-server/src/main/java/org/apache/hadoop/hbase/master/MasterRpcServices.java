@@ -2057,7 +2057,7 @@ public class MasterRpcServices extends RSRpcServices
     pbRegions.forEach((pbRegion) -> regions.add(HRegionInfo.convert(pbRegion)));
     try {
       if (request.getGoodState()) {
-        this.master.getRegionReplicaHealthManager().markAsGoodRegions(regions);
+        this.master.getRegionReplicaHealthManager().markRegionsGood(regions);
       } else {
         this.master.getRegionReplicaHealthManager().handleBadRegions(regions,
             EnvironmentEdgeManager.currentTime());

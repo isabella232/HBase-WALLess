@@ -1094,6 +1094,8 @@ public class HMaster extends HRegionServer implements MasterServices {
    // AccessController#postCompletedCreateTableAction
    this.service.startExecutorService(ExecutorType.MASTER_TABLE_OPERATIONS, 1);
    startProcedureExecutor();
+   // TODO decide how many threads we need.
+   this.service.startExecutorService(ExecutorType.MASTER_REGION_REPLICA_OPS, 5);
 
    // Start log cleaner thread
    int cleanerInterval = conf.getInt("hbase.master.cleaner.interval", 60 * 1000);
@@ -1131,8 +1133,7 @@ public class HMaster extends HRegionServer implements MasterServices {
     // Start RegionReplicaHealthManagerChore
     int replicaHealthManagerPeriod = conf
         .getInt("hbase.master.region.replica.health.manager.interval", 10 * 1000);
-    this.replicaHealthManager = new RegionReplicaHealthManager(this, this,
-        replicaHealthManagerPeriod);
+    this.replicaHealthManager = new RegionReplicaHealthManager(this, replicaHealthManagerPeriod);
     getChoreService().scheduleChore(this.replicaHealthManager);
   }
 
