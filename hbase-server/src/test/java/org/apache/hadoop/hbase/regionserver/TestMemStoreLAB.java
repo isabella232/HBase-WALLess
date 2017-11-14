@@ -220,7 +220,7 @@ public class TestMemStoreLAB {
       ChunkCreator.initialize(MemStoreLABImpl.MAX_ALLOC_DEFAULT, false,
         globalMemStoreLimit, 0.1f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null);
       ChunkCreator.clearDisableFlag();
-      mslab = new MemStoreLABImpl(conf);
+      mslab = new MemStoreLABImpl(conf, null);
       // launch multiple threads to trigger frequent chunk retirement
       List<Thread> threads = new ArrayList<>();
       final KeyValue kv = new KeyValue(Bytes.toBytes("r"), Bytes.toBytes("f"), Bytes.toBytes("q"),

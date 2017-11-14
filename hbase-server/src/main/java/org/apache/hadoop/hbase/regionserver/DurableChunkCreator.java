@@ -25,6 +25,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.mnemonic.DurableChunk;
 import org.apache.mnemonic.NonVolatileMemAllocator;
+import org.apache.mnemonic.Reclaim;
 import org.apache.mnemonic.Utils;
 
 @InterfaceAudience.Private
@@ -35,22 +36,37 @@ public class DurableChunkCreator extends ChunkCreator {
   private DurableChunk<NonVolatileMemAllocator> durableBigChunk;
   // Offset to track the allocation inside the bigChunk.
   private AtomicLong offset = new AtomicLong(0);
+  // if we have a bigger value this does not work. So creating some random value for now
+  // as in mnemonic's ChunkBufferNGTest
+  private long uniqueId = 23l;
+  private NonVolatileMemAllocator allocator;
 
   DurableChunkCreator(int chunkSize, long globalMemStoreSize, float poolSizePercentage,
       String durablePath) {
     super(chunkSize, true);
     // Do validation. but for now creating max sized allocator
     // As per Gary, pmalloc works with any size and pmem is not storage and space efficient
-    NonVolatileMemAllocator allocator = new NonVolatileMemAllocator(
+    allocator = new NonVolatileMemAllocator(
       // creating twice the size of the configured memory. This works for now
         Utils.getNonVolatileMemoryAllocatorService("pmem"),
         (long) ((2 * globalMemStoreSize * poolSizePercentage)),
         durablePath, true);
+    // TODO : Understand what is this
+    allocator.setChunkReclaimer(new Reclaim<Long>() {
+      @Override
+      public boolean reclaim(Long mres, Long sz) {
+        return false;
+      }
+    });
     // This does not work with > 15G
     durableBigChunk = allocator.createChunk((long)((globalMemStoreSize * poolSizePercentage)));
     if (durableBigChunk == null) {
       throw new RuntimeException("Not able to create a durable chunk");
     }
+    // this.uniqueId = durablePath.hashCode();
+    // set the handler with the unique id
+    allocator.setHandler(uniqueId, durableBigChunk.getHandler());
+    long handler = allocator.getHandler(uniqueId);
   }
 
   protected void initializePool(long globalMemStoreSize, float poolSizePercentage,
@@ -65,10 +81,11 @@ public class DurableChunkCreator extends ChunkCreator {
     assert pool != null;
   }
 
-  protected Chunk getChunk() {
+  protected Chunk getChunk(String regionName) {
     // In case of DurableChunks, it has to come always from pool. Never create on demand. Return
     // null when no free chunk available. The null chunks to be handled down the line.
-    Chunk chunk = this.pool.getChunk();
+    Chunk chunk = null;
+    chunk = this.pool.getChunk();
     if (chunk != null) {
       // put this chunk into the chunkIdMap
       this.chunkIdMap.put(chunk.getId(), new SoftReference<>(chunk));
@@ -78,9 +95,10 @@ public class DurableChunkCreator extends ChunkCreator {
         // TODO
       }
     }
-    // do the init here. We reset the chunk in pool.getchunk and again init() it. already this would have been inited
+    // do the init here. We reset the chunk in pool.getchunk and again init() it. already this would
+    // have been inited
     // while chunk pool was created. Fix it in trunk also
-    chunk.init();
+    chunk.init(regionName);
     return chunk;
   }
 
@@ -93,17 +111,12 @@ public class DurableChunkCreator extends ChunkCreator {
     return new DurableSlicedChunk(id, this.durableBigChunk, offsetToUse, chunkSize);
   }
 
-  protected void persist(Chunk c) {
-    assert c instanceof DurableSlicedChunk;
-    ((DurableSlicedChunk) c).persist();
-  }
-
-  // TODO seems no one calls me
+  // called during regionserver clean shutdown
   protected void close() {
-    // The other problem here is that when there is an abrupt shutdown I think the chunk area
-    // may be corrupted and may not be able to reuse it? Need to check.
-    // TODO : Mnemonic currently deletes the path if it is already available - need to see
-    // if it interferes with restart scenario. If needed need to handle those cases
-    this.durableBigChunk.destroy();
+    // when there is abrupt shutdown and another process tries to read it we are able to
+    // read the data. Even if the close has not happened
+    if (this.allocator != null) {
+      this.allocator.close();
+    }
   }
 }

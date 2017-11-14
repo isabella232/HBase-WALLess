@@ -78,7 +78,7 @@ public class TestMemStoreChunkPool {
   @Test
   public void testReusingChunks() {
     Random rand = new Random();
-    MemStoreLAB mslab = new MemStoreLABImpl(conf);
+    MemStoreLAB mslab = new MemStoreLABImpl(conf, null);
     int expectedOff = 0;
     ByteBuffer lastBuffer = null;
     final byte[] rk = Bytes.toBytes("r1");
@@ -104,7 +104,7 @@ public class TestMemStoreChunkPool {
     int chunkCount = chunkCreator.getPoolSize();
     assertTrue(chunkCount > 0);
     // reconstruct mslab
-    mslab = new MemStoreLABImpl(conf);
+    mslab = new MemStoreLABImpl(conf, null);
     // chunk should be got from the pool, so we can reuse it.
     KeyValue kv = new KeyValue(rk, cf, q, new byte[10]);
     mslab.copyCellInto(kv);
@@ -241,7 +241,7 @@ public class TestMemStoreChunkPool {
       Runnable r = new Runnable() {
         @Override
         public void run() {
-          MemStoreLAB memStoreLAB = new MemStoreLABImpl(conf);
+          MemStoreLAB memStoreLAB = new MemStoreLABImpl(conf, null);
           for (int i = 0; i < maxCount; i++) {
             memStoreLAB.copyCellInto(kv);// Try allocate size = chunkSize. Means every
                                          // allocate call will result in a new chunk

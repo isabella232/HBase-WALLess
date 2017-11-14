@@ -276,8 +276,8 @@ public class TestCellFlatSet extends TestCase {
 
     // allocate new chunks and use the data chunk to hold the full data of the cells
     // and the index chunk to hold the cell-representations
-    Chunk dataChunk = chunkCreator.getChunk();
-    Chunk idxChunk  = chunkCreator.getChunk();
+    Chunk dataChunk = chunkCreator.getChunk(null);
+    Chunk idxChunk  = chunkCreator.getChunk(null);
     // the array of index chunks to be used as a basis for CellChunkMap
     Chunk chunkArray[] = new Chunk[8];  // according to test currently written 8 is way enough
     int chunkArrayIdx = 0;
@@ -293,7 +293,7 @@ public class TestCellFlatSet extends TestCase {
     for (Cell kv: cellArray) {
       // do we have enough space to write the cell data on the data chunk?
       if (dataOffset + KeyValueUtil.length(kv) > chunkCreator.getChunkSize()) {
-        dataChunk = chunkCreator.getChunk();    // allocate more data chunks if needed
+        dataChunk = chunkCreator.getChunk(null);    // allocate more data chunks if needed
         dataBuffer = dataChunk.getData();
         dataOffset = Bytes.SIZEOF_INT;
       }
@@ -302,7 +302,7 @@ public class TestCellFlatSet extends TestCase {
 
       // do we have enough space to write the cell-representation on the index chunk?
       if (idxOffset + CellChunkMap.SIZEOF_CELL_REP > chunkCreator.getChunkSize()) {
-        idxChunk = chunkCreator.getChunk();    // allocate more index chunks if needed
+        idxChunk = chunkCreator.getChunk(null);    // allocate more index chunks if needed
         idxBuffer = idxChunk.getData();
         idxOffset = Bytes.SIZEOF_INT;
         chunkArray[chunkArrayIdx++] = idxChunk;

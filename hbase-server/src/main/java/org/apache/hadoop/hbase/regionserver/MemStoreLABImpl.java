@@ -35,6 +35,7 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
+import org.apache.hadoop.hbase.util.Bytes;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -87,19 +88,22 @@ public class MemStoreLABImpl implements MemStoreLAB {
   private AtomicBoolean reclaimed = new AtomicBoolean(false);
   // Current count of open scanners which reading data from this MemStoreLAB
   private final AtomicInteger openScannerCount = new AtomicInteger();
+  private final DurableCellChunkCodec codec = new DurableCellChunkCodec();
 
+  private String regionName;
   // Used in testing
   public MemStoreLABImpl() {
-    this(new Configuration());
+    this(new Configuration(), null);
   }
 
-  public MemStoreLABImpl(Configuration conf) {
+  public MemStoreLABImpl(Configuration conf, String regionName) {
     chunkSize = conf.getInt(CHUNK_SIZE_KEY, CHUNK_SIZE_DEFAULT);
     maxAlloc = conf.getInt(MAX_ALLOC_KEY, MAX_ALLOC_DEFAULT);
     this.chunkCreator = ChunkCreator.getInstance();
     // if we don't exclude allocations >CHUNK_SIZE, we'd infiniteloop on one!
     Preconditions.checkArgument(maxAlloc <= chunkSize,
         MAX_ALLOC_KEY + " must be less than " + CHUNK_SIZE_KEY);
+    this.regionName = regionName;
   }
 
   @Override
@@ -133,17 +137,25 @@ public class MemStoreLABImpl implements MemStoreLAB {
         tryRetireChunk(c);
       }
     }
-    return copyToChunkCell(cell, c.getData(), allocOffset, size);
+    return copyToChunkCell(cell, c.getData(), allocOffset, size, (c instanceof DurableSlicedChunk));
   }
 
   /**
    * Clone the passed cell by copying its data into the passed buf and create a cell with a chunkid
    * out of it
+   * @param b 
    */
-  private Cell copyToChunkCell(Cell cell, ByteBuffer buf, int offset, int len) {
+  private Cell copyToChunkCell(Cell cell, ByteBuffer buf, int offset, int len, boolean durableChunk) {
     int tagsLen = cell.getTagsLength();
     if (cell instanceof ExtendedCell) {
-      ((ExtendedCell) cell).write(buf, offset);
+      if (durableChunk) {
+        // this new object creation every time should be avoided
+        // TODO : Write seqID
+        codec.encode((ExtendedCell)cell, offset, buf);
+        offset += Bytes.SIZEOF_INT;
+      } else {
+        ((ExtendedCell) cell).write(buf, offset);
+      }
     } else {
       // Normally all Cell impls within Server will be of type ExtendedCell. Just considering the
       // other case also. The data fragments within Cell is copied into buf as in KeyValue
@@ -211,7 +223,6 @@ public class MemStoreLABImpl implements MemStoreLAB {
    * @return true if we won the race to retire the chunk
    */
   private void tryRetireChunk(Chunk c) {
-    this.chunkCreator.persist(c);
     curChunk.compareAndSet(c, null);
     // If the CAS succeeds, that means that we won the race
     // to retire the chunk. We could use this opportunity to
@@ -241,7 +252,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
         if (c != null) {
           return c;
         }
-        c = this.chunkCreator.getChunk();
+        c = this.chunkCreator.getChunk(regionName);
         if (c != null) {
           // set the curChunk. No need of CAS as only one thread will be here
           curChunk.set(c);
@@ -270,5 +281,10 @@ public class MemStoreLABImpl implements MemStoreLAB {
       }
     }
     return pooledChunks;
+  }
+
+  @Override
+  public String getRegionName() {
+    return this.regionName;
   }
 }

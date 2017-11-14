@@ -93,10 +93,10 @@ public abstract class Chunk {
    * constructed the chunk. It is thread-safe against other threads calling alloc(), who will block
    * until the allocation is complete.
    */
-  public void init() {
+  public void init(String regionName) {
     assert nextFreeOffset.get() == UNINITIALIZED;
     try {
-      allocateDataBuffer();
+      allocateDataBuffer(regionName);
     } catch (OutOfMemoryError e) {
       boolean failInit = nextFreeOffset.compareAndSet(UNINITIALIZED, OOM);
       assert failInit; // should be true.
@@ -110,7 +110,7 @@ public abstract class Chunk {
     Preconditions.checkState(initted, "Multiple threads tried to init same chunk");
   }
 
-  abstract void allocateDataBuffer();
+  abstract void allocateDataBuffer(String regionName);
 
   /**
    * Reset the offset to UNINITIALIZED before before reusing an old chunk

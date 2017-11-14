@@ -89,4 +89,10 @@ public class ImmutableMemStoreLAB implements MemStoreLAB {
       checkAndCloseMSLABs(count);
     }
   }
+
+  @Override
+  public String getRegionName() {
+    // TODO Auto-generated method stub
+    return null;
+  }
 }

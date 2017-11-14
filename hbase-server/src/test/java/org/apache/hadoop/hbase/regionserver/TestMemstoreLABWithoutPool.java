@@ -101,7 +101,7 @@ public class TestMemstoreLABWithoutPool {
     Configuration conf = HBaseConfiguration.create();
     MemStoreLABImpl[] mslab = new MemStoreLABImpl[10];
     for (int i = 0; i < 10; i++) {
-      mslab[i] = new MemStoreLABImpl(conf);
+      mslab[i] = new MemStoreLABImpl(conf, null);
     }
     // launch multiple threads to trigger frequent chunk retirement
     List<Thread> threads = new ArrayList<>();

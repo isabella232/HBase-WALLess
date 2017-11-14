@@ -1491,6 +1491,7 @@ public class HBaseTestingUtility extends HBaseCommonTestingUtility {
       // Disable blooms (they are on by default as of 0.95) but we disable them here because
       // tests have hard coded counts of what to expect in block cache, etc., and blooms being
       // on is interfering.
+      hcd.setInMemoryCompaction(MemoryCompactionPolicy.NONE);
       hcd.setBloomFilterType(BloomType.NONE);
       htd.addFamily(hcd);
     }

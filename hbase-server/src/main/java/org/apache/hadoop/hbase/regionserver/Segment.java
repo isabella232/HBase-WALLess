@@ -66,6 +66,7 @@ public abstract class Segment {
   protected final AtomicLong heapSize;
   protected final TimeRangeTracker timeRangeTracker;
   protected volatile boolean tagsPresent;
+  private String regionName;
 
   // Empty constructor to be used when Segment is used as interface,
   // and there is no need in true Segments state

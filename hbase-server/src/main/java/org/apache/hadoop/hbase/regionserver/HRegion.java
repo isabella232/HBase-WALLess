@@ -92,7 +92,6 @@ import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.NamespaceDescriptor;
 import org.apache.hadoop.hbase.NotServingRegionException;
-import org.apache.hadoop.hbase.RegionLocations;
 import org.apache.hadoop.hbase.RegionTooBusyException;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.Tag;
@@ -100,8 +99,6 @@ import org.apache.hadoop.hbase.TagUtil;
 import org.apache.hadoop.hbase.UnknownScannerException;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.client.Append;
-import org.apache.hadoop.hbase.client.ClusterConnection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Durability;
 import org.apache.hadoop.hbase.client.Get;
@@ -110,10 +107,8 @@ import org.apache.hadoop.hbase.client.IsolationLevel;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.PackagePrivateFieldAccessor;
 import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.RetriesExhaustedException;
 import org.apache.hadoop.hbase.client.RowMutations;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.conf.ConfigurationManager;
@@ -143,7 +138,6 @@ import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.Write
 import org.apache.hadoop.hbase.regionserver.ScannerContext.LimitScope;
 import org.apache.hadoop.hbase.regionserver.ScannerContext.NextState;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionContext;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.BadReplicaException;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
@@ -949,7 +943,34 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           ((HStore)store).stopReplayingFromWAL();
         }
       }
-
+    }
+    // Replay cells from durable chunk
+    if (this.getRegionServerServices() != null) {
+      DurableChunkRetriever chunkRetriever =
+          ((HRegionServer) this.getRegionServerServices()).getChunkRetriever();
+      if (chunkRetriever != null) {
+        List<Cell> regionChunk =
+            chunkRetriever.getRegionChunk(this.getRegionInfo().getRegionNameAsString());
+        Exception e = null;
+        try {
+          if (regionChunk != null) {
+            LOG.debug("Fetching cells for the region "
+                + this.getRegionInfo().getRegionNameAsString() + " " + regionChunk.size());
+          }
+          if (regionChunk != null) {
+            // this will get excption
+            maxSeqId = Math.max(maxSeqId, replayCellsFromDurableChunk(maxSeqId, regionChunk));
+          }
+          // advance to the new maxSeqId
+          this.mvcc.advanceTo(maxSeqId);
+        } catch (Exception ex) {
+          e = ex;
+        } finally {
+          if (e == null) {
+            chunkRetriever.clearRegionChunk(this.getRegionInfo().getRegionNameAsString());
+          }
+        }
+      }
     }
     this.lastReplayedOpenRegionSeqId = maxSeqId;
 
@@ -1011,6 +1032,39 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
     status.markComplete("Region opened successfully");
     return nextSeqid;
+  }
+
+  private long replayCellsFromDurableChunk(long maxSeqIdInStoreFiles, List<Cell> cells) throws IOException {
+    MemstoreSize memstoreSize = new MemstoreSize();
+    LOG.debug("Applying " + cells.size() + " cells from durable chunk to the region "
+        + this.getRegionInfo());
+    MonitoredTask status = TaskMonitor.get().createStatus("Replaying from durable chunk");
+    long maxSeqId = -1;
+    boolean flush = false;
+    for (Cell cell : cells) {
+      if (cell.getSequenceId() >= maxSeqIdInStoreFiles) {
+        if (cell.getSequenceId() > maxSeqId) {
+          maxSeqId = cell.getSequenceId();
+        }
+        HStore hStore = getHStore(cell);
+        applyToMemstore(hStore, cell, memstoreSize);
+      } else {
+        LOG.debug("Skipping cell "+cell+" as already available in file");
+      }
+    }
+    // add it to the RSAccounting so that we do the accounting of these edits from durable chunk
+    if (this.rsAccounting != null) {
+      rsAccounting.addRegionReplayEditsSize(getRegionInfo().getRegionName(), memstoreSize);
+    }
+    // check if flush size has been breached
+    flush = isFlushSize(this.addAndGetMemstoreSize(memstoreSize));
+    if (flush) {
+      // flush if the flush size is breached
+      status.setStatus("Flushing data that was got from durable chunk");
+      // TODO : What if the secondary is not up at this time? Pls check this case
+      internalFlushcache(null, maxSeqId, stores.values(), status, false);
+    }
+    return maxSeqId;
   }
 
   /**

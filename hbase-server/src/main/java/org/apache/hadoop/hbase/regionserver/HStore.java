@@ -274,13 +274,14 @@ public class HStore implements Store {
           CompactingMemStore.class, CompactingMemStore.class);
         className = clz.getName();
         this.memstore = ReflectionUtils.newInstance(clz, new Object[] { conf, this.comparator, this,
-            this.getHRegion().getRegionServicesForStores(), inMemoryCompaction});
+            this.getHRegion().getRegionServicesForStores(), inMemoryCompaction, this.region.getRegionInfo()});
         break;
       case NONE :
       default:
-        className = DefaultMemStore.class.getName();
-        this.memstore = ReflectionUtils.instantiateWithCustomCtor(className, new Class[] {
-        Configuration.class, CellComparator.class }, new Object[] { conf, this.comparator });
+      className = DefaultMemStore.class.getName();
+      this.memstore = ReflectionUtils.instantiateWithCustomCtor(className,
+        new Class[] { Configuration.class, CellComparator.class, HRegionInfo.class },
+        new Object[] { conf, this.comparator, this.region.getRegionInfo() });
     }
     LOG.info("Memstore class name is " + className);
     this.offPeakHours = OffPeakHours.getInstance(conf);

@@ -43,8 +43,8 @@ public final class SegmentFactory {
 
   // create skip-list-based (non-flat) immutable segment from compacting old immutable segments
   public ImmutableSegment createImmutableSegment(final Configuration conf,
-      final CellComparator comparator, MemStoreSegmentsIterator iterator) {
-    return new ImmutableSegment(comparator, iterator, MemStoreLAB.newInstance(conf));
+      final CellComparator comparator, MemStoreSegmentsIterator iterator, String regionName) {
+    return new ImmutableSegment(comparator, iterator, MemStoreLAB.newInstance(conf, regionName));
   }
 
   // create composite immutable segment from a list of segments
@@ -57,11 +57,11 @@ public final class SegmentFactory {
   // create new flat immutable segment from compacting old immutable segments
   public ImmutableSegment createImmutableSegmentByCompaction(final Configuration conf,
       final CellComparator comparator, MemStoreSegmentsIterator iterator, int numOfCells,
-      ImmutableSegment.Type segmentType)
+      ImmutableSegment.Type segmentType, String regionName)
       throws IOException {
     Preconditions.checkArgument(segmentType == ImmutableSegment.Type.ARRAY_MAP_BASED,
         "wrong immutable segment type");
-    MemStoreLAB memStoreLAB = MemStoreLAB.newInstance(conf);
+    MemStoreLAB memStoreLAB = MemStoreLAB.newInstance(conf, regionName);
     return
         // the last parameter "false" means not to merge, but to compact the pipeline
         // in order to create the new segment
@@ -80,8 +80,9 @@ public final class SegmentFactory {
   }
 
   // create mutable segment
-  public MutableSegment createMutableSegment(final Configuration conf, CellComparator comparator) {
-    MemStoreLAB memStoreLAB = MemStoreLAB.newInstance(conf);
+  public MutableSegment createMutableSegment(final Configuration conf, CellComparator comparator,
+      String regionName) {
+    MemStoreLAB memStoreLAB = MemStoreLAB.newInstance(conf, regionName);
     return generateMutableSegment(conf, comparator, memStoreLAB);
   }
 

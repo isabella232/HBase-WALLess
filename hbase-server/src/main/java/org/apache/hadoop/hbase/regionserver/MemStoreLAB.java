@@ -83,12 +83,15 @@ public interface MemStoreLAB {
    */
   void decScannerCount();
 
-  public static MemStoreLAB newInstance(Configuration conf) {
+  // TODO : This should be Id rather than the name?? Save space too
+  String getRegionName();
+
+  public static MemStoreLAB newInstance(Configuration conf, String regionName) {
     MemStoreLAB memStoreLAB = null;
     if (isEnabled(conf)) {
       String className = conf.get(MSLAB_CLASS_NAME, MemStoreLABImpl.class.getName());
       memStoreLAB = ReflectionUtils.instantiateWithCustomCtor(className,
-          new Class[] { Configuration.class }, new Object[] { conf });
+          new Class[] { Configuration.class, String.class }, new Object[] { conf, regionName });
     }
     return memStoreLAB;
   }

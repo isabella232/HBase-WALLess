@@ -32,6 +32,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellComparator;
 import org.apache.hadoop.hbase.ExtendedCell;
+import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -59,6 +60,8 @@ public abstract class AbstractMemStore implements MemStore {
   protected volatile long snapshotId;
   // Used to track when to flush
   private volatile long timeOfOldestEdit;
+  // TODO : Generate some id rather than writing the STring??
+  protected HRegionInfo regionInfo;
 
   public final static long FIXED_OVERHEAD = ClassSize.OBJECT
           + (4 * ClassSize.REFERENCE)
@@ -80,9 +83,10 @@ public abstract class AbstractMemStore implements MemStore {
     return order - 1;
   }
 
-  protected AbstractMemStore(final Configuration conf, final CellComparator c) {
+  protected AbstractMemStore(final Configuration conf, final CellComparator c, final HRegionInfo regionInfo) {
     this.conf = conf;
     this.comparator = c;
+    this.regionInfo = regionInfo;
     resetActive();
     this.snapshot = SegmentFactory.instance().createImmutableSegment(c);
     this.snapshotId = NO_SNAPSHOT_ID;
@@ -90,7 +94,15 @@ public abstract class AbstractMemStore implements MemStore {
 
   protected void resetActive() {
     // Reset heap to not include any keys
-    this.active = SegmentFactory.instance().createMutableSegment(conf, comparator);
+    String regionName = null;
+    if(active != null) {
+      regionName = this.active.getMemStoreLAB().getRegionName();
+    } else {
+      if (regionInfo != null) {
+        regionName = this.regionInfo.getRegionNameAsString();
+      }
+    }
+    this.active = SegmentFactory.instance().createMutableSegment(conf, comparator, regionName);
     this.timeOfOldestEdit = Long.MAX_VALUE;
   }
 

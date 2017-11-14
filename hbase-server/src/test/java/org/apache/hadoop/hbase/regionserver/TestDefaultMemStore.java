@@ -550,7 +550,7 @@ public class TestDefaultMemStore {
 
   @Test
   public void testMultipleVersionsSimple() throws Exception {
-    DefaultMemStore m = new DefaultMemStore(new Configuration(), CellComparator.COMPARATOR);
+    DefaultMemStore m = new DefaultMemStore(new Configuration(), CellComparator.COMPARATOR, null);
     byte [] row = Bytes.toBytes("testRow");
     byte [] family = Bytes.toBytes("testFamily");
     byte [] qf = Bytes.toBytes("testQualifier");
@@ -834,7 +834,7 @@ public class TestDefaultMemStore {
   @Test
   public void testUpsertMemstoreSize() throws Exception {
     Configuration conf = HBaseConfiguration.create();
-    memstore = new DefaultMemStore(conf, CellComparator.COMPARATOR);
+    memstore = new DefaultMemStore(conf, CellComparator.COMPARATOR, null);
     MemstoreSize oldSize = memstore.size();
 
     List<Cell> l = new ArrayList<>();

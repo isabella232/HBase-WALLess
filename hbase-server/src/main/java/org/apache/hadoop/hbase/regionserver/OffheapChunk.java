@@ -38,7 +38,7 @@ public class OffheapChunk extends Chunk {
   }
 
   @Override
-  void allocateDataBuffer() {
+  void allocateDataBuffer(String regionName) {
     if (data == null) {
       data = ByteBuffer.allocateDirect(this.size);
       data.putInt(0, this.getId());

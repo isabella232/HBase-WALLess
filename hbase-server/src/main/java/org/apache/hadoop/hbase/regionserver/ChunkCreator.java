@@ -18,6 +18,7 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
+import java.io.File;
 import java.lang.ref.SoftReference;
 import java.util.Iterator;
 import java.util.Map;
@@ -33,8 +34,10 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.regionserver.HeapMemoryManager.HeapMemoryTuneObserver;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.util.StringUtils;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -125,11 +128,13 @@ public class ChunkCreator {
     return cur;
   }
 
-  protected void close() {
-    // noop
+  protected static void shutdown() {
+    if (INSTANCE != null) {
+      INSTANCE.close();
+    }
   }
 
-  protected void persist(Chunk c) {
+  protected void close() {
     // noop
   }
 
@@ -137,10 +142,10 @@ public class ChunkCreator {
    * Creates and inits a chunk.
    * @return the chunk that was initialized
    */
-  protected Chunk getChunk() {
+  protected Chunk getChunk(String regionName) {
     Chunk chunk = null;
-    if (pool != null) {
-      //  the pool creates the chunk internally. The chunk#init() call happens here
+      if (pool != null) {
+      // the pool creates the chunk internally. The chunk#init() call happens here
       chunk = this.pool.getChunk();
       // the pool has run out of maxCount
       if (chunk == null) {
@@ -157,7 +162,7 @@ public class ChunkCreator {
     this.chunkIdMap.put(chunk.getId(), new SoftReference<>(chunk));
     // now we need to actually do the expensive memory allocation step in case of a new chunk,
     // else only the offset is set to the beginning of the chunk to accept allocations
-    chunk.init();
+    chunk.init(regionName);
     return chunk;
   }
 
@@ -245,7 +250,7 @@ public class ChunkCreator {
       for (int i = 0; i < initialCount; i++) {
         // for now initial count and total size are same so no extra offheap buffers will be required
         Chunk chunk = createChunk(true);
-        chunk.init();
+        //chunk.init(null);
         reclaimedChunks.add(chunk);
         //LOG.info("Created chunk "+i);
       }
@@ -302,6 +307,11 @@ public class ChunkCreator {
         Chunk chunk = ChunkCreator.this.removeChunk(chunkId);
         if (chunk != null) {
           if (chunk.isFromPool() && toAdd > 0) {
+            if (chunk.data != null) {
+              // put back the chunk by ensuring that the chunk is not used any more so that while
+              // retrieving all such chunks can be omitted
+              chunk.data.put(Bytes.SIZEOF_INT, (byte) 0);
+            }
             reclaimedChunks.add(chunk);
           }
           toAdd--;

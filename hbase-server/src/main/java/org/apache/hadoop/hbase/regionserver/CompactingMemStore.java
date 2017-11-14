@@ -31,6 +31,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellComparator;
 import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.MemoryCompactionPolicy;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -89,8 +90,19 @@ public class CompactingMemStore extends AbstractMemStore {
 
   public CompactingMemStore(Configuration conf, CellComparator c,
       HStore store, RegionServicesForStores regionServices,
+      MemoryCompactionPolicy compactionPolicy, HRegionInfo regionInfo) throws IOException {
+    super(conf, c, regionInfo);
+    this.store = store;
+    this.regionServices = regionServices;
+    this.pipeline = new CompactionPipeline(getRegionServices());
+    this.compactor = createMemStoreCompactor(compactionPolicy);
+    initInmemoryFlushSize(conf);
+  }
+  
+  public CompactingMemStore(Configuration conf, CellComparator c,
+      HStore store, RegionServicesForStores regionServices,
       MemoryCompactionPolicy compactionPolicy) throws IOException {
-    super(conf, c);
+    super(conf, c, null);
     this.store = store;
     this.regionServices = regionServices;
     this.pipeline = new CompactionPipeline(getRegionServices());

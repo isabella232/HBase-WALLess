@@ -18,6 +18,7 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.lang.Thread.UncaughtExceptionHandler;
@@ -117,6 +118,7 @@ import org.apache.hadoop.hbase.ipc.RpcServerInterface;
 import org.apache.hadoop.hbase.ipc.ServerNotRunningYetException;
 import org.apache.hadoop.hbase.ipc.ServerRpcController;
 import org.apache.hadoop.hbase.master.HMaster;
+import org.apache.hadoop.hbase.master.MasterServices;
 import org.apache.hadoop.hbase.master.RegionState.State;
 import org.apache.hadoop.hbase.master.balancer.BaseLoadBalancer;
 import org.apache.hadoop.hbase.mob.MobCacheConfig;
@@ -1215,6 +1217,8 @@ public class HRegionServer extends HasThread implements
       stopServiceThreads();
     }
 
+    // close the DurableChunk-if there is any
+    ChunkCreator.shutdown();
     if (this.rpcServices != null) {
       this.rpcServices.stop();
     }
@@ -1607,7 +1611,14 @@ public class HRegionServer extends HasThread implements
       startServiceThreads();
       startHeapMemoryManager();
       // Call it after starting HeapMemoryManager.
-      initializeMemStoreChunkCreator();
+      // this is for tests
+      if (!(this instanceof MasterServices)) {
+        // for tests. In real case this is not needed.
+        ChunkCreator.resetInstance();
+        DurableChunkRetriever.resetInstance();
+        initializeMemstoreChunkRetriever();
+        initializeMemStoreChunkCreator();
+      }
       LOG.info("Serving as " + this.serverName +
         ", RpcServer on " + rpcServices.isa +
         ", sessionid=0x" +
@@ -1645,6 +1656,27 @@ public class HRegionServer extends HasThread implements
       String durablePath = conf.get("hbase.memstore.mslab.durable.path");// TODO better name?
       ChunkCreator.initialize(chunkSize, offheap, globalMemStoreSize, poolSizePercentage,
           initialCountPercentage, this.hMemManager, durablePath);
+    }
+  }
+
+  protected void initializeMemstoreChunkRetriever() {
+    if (MemStoreLAB.isEnabled(conf)) {
+      Pair<Long, MemoryType> pair = MemorySizeUtil.getGlobalMemstoreSize(conf);
+      long globalMemStoreSize = pair.getFirst();
+      boolean offheap = this.regionServerAccounting.isOffheap();
+      // When off heap memstore in use, take full area for chunk pool.
+      float poolSizePercentage = offheap ? 1.0F
+          : conf.getFloat(MemStoreLAB.CHUNK_POOL_MAXSIZE_KEY, MemStoreLAB.POOL_MAX_SIZE_DEFAULT);
+      float initialCountPercentage = conf.getFloat(MemStoreLAB.CHUNK_POOL_INITIALSIZE_KEY,
+        MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT);
+      int chunkSize = conf.getInt(MemStoreLAB.CHUNK_SIZE_KEY, MemStoreLAB.CHUNK_SIZE_DEFAULT);
+      // init the chunkCreator
+      String durablePath = conf.get("hbase.memstore.mslab.durable.path");
+      if (durablePath != null) {
+        // In the actual case when a RS comes up in the same node the INSTANCE will also be null
+        DurableChunkRetriever.initialize(durablePath, chunkSize,
+          (int) (globalMemStoreSize * poolSizePercentage / chunkSize));
+      }
     }
   }
 
@@ -3551,6 +3583,9 @@ public class HRegionServer extends HasThread implements
     return this.compactSplitThread;
   }
 
+  public DurableChunkRetriever getChunkRetriever() {
+    return DurableChunkRetriever.getInstance();
+  }
   /**
    * A helper function to store the last flushed sequence Id with the previous failed RS for a
    * recovering region. The Id is used to skip wal edits which are flushed. Since the flushed
