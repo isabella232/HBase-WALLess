@@ -95,7 +95,7 @@ public abstract class AbstractMemStore implements MemStore {
   protected void resetActive() {
     // Reset heap to not include any keys
     String regionName = null;
-    if(active != null) {
+    if (active != null && this.active.getMemStoreLAB() != null) {
       regionName = this.active.getMemStoreLAB().getRegionName();
     } else {
       if (regionInfo != null) {

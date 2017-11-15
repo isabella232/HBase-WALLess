@@ -101,7 +101,9 @@ public class DurableChunkRetriever {
           byte inUse = chunkBuffer.get().get(Bytes.SIZEOF_INT);
           // the region name is after the chunkId and the byte representing if the chunk is in use
           // or not
-          LOG.info("The chunk is in Use?? " + inUse);
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("The chunk is in Use?? " + inUse);
+          }
           if (inUse == (byte) 1) {
             int endPremable = ByteBufferUtils.toInt(chunkBuffer.get(),
               Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE);
@@ -130,6 +132,8 @@ public class DurableChunkRetriever {
   }
 
   // Unused
+  // TODO : The problem is we don't know when to clear it. Say for example we have a start up of an
+  // RS but none of the regions are found to be similar as those in the chunk
   public void clear() {
     this.regionChunks.clear();
   }

@@ -151,7 +151,9 @@ public class DurableSlicedChunk extends Chunk {
       // next 4 bytes will inidcate the endPreamble.  will be filled in after every cell is written
       // this should be int or short?
       if (regionName != null) {
-        LOG.info("Creating new buffer again for region " + regionName);
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Creating new buffer again for region " + regionName);
+        }
       }
       if (regionName != null) {
         data.putInt(2* Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE, regionName.length());
