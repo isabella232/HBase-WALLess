@@ -651,7 +651,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   private final MultiVersionConcurrencyControl mvcc = new MultiVersionConcurrencyControl();
 
-  private Object maxSeqNoLock = new Object();
   // can this be volatile only??
   private AtomicLong currentMaxSeqNo = new AtomicLong(-1l);
 
@@ -3413,16 +3412,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
     public ReplayRegionAction(long seqNo, Action memstoreAction) {
       this.seqNo = seqNo;
-      // we need to sync here?? Or volatile is enough??
-      synchronized (maxSeqNoLock) {
-        if (seqNo > currentMaxSeqNo.get()) {
-          // get the max seqId while preparing the action. The MVCC has to some how
-          // catch up to this maxseqNo and it need not happen in increasing order.
-          // so the reads to replica regions needs to wait for the mvcc to catch up to this
-          // max seqNo
-          currentMaxSeqNo.set(seqNo);
-        }
-      }
+      // get the max seqId while preparing the action. The MVCC has to some how
+      // catch up to this maxseqNo and it need not happen in increasing order.
+      // so the reads to replica regions needs to wait for the mvcc to catch up to this
+      // max seqNo
+      currentMaxSeqNo.getAndAccumulate(seqNo, (x, y) -> Math.max(x, y));
       this.memstoreAction = memstoreAction;
     }
 
@@ -3431,6 +3425,18 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // TODO do we need an update lock here?
       memstoreAction.performAction();
       addAndGetMemstoreSize(memstoreAction.getSize());
+      // TODO is this correct? WIth this been called, the other change of waitForRead() while
+      // opening readers are incorrect. Here there wont be any waiters.notifyAll
+      // This call will advance readPnt and wrtePnt to given seqNo. Say cur number is 10 amd tow
+      // parallel threads doing this op with 11 and 12 as seqNo. Say 12 wala thread gets 1st chance
+      // and that will change the readPnts to 12 and come out. 11 wal did not get a chance and cells
+      // are not yet added to CSLM. Still we make readPnt advance. In normal writes we hanlde this
+      // kind of cases by completeAndWait() way. In replay only we dont do this because that wl be
+      // any way single threaded. Here we need normal write way I believe. ie. The 1st write op has
+      // to start an mvcc and get a write entry and this op has to finish that
+      // As of now ok as the replication happening from the src region will be single threaded per
+      // the destination region and the action is getting executed by a single thread per region.
+      // When any of these changes it will be an issue
       mvcc.advanceTo(seqNo);
     }
   }
@@ -6203,7 +6209,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     private final long maxResultSize;
     private final ScannerContext defaultScannerContext;
     private final FilterWrapper filter;
-    private List<Integer> goodReplicas;
 
     @Override
     public HRegionInfo getRegionInfo() {
@@ -6241,24 +6246,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       long mvccReadPoint = PackagePrivateFieldAccessor.getMvccReadPoint(scan);
       synchronized (scannerReadPoints) {
         if (mvccReadPoint > 0) {
-          // wait for mvcc point to catch up if it is a replica region
-          if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
-            catchUpMvcc(mvccReadPoint);
-          }
           this.readPt = mvccReadPoint;
         } else if (nonce == HConstants.NO_NONCE || rsServices == null
             || rsServices.getNonceManager() == null) {
-          // if it is a replica we won't have the read pt. This is the case when there were no RPC
-          // that
-          // was successful in primary
-          if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
-            long tempMvcc = currentMaxSeqNo.get();
-            if (tempMvcc != -1) {
-              catchUpMvcc(tempMvcc);
-              this.readPt = tempMvcc;
-            } else {
-              this.readPt = getReadPoint(isolationLevel);
-            }
+          long tempMvcc;
+          // We are reading from a replica and no RPCs happened to primary. So no readPnt been
+          // known. We have the seqNo till which been committed here and replied back to its
+          // replicating region. This is there in 'currentMaxSeqNo'. Assume that is the readPnt.
+          if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())
+              && (tempMvcc = currentMaxSeqNo.get()) != -1) {
+            this.readPt = tempMvcc;
           } else {
             this.readPt = getReadPoint(isolationLevel);
           }
@@ -6267,21 +6264,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         }
         scannerReadPoints.put(this, this.readPt);
       }
-      if (regionReplicator != null) {
-        goodReplicas = regionReplicator.getCurrentPiplineForReads();
+      if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
+        // The cells are added to the CSLM (from where we read) in an async way for the replica
+        // regions. The below wait is to confirm that all the Cells till the readPnt are actually
+        // committed into CSLM.
+        mvcc.waitForRead(this.readPt);
       }
       initializeScanners(scan, additionalScanners);
-    }
-
-    private void catchUpMvcc(long mvccReadPoint) {
-      while (mvcc.getReadPoint() < mvccReadPoint) {
-        try {
-          // is it better to go with wait and notify mechanism??
-          Thread.sleep(200);
-        } catch (InterruptedException e) {
-          // TODO : throw exception??
-        }
-      }
     }
 
     protected void initializeScanners(Scan scan, List<KeyValueScanner> additionalScanners)
@@ -8723,5 +8712,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     this.fs.convertAsPrimaryRegion();
     this.writestate.setReadOnly(false);
     this.regionReplicator.convertAsPrimaryRegion(getRegionInfo());
+  }
+
+  public List<Integer> getGoodReplicas() {
+    return this.regionReplicator.getCurrentPiplineForReads();
   }
 }

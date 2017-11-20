@@ -250,7 +250,6 @@ public class RegionReplicaReplicator {
     }
   }
 
-  // TODO : Just adding for completion.
   // TODO - We should not give back any replicas for which state in META is still bad. There is a
   // time gap btw the Good state set here and in META. So that extra check is needed. Once we get
   // the flush request from a replica (after it is up again), then itself we will add that replica

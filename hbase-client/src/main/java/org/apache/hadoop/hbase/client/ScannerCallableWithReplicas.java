@@ -195,6 +195,7 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
           if (currentScannerCallable != null) {
             if (currentScannerCallable.goodReplicaIds != null) {
               // we already have the goodReplicaIds with us.
+              // TODO This is kind of Hedged reads? We need read from any of the good replica as and when needed.
               addCallsForOtherReplicas(timeout, TimeUnit.MILLISECONDS, cs,
                 currentScannerCallable.goodReplicaIds);
               f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS,
