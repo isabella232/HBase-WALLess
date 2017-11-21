@@ -3153,8 +3153,10 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
  
     //Adding good replicas here. only for primary region
     if (RegionReplicaUtil.isDefaultReplica(region.getRegionInfo())) {
-      for (int id : ((HRegion) region).getGoodReplicas()) {
-        builder.addGoodReplicaIds(id);
+      if (((HRegion) region).getGoodReplicas() != null) {
+        for (int id : ((HRegion) region).getGoodReplicas()) {
+          builder.addGoodReplicaIds(id);
+        }
       }
     }
     builder.setTtl(scannerLeaseTimeoutPeriod);
