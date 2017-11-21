@@ -44,6 +44,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -326,8 +327,13 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
 
   final AtomicBoolean clearCompactionQueues = new AtomicBoolean(false);
 
-  final Map<String, ReplayCallbackExecutor> regionCallBackExecutor =
-      new ConcurrentHashMap<String, ReplayCallbackExecutor>();
+  final Map<String, Integer> regionCallBackExecutor = new ConcurrentHashMap<String, Integer>();
+
+  private final int noOfRegionCallBackExecutor;
+
+  private final ReplayCallbackExecutor callbackExecutors[];
+
+  private AtomicInteger nextExecutorIndex = new AtomicInteger(0);
 
   /**
    * An Rpc callback for closing a RegionScanner.
@@ -1270,9 +1276,17 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
     isa = new InetSocketAddress(initialIsa.getHostName(), address.getPort());
     rpcServer.setErrorHandler(this);
     rs.setName(name);
-
+    this.noOfRegionCallBackExecutor = rs.conf.getInt("hbase.regionserver.region.callback.executor.thread.count", 10);
     closedScanners = CacheBuilder.newBuilder()
         .expireAfterAccess(scannerLeaseTimeoutPeriod, TimeUnit.MILLISECONDS).build();
+    callbackExecutors = new ReplayCallbackExecutor[noOfRegionCallBackExecutor];
+    for (int i = 0; i < noOfRegionCallBackExecutor; i++) {
+      ReplayCallbackExecutor replayCallbackExecutor = new ReplayCallbackExecutor();
+      callbackExecutors[i] = replayCallbackExecutor;
+      replayCallbackExecutor.setDaemon(true);
+      // TODO :  we need to shut it down??
+      replayCallbackExecutor.start();
+    }
   }
 
   @Override
@@ -2280,17 +2294,11 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
       if (!familyMaps.isEmpty()) {
         // Already the mutations will be sorted at primary region. And we get those in same order
         // here. So no need for extra sort.
-        // create one per region  -  Anoop : Will be too much? May be ok.
         // DO this or go with an executor. //TODO : How to shutdown these threads on stop??
-        ReplayCallbackExecutor replayCallbackExecutor =
-            regionCallBackExecutor.get(region.getRegionInfo().getEncodedName());
-        if (replayCallbackExecutor == null) {
-          replayCallbackExecutor = new ReplayCallbackExecutor();
-          replayCallbackExecutor.setDaemon(true);
-          regionCallBackExecutor.put(region.getRegionInfo().getEncodedName(),
-            replayCallbackExecutor);
-          // TODO : Handle interrupted exception
-          replayCallbackExecutor.start();
+        Integer executorIndex = regionCallBackExecutor.get(region.getRegionInfo().getEncodedName());
+        if (executorIndex == null) {
+          executorIndex = getNextExecutorIndex();
+          regionCallBackExecutor.put(region.getRegionInfo().getEncodedName(), executorIndex);
         }
         try {
           action =
@@ -2302,7 +2310,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
         // if there is an error then this action is not going to be performed which means we are not
         // advancing the mvcc
         try {
-          replayCallbackExecutor.offer(action);
+          callbackExecutors[executorIndex].offer(action);
         } catch (InterruptedException e) {
           // Handle this case
         }
@@ -2317,6 +2325,12 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
     } catch (IOException ie) {
       throw new ServiceException(ie);
     }
+  }
+
+  private synchronized int getNextExecutorIndex() {
+    int res = (nextExecutorIndex.get()) % callbackExecutors.length;
+    nextExecutorIndex.incrementAndGet();
+    return res;
   }
 
   private void handleMetaMarkerCell(Cell cell, HRegion region, int replicasOffered)

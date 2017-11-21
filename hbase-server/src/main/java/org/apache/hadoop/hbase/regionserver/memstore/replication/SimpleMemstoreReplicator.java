@@ -8,6 +8,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -50,7 +51,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private final long replicationTimeout;
   protected static final int DEFAULT_WAL_SYNC_TIMEOUT_MS = 5 * 60 * 1000;
   protected final RegionServerServices rs;
-  private int threadIndex = 0;
+  private AtomicInteger threadIndex = new AtomicInteger(0);
   private final RpcControllerFactory rpcControllerFactory;
   private final RpcRetryingCallerFactory rpcRetryingCallerFactory;
   
@@ -149,8 +150,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   // called only when the region replicator is created
   @Override
   public synchronized int getNextReplicationThread() {
-    this.threadIndex = (threadIndex + 1) % this.replicationThreads.length;
-    return threadIndex;
+    int res = (threadIndex.get()) % this.replicationThreads.length;
+    threadIndex.incrementAndGet();
+    return res;
   }
 
   /*
