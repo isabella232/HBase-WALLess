@@ -35,6 +35,7 @@ import org.apache.hadoop.hbase.nio.ByteBuff;
  * The format of writing Cells is <4 bytes KV length><Key/Value/Tags><8 bytes seqId>
  * Note that the first 4 bytes of length will NOT include the seqId serialized size.
  */
+// TODO : remove this. not needed
 @InterfaceAudience.Private
 public class KVCodecWithSeqId implements Codec {
 

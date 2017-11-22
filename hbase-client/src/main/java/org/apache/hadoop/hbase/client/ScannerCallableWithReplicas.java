@@ -183,44 +183,47 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
           cs.poll(timeBeforeReplicas, TimeUnit.MICROSECONDS); // Yes, microseconds
       if (f != null) {
         // After poll, if f is not null, there must be a completed task
-        Pair<Result[], ScannerCallable> r = f.get();
-        if (r != null && r.getSecond() != null) {
-          updateCurrentlyServingReplica(r.getSecond(), r.getFirst(), done, pool);
-        }
-        return r == null ? null : r.getFirst(); // great we got a response
-      } else {
-        if (regionReplication != 1) {
-          // result not got from primary. Try with the replicas if there was a successful RPC.
-          // Use the good Replicas
-          if (currentScannerCallable != null) {
-            if (currentScannerCallable.goodReplicaIds != null) {
-              // we already have the goodReplicaIds with us.
-              // TODO This is kind of Hedged reads? We need read from any of the good replica as and when needed.
-              addCallsForOtherReplicas(timeout, TimeUnit.MILLISECONDS, cs,
-                currentScannerCallable.goodReplicaIds);
-              f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS,
-                currentScannerCallable.goodReplicaIds);
+        try {
+          Pair<Result[], ScannerCallable> r = f.get();
+          if (r != null && r.getSecond() != null) {
+            updateCurrentlyServingReplica(r.getSecond(), r.getFirst(), done, pool);
+          }
+          return r == null ? null : r.getFirst(); // great we got a response
+        } catch (ExecutionException e) {
 
-              if (f == null) {
-                f = getGoodReplicaFromMETAandRetry(timeout, cs);
-              }
-            } else {
-              // the case where the even the first RPC was not set.
-              // in that case directly go with replicas
-              addCallsForOtherReplicas(cs, 0, regionReplication - 1);
-              f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS,
-                1, regionReplication);
-              if (f == null) {
-                // probably the timeout should be adjusted
-                f = getGoodReplicaFromMETAandRetry(timeout, cs);
-              }
+        }
+      }
+      if (regionReplication != 1) {
+        // result not got from primary. Try with the replicas if there was a successful RPC.
+        // Use the good Replicas
+        if (currentScannerCallable != null) {
+          if (currentScannerCallable.goodReplicaIds != null) {
+            // we already have the goodReplicaIds with us.
+            // TODO This is kind of Hedged reads? We need read from any of the good replica as and
+            // when needed.
+            addCallsForOtherReplicas(timeout, TimeUnit.MILLISECONDS, cs,
+              currentScannerCallable.goodReplicaIds);
+            f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS,
+              currentScannerCallable.goodReplicaIds);
+
+            if (f == null) {
+              f = getGoodReplicaFromMETAandRetry(timeout, cs);
+            }
+          } else {
+            // the case where the even the first RPC was not set.
+            // in that case directly go with replicas
+            addCallsForOtherReplicas(cs, 0, regionReplication - 1);
+            f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS, 1,
+              regionReplication);
+            if (f == null) {
+              // probably the timeout should be adjusted
+              f = getGoodReplicaFromMETAandRetry(timeout, cs);
             }
           }
-        } else {
-          // when region replica is 1 wait for results from primary till timeout
-          f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS,
-            0, 1);
         }
+      } else {
+        // when region replica is 1 wait for results from primary till timeout
+        f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS, 0, 1);
       }
       if (f == null) {
         throw new RetriesExhaustedException(
@@ -426,11 +429,13 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
       // For the Consistency.TIMELINE case, we can't reuse the caller
       // since we could be making parallel RPCs (caller.callWithRetries is synchronized
       // and we can't invoke it multiple times at the same time)
-      this.caller = ScannerCallableWithReplicas.this.caller;
-      if (scan.getConsistency() == Consistency.TIMELINE) {
+     // this.caller = ScannerCallableWithReplicas.this.caller;
+     // if (scan.getConsistency() == Consistency.TIMELINE) {
+      // we will reset it every time
+      // TODO : Check this once again
         this.caller = RpcRetryingCallerFactory.instantiate(ScannerCallableWithReplicas.this.conf)
             .<Result[]> newCaller();
-      }
+      //}
     }
 
     @Override

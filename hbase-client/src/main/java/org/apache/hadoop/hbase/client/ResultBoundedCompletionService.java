@@ -275,6 +275,9 @@ public class ResultBoundedCompletionService<V> {
         }
         continue;
       }
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Replica " + f.getReplicaId() + " returns result");
+      }
       return f;
     }
 
