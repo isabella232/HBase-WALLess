@@ -165,6 +165,12 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
     replicaSwitched.set(false);
     // submit call for the primary replica.
     addCallsForCurrentReplica(cs);
+    if (LOG.isDebugEnabled()) {
+      if (currentScannerCallable != null && currentScannerCallable.getHRegionInfo() != null) {
+        LOG.debug("The current replica being served is "
+            + currentScannerCallable.getHRegionInfo().getReplicaId());
+      }
+    }
     // The algo works like this for SCans
     // 1) First hit the primary and wait for the timeBeforeReplicas.
     // 2) if we have a result from 1) return the result.

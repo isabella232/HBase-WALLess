@@ -18,7 +18,6 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -31,7 +30,7 @@ import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.RegionLocator;
+import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
@@ -39,6 +38,7 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.testclassification.MediumTests;
 import org.apache.hadoop.hbase.testclassification.RegionServerTests;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.JVMClusterUtil.RegionServerThread;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.junit.AfterClass;
@@ -47,12 +47,12 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 @Category({ RegionServerTests.class, MediumTests.class })
-public class TestScanFailoverWithReplicas {
-  private static final Log LOG = LogFactory.getLog(TestScanFailoverWithReplicas.class);
+public class TestGetFailOverWithReplicas {
+  private static final Log LOG = LogFactory.getLog(TestGetFailOverWithReplicas.class);
 
   private static final int NB_SERVERS = 4;
   private static Table table;
-  private static final byte[] row = "TestScanFailoverWithReplicas".getBytes();
+  private static final byte[] row = "TestGetFailOverWithReplicas".getBytes();
 
   private static HRegionInfo hriPrimary;
   private static HRegionInfo hriSecondary;
@@ -105,43 +105,23 @@ public class TestScanFailoverWithReplicas {
   }
   
   @Test(timeout = 300000)
-  public void testScanFailOver() throws Exception {
+  public void testGetFailOver() throws Exception {
     // this will load table.
     HTU.loadNumericRows(table, f, 0, 1000);
     // start a scan on the primary. Ensure the scan has multiple RPCs.
-    Scan s = new Scan();
-    s.setMaxResultSize(10l);
-    ResultScanner scanner = table.getScanner(s);
-    Iterator<Result> iterator = scanner.iterator();
-    boolean firstRpcDone = false;
-    boolean abort = false;
-    int count = 0;
-    while(iterator.hasNext()) {
-      Result next = iterator.next();
-      System.out.println("The cell is "+next);
-      count ++;
-      firstRpcDone = true;
-      // This test checks for the following
-      /**
-       * During course of a scan we abort the primary region server.
-       * So the scan should automatically fail over to the replicas.Now since primary is down
-       * ServerCrashProcedure does an automatic switch over of primary and the one that got
-       * converted to primary is assigned to some other RS.
-       * So during the course of scan fail over, the scan first moves over to replicaId 1. Now assume
-       * that replica Id 1 is converted to primary, the region with replicaId 1 is moved over to some other RS.
-       * So the scan under progress will undergo another fail over and will start working from replica Id 2.
-       * There should not be any repititon of rows and the fail over should be transparent to the client
-       */
-      if(firstRpcDone) {
-        // abort the primary and continue with the next call
-        if (!abort) {
+    boolean abort = false; 
+    for (int i = 0; i < 1000; i++) {
+      byte[] data = Bytes.toBytes(String.valueOf(i));
+      Get g = new Get(data);
+      Result result = table.get(g);
+      System.out.println("the result is " + result);
+      if (!abort) {
+        if (i % 100 == 0) {
           abortPrimary();
-          //Thread.sleep(6000);
+          abort = true;
         }
-        abort = true;
       }
     }
-    assertEquals("the total count should be 1000", 1000, count);
   }
   
   private void abortPrimary() {

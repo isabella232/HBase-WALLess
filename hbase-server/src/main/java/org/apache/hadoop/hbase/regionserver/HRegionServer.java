@@ -2350,13 +2350,8 @@ public class HRegionServer extends HasThread implements
     if (ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo())) {
       return;
     }
-    if (!ServerRegionReplicaUtil.isRegionReplicaReplicationEnabled(region.conf) ||
-        !ServerRegionReplicaUtil.isRegionReplicaWaitForPrimaryFlushEnabled(
-          region.conf)) {
-      region.setReadsEnabled(true);
-      return;
-    }
 
+   LOG.info("Trigger flush on primary by region "+region.getRegionInfo());
     region.setReadsEnabled(false); // disable reads before marking the region as opened.
     // RegionReplicaFlushHandler might reset this.
 
