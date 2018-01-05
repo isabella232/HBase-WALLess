@@ -1711,10 +1711,12 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
 
   private void reportReplicaGoodToMeta(HRegion region, int requestingReplica,
       FlushResultImpl flushResult) {
-    if (requestingReplica > 0 && !(flushResult.failedReplicas.contains(requestingReplica))) {
-      this.regionServer.reportReplicaRegionHealthGood(
+    if (flushResult != null && flushResult.failedReplicas != null) {
+      if (requestingReplica > 0 && !(flushResult.failedReplicas.contains(requestingReplica))) {
+        this.regionServer.reportReplicaRegionHealthGood(
           RegionReplicaUtil.getRegionInfoForReplica(region.getRegionInfo(), requestingReplica),
           region);
+      }
     }
   }
 

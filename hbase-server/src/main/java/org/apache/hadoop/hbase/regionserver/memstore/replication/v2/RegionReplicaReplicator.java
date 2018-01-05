@@ -230,8 +230,13 @@ public class RegionReplicaReplicator {
     Lock lock = this.lock.writeLock();
     lock.lock();
     try {
-      this.pipeline.add(replica);
-      return this.badReplicas.remove(replica);
+      // when a replica region opens it makes a call for primary region flush. 
+      // there is no pipeline at that point of time. This Null checks helps avoid NPE
+      if (pipeline != null) {
+        this.pipeline.add(replica);
+        return this.badReplicas.remove(replica);
+      }
+      return true;
     } finally {
       lock.unlock();
     }
