@@ -2354,6 +2354,10 @@ public class HStore implements Store {
       long snapshotId = -1; // -1 means do not drop
       if (dropMemstoreSnapshot && snapshot != null) {
         snapshotId = snapshot.getId();
+        List<KeyValueScanner> scanners = snapshot.getScanners();
+        for (KeyValueScanner scanner : scanners) {
+          scanner.close();
+        }
       }
       HStore.this.updateStorefiles(storeFiles, snapshotId);
     }
