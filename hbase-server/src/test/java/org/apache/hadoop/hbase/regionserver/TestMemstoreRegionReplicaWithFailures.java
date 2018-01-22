@@ -124,6 +124,7 @@ public class TestMemstoreRegionReplicaWithFailures {
     try {
       pair = openSecondary();
       tertiaryOpenedIn = openTertiary(pair);
+      Thread.sleep(3000);
       tertiaryRegion = (HRegion)getTertiaryRegion(tertiaryOpenedIn);
       tertiaryRegion.throwErrorOnMemstoreReplay(true);
       byte[] data = Bytes.toBytes(String.valueOf(100));
@@ -158,6 +159,7 @@ public class TestMemstoreRegionReplicaWithFailures {
     try {
       pair = openSecondary();
       tertiaryOpenedIn = openTertiary(pair);
+      Thread.sleep(3000);
       secondarRegion = (HRegion)getSecondaryRegion(pair);
       secondarRegion.throwErrorOnMemstoreReplay(true);
       byte[] data = Bytes.toBytes(String.valueOf(100));
@@ -193,6 +195,7 @@ public class TestMemstoreRegionReplicaWithFailures {
     try {
       pair = openSecondary();
       tertiaryOpenedIn = openTertiary(pair);
+      Thread.sleep(3000);
       secondaryRegion = (HRegion)getSecondaryRegion(pair);
       secondaryRegion.throwErrorOnMemstoreReplay(true);
       byte[] data = Bytes.toBytes(String.valueOf(100));
@@ -212,15 +215,20 @@ public class TestMemstoreRegionReplicaWithFailures {
       Result result = table.get(get);
       Assert.assertArrayEquals(row, result.getValue(f, null));
       
+      // throw error on secondary also. Lets move it to tertiary
+      secondaryRegion.throwErrorOnScan(true);
+      
       row = Bytes.toBytes(String.valueOf(100));
       get = new Get(row);
       get.setConsistency(Consistency.TIMELINE);
       result = table.get(get);
       // this should some how get a result from tertiary. Lets see
       Assert.assertArrayEquals(row, result.getValue(f, null));
+      System.out.println("Got some output here");
     } finally {
       secondaryRegion.throwErrorOnMemstoreReplay(false);
       primaryRegion.throwErrorOnScan(false);
+      secondaryRegion.throwErrorOnScan(false);
       HTU.deleteNumericRows(table, HConstants.CATALOG_FAMILY, 100, 101);
       closeSecondary(pair.getSecond());
       closeTertiary(tertiaryOpenedIn);

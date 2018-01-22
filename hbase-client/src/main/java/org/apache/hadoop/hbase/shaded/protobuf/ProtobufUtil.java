@@ -2261,18 +2261,19 @@ public final class ProtobufUtil {
         .setFlushSequenceNumber(flushSeqId)
         .setTableName(UnsafeByteOperations.unsafeWrap(hri.getTable().getName()));
 
-    for (Map.Entry<byte[], List<Path>> entry : committedFiles.entrySet()) {
-      WALProtos.FlushDescriptor.StoreFlushDescriptor.Builder builder =
-          WALProtos.FlushDescriptor.StoreFlushDescriptor.newBuilder()
-          .setFamilyName(UnsafeByteOperations.unsafeWrap(entry.getKey()))
-          .setStoreHomeDir(Bytes.toString(entry.getKey())); //relative to region
-      if (entry.getValue() != null) {
-        for (Path path : entry.getValue()) {
-          builder.addFlushOutput(path.getName());
-        }
-      }
-      desc.addStoreFlushes(builder);
-    }
+		if (committedFiles != null) {
+			for (Map.Entry<byte[], List<Path>> entry : committedFiles.entrySet()) {
+				WALProtos.FlushDescriptor.StoreFlushDescriptor.Builder builder = WALProtos.FlushDescriptor.StoreFlushDescriptor
+						.newBuilder().setFamilyName(UnsafeByteOperations.unsafeWrap(entry.getKey()))
+						.setStoreHomeDir(Bytes.toString(entry.getKey())); // relative to region
+				if (entry.getValue() != null) {
+					for (Path path : entry.getValue()) {
+						builder.addFlushOutput(path.getName());
+					}
+				}
+				desc.addStoreFlushes(builder);
+			}
+		}
     return desc.build();
   }
 

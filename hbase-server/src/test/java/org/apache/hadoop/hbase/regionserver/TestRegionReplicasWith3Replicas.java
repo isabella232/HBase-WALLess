@@ -218,6 +218,8 @@ public class TestRegionReplicasWith3Replicas {
       pair = openSecondary();
       tertiaryOpenedIn = openTertiary(pair);
 
+      // wait for post open deploy to be completed.
+      Thread.sleep(3000);
       // load some data to primary
       LOG.info("Loading data to primary region");
       for (int i = 0; i < 3; ++i) {
@@ -321,6 +323,7 @@ public class TestRegionReplicasWith3Replicas {
       pair = openSecondary();
       tertiaryOpenedIn = openTertiary(pair);
 
+      Thread.sleep(3000);
       //load some data to primary
       LOG.info("Loading data to primary region");
       HTU.loadNumericRows(table, f, 0, 1000);

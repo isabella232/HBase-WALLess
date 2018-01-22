@@ -2512,6 +2512,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // bulk loaded file between memory and existing hfiles. It wants a good seqeunceId that belongs
     // to no other that it can use to associate with the bulk load. Hence this little dance below
     // to go get one.
+    CompletableFuture<ReplicateMemstoreResponse> future = null;
     if (this.memstoreDataSize.get() <= 0) {
       // Take an update lock so no edits can come into memory just yet.
       this.updatesLock.writeLock().lock();
@@ -2530,6 +2531,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
             flushResult = new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH_MEMSTORE_EMPTY,
                 flushOpSeqId, "Nothing to flush",
                 writeFlushRequestMarkerToWAL(wal, writeFlushWalMarker), null);
+            if (RegionReplicaUtil.isDefaultReplica(getRegionInfo().getReplicaId())) {
+                future = sendFlushRpc(FlushAction.CANNOT_FLUSH, flushOpSeqId, null,
+                    currentReplicaIndex, flushOpSeqId, true, null);
+              }
             mvcc.completeAndWait(writeEntry);
             // Set to null so we don't complete it again down in finally block.
             writeEntry = null;
@@ -2580,7 +2585,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     long flushedSeqId = HConstants.NO_SEQNUM;
     byte[] encodedRegionName = getRegionInfo().getEncodedNameAsBytes();
     boolean rpcSent = false;
-    CompletableFuture<ReplicateMemstoreResponse> future = null;
     try {
       if (wal != null) {
         // TODO : The seq id generation logic is in WAL// To be removed
@@ -6395,10 +6399,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
       startRegionOperation(Operation.SCAN);
       readRequestsCount.increment();
-      if(throwErrorOnScan) {
-        throw new IOException("Throw error on scan");
-      }
       try {
+    	  // always throw exception here so that try/finally works. This was causing an issue
+    	  if(throwErrorOnScan) {
+    		  throw new IOException("Throw error on scan");
+    	  }
         return nextRaw(outResults, scannerContext);
       } finally {
         closeRegionOperation(Operation.SCAN);
