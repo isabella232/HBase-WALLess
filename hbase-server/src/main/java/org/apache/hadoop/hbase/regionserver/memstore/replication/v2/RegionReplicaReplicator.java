@@ -22,7 +22,6 @@ import org.apache.hadoop.hbase.client.ClusterConnection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.CompletedFuture;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.PipelineException;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
@@ -79,9 +78,9 @@ public class RegionReplicaReplicator {
   private HRegionInfo curRegion;
   private final int minNonPrimaryWriteReplicas;
   private volatile HRegionLocation[] regionLocations;
-  private List<MemstoreReplicationEntry> entryBuffer;
-  private volatile long curSeq = 0;
-  private volatile long curMaxConsumedSeq = -1;
+  private volatile List<MemstoreReplicationEntry> entryBuffer = new ArrayList<>();
+  private volatile long nextSeq = 1;
+  private volatile long curMaxConsumedSeq = 0;
   private int replicationThreadIndex;
   // Those replicas whose health is marked as BAD already in this primary
   private Set<Integer> badReplicas;
@@ -100,7 +99,6 @@ public class RegionReplicaReplicator {
     this.conf = conf;
     this.curRegion = currentRegion;
     this.minNonPrimaryWriteReplicas = minWriteReplicas - 1;
-    this.entryBuffer = new ArrayList<>();
     this.replicationThreadIndex = replicationThreadIndex;
     if (RegionReplicaUtil.isDefaultReplica(this.curRegion)) {
       badReplicas = new HashSet<>();
@@ -111,14 +109,12 @@ public class RegionReplicaReplicator {
   public CompletableFuture<ReplicateMemstoreResponse> append(MemstoreReplicationEntry entry)
       throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future = new CompletableFuture<>();
-    entry.attachFuture(future, curSeq++);
-    addToBuffer(entry);
+    // Seems no way to avoid this sync
+    synchronized (this) {
+      entry.attachFuture(future, nextSeq++);
+      this.entryBuffer.add(entry);
+    }
     return future;
-  }
-
-  // Seems no way to avoid this sync
-  private synchronized void addToBuffer(MemstoreReplicationEntry entry) {
-    this.entryBuffer.add(entry);
   }
 
   /**
@@ -128,12 +124,12 @@ public class RegionReplicaReplicator {
    */
   public synchronized List<MemstoreReplicationEntry> pullEntries(long minSeq) {
     // TODO : some problem here.  Fix !!  This is a very imp fix. What is the issue (Anoop)
-/*    if (this.curMaxConsumedSeq >= minSeq) {
+    if (this.curMaxConsumedSeq >= minSeq) {
       return null;
-    }*/
+    }
     List<MemstoreReplicationEntry> local = this.entryBuffer;
     this.entryBuffer = new ArrayList<>();
-    this.curMaxConsumedSeq = this.curSeq;
+    this.curMaxConsumedSeq = this.nextSeq - 1;
     return local;
   }
 
