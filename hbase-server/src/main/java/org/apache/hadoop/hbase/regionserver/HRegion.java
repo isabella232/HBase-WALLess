@@ -2532,6 +2532,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
                 flushOpSeqId, "Nothing to flush",
                 writeFlushRequestMarkerToWAL(wal, writeFlushWalMarker), null);
             if (RegionReplicaUtil.isDefaultReplica(getRegionInfo().getReplicaId())) {
+            	// EVen if there is no flush happening we need to send this CANNOT_FLUSH RPC
+            	// so that the replica region can be enabled for reads. The reads were disabled in
+            	// replica when the ReplicaRegionFlushHandler was called. This RPC
+            	// will ensure that the replica  regions are enabled for reads during replay of flush markers                
                 future = sendFlushRpc(FlushAction.CANNOT_FLUSH, flushOpSeqId, null,
                     currentReplicaIndex, flushOpSeqId, true, null);
               }

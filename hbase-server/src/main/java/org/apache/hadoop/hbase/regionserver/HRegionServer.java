@@ -2230,6 +2230,9 @@ public class HRegionServer extends HasThread implements
         + r.getRegionInfo().getRegionNameAsString());
     }
 
+    // TODO : differentiate between clean region opening and a region open on failure.
+    // Since the primary region is already opened by this time it starts accepting mutations and
+    // this call to flush the primary causes smaller fluhes
     if (!primaryRegionReplace) triggerFlushInPrimaryRegion((HRegion)r);
 
     LOG.debug("Finished post open deploy task for " + r.getRegionInfo().getRegionNameAsString());

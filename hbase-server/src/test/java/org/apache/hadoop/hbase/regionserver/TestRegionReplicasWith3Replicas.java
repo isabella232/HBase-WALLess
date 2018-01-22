@@ -323,6 +323,10 @@ public class TestRegionReplicasWith3Replicas {
       pair = openSecondary();
       tertiaryOpenedIn = openTertiary(pair);
 
+      // wait for post open deploy to be completed.
+      // All replica regions force a flush on primary and this flush
+      // makes additional store files. So before we even accept writes
+      // wait for the replicas to be opened completely.
       Thread.sleep(3000);
       //load some data to primary
       LOG.info("Loading data to primary region");
@@ -347,6 +351,11 @@ public class TestRegionReplicasWith3Replicas {
       assertGetRpc(hriSecondary, 42, true, pair.getSecond());
       assertGetRpc(hriSecondary, 1042, false, pair.getSecond());
 
+      // wait for post open deploy to be completed.
+      // All replica regions force a flush on primary and this flush
+      // makes additional store files. So before we even accept writes
+      // wait for the replicas to be opened completely.
+      Thread.sleep(3000);
       // load some data to primary
       HTU.loadNumericRows(table, f, 1000, 1100);
       region = getPrimaryRegion(pair);
