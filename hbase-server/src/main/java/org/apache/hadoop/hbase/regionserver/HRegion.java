@@ -3711,6 +3711,24 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         applyFamilyMapToMemstore(familyMaps[i], memstoreSize);
       }
 
+      Set<Store> processed = new HashSet<Store>();
+      // execute the persiste here
+      for (int i = firstIndex; i < lastIndexExclusive; i++) {
+        if (batchOp.retCodeDetails[i].getOperationStatusCode() != OperationStatusCode.NOT_RUN) {
+          continue;
+        }
+        
+        Map<byte[], List<Cell>> values = familyMaps[i];
+        Set<byte[]> keySet = values.keySet();
+        for (byte[] storeName : keySet) {
+          // persist after the batch
+          Store store = getStore(storeName);
+          if (!processed.contains(store)) {
+            ((HStore) store).persist();
+            processed.add(store);
+          }
+        }
+      }
       // update memstore size
       this.addAndGetMemstoreSize(memstoreSize);
 
@@ -4306,6 +4324,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     for (Entry<byte[], Collection<Cell>> e : familyMaps.entrySet()) {
       HStore store = getHStore(e.getKey());
       Action action = store.addAsync(e.getValue(), memstoreSize);
+      store.persist();
       // This is a bug
       actions.add(action);
     }

@@ -112,6 +112,9 @@ public abstract class Chunk {
 
   abstract void allocateDataBuffer(String regionName);
 
+  public void persist() {
+    
+  }
   /**
    * Reset the offset to UNINITIALIZED before before reusing an old chunk
    */

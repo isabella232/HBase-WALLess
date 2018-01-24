@@ -153,4 +153,6 @@ public interface MemStore {
    * are done
    */
   default void stopReplayingFromWAL(){return;}
+
+  default void persist() {};
 }

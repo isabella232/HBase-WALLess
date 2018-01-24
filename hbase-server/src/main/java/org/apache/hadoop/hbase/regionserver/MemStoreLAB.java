@@ -99,4 +99,6 @@ public interface MemStoreLAB {
   public static boolean isEnabled(Configuration conf) {
     return conf.getBoolean(USEMSLAB_KEY, USEMSLAB_DEFAULT);
   }
+
+  void persist();
 }

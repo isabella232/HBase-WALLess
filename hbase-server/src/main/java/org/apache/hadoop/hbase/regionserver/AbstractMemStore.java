@@ -133,6 +133,10 @@ public abstract class AbstractMemStore implements MemStore {
     return action;
   }
 
+  @Override
+  public void persist() {
+    this.active.persist();
+  }
   private void add(Cell cell, MemstoreAction action) {
     // TODO for our case we must copy to MSLAB area. To add such facility down the line.
     Cell toAdd = maybeCloneWithAllocator(cell);

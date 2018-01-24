@@ -95,4 +95,11 @@ public class ImmutableMemStoreLAB implements MemStoreLAB {
     // TODO Auto-generated method stub
     return null;
   }
+  
+  @Override
+  public void persist() {
+    for (MemStoreLAB mslab : this.mslabs) {
+      mslab.persist();
+    }
+  }
 }

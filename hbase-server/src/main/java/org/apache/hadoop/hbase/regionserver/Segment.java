@@ -170,6 +170,11 @@ public abstract class Segment {
     return (cellFromMslab != null) ? cellFromMslab : cell;
   }
 
+  public void persist() {
+    if (this.memStoreLAB != null) {
+      this.memStoreLAB.persist();
+    }
+  }
   /**
    * Get cell length after serialized in {@link KeyValue}
    */

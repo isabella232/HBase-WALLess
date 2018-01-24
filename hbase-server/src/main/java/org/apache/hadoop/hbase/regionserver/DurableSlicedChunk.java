@@ -165,8 +165,8 @@ public class DurableSlicedChunk extends Chunk {
     }
   }
 
-  void persist() {
+  public void persist() {
     this.chunkBuffer.syncToNonVolatileMemory();
-    this.chunkBuffer.syncToLocal();
+    //this.chunkBuffer.syncToLocal();
   }
 }

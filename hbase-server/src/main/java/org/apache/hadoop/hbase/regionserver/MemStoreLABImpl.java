@@ -138,6 +138,15 @@ public class MemStoreLABImpl implements MemStoreLAB {
       }
     }
     return copyToChunkCell(cell, c.getData(), allocOffset, size, (c instanceof DurableSlicedChunk));
+    //c.persist();
+    //return returnCell;
+  }
+
+  @Override
+  public void persist() {
+    for(int chunkId : chunks) {
+      this.chunkCreator.getChunk(chunkId).persist();
+    }
   }
 
   /**

@@ -2630,4 +2630,8 @@ public class HStore implements Store {
       lock.writeLock().unlock();
     }
   }
+
+  public void persist() {
+    this.memstore.persist();
+  }
 }
