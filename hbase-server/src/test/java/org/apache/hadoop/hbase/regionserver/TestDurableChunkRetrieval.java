@@ -16,7 +16,6 @@ import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
@@ -24,8 +23,8 @@ import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.testclassification.MediumTests;
 import org.apache.hadoop.hbase.testclassification.RegionServerTests;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.hbase.util.RegionSplitter;
 import org.apache.hadoop.hbase.util.JVMClusterUtil.RegionServerThread;
+import org.apache.hadoop.hbase.util.RegionSplitter;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -55,6 +54,9 @@ public class TestDurableChunkRetrieval {
     HTU.getConfiguration().setInt("hbase.regionserver.offheap.global.memstore.size", 800);
     HTU.getConfiguration().setBoolean("hbase.regionserver.use.mslab.systemtables.for.tests", false);
     HTU.getConfiguration().setBoolean("hbase.balancer.tablesOnMaster.systemTablesOnly", false);
+    //HTU.getConfiguration().setInt("hbase.hregion.memstore.mslab.chunksize", 2048);
+   // HTU.getConfiguration().setInt("hbase.hregion.memstore.mslab.max.allocation", (2048)-1);
+
     HTU.getConfiguration().setBoolean("hbase.balancer.tablesOnMaster", false);
     HTU.getConfiguration().set("hbase.memstore.mslab.durable.path", "./chunkfile");
     HTU.startMiniCluster(NB_SERVERS);
@@ -91,14 +93,26 @@ public class TestDurableChunkRetrieval {
 
   @Test
   public void testDurableChunkRetrieval() throws Exception {
-    byte[] val = new byte[10240];
+    byte[] val = new byte[1024];
     List<Put> puts = new ArrayList<Put>();
-    for (int i = 0; i < 3000; i++) {
+    for (int i = 0; i < 1000; i++) {
       Put p = new Put(Bytes.toBytes("row" + i));
       p.addColumn(f, Bytes.toBytes("q"), val);
       puts.add(p);
     }
     table.put(puts);
+/*    WriteThread[] threads = new WriteThread[10];
+    for(int i = 0 ; i < 10; i++) {
+      threads[i] = new WriteThread(i);
+    }
+    for(int i = 0 ; i < 10; i++) {
+      threads[i].start();
+      //Making it serial. Making it parallel corrupts the input cell itself !!! Strange !!!
+      //threads[i].join();
+    }
+    for (int i = 0; i < 10; i++) {
+      threads[i].join();
+    }*/
     System.out.println("completed puts ");
     Scan s = new Scan();
     ResultScanner scanner = table.getScanner(s);
@@ -106,6 +120,7 @@ public class TestDurableChunkRetrieval {
     int count= 0 ;
     while(iterator.hasNext()) {
       Result next = iterator.next();
+      System.out.println("The result "+next);
       count++;
     }
     System.out.println("Before abort results count is "+count);
@@ -129,9 +144,10 @@ public class TestDurableChunkRetrieval {
     count= 0 ;
     while(iterator.hasNext()) {
       Result next = iterator.next();
+      System.out.println("The result "+next);
       count++;
     }
-    assertEquals("The total rows received should be 3000", count, 3000);
+    assertEquals("The total rows received should be 1000", count, 1000);
     // flush this data
     HTU.getAdmin().flush(table.getName());
     
@@ -168,5 +184,35 @@ public class TestDurableChunkRetrieval {
       count++;
     }
     assertEquals("The total rows received should be 300", count, 300);
+  }
+  
+  public static class WriteThread extends Thread {
+    private int index;
+    public WriteThread(int index) {
+      this.index = index;
+    }
+    byte[] val = new byte[1];
+    @Override
+    public void run() {
+      List<Put> puts = new ArrayList<Put>();
+      for (int i = 0; i < 25; i++) {
+        Put p = new Put(Bytes.toBytes(index+"row" +index+ i));
+        p.addColumn(f, Bytes.toBytes("q"), val);
+        try {
+          table.put(p);
+        } catch (IOException e) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
+        //puts.add(p);
+      }
+/*      try {
+        table.put(puts);
+        System.out.println("Done with puts");
+      } catch (IOException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }*/
+    }
   }
 }

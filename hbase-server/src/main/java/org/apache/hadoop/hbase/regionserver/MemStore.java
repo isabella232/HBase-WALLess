@@ -18,7 +18,6 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.List;
 
 import org.apache.hadoop.hbase.Cell;
@@ -79,6 +78,16 @@ public interface MemStore {
    * @param cells
    * @param memstoreSize The delta in memstore size will be passed back via this.
    *        This will include both data size and heap overhead delta.
+   * @param batchSizePerStore 
+   */
+  void add(List<Cell> cells, MemstoreSize memstoreSize, int batchSizePerStore);
+ 
+  /**
+   * Write the updates
+   * @param cells
+   * @param memstoreSize The delta in memstore size will be passed back via this.
+   *        This will include both data size and heap overhead delta.
+   * @param batchSizePerStore 
    */
   void add(List<Cell> cells, MemstoreSize memstoreSize);
 
@@ -91,9 +100,10 @@ public interface MemStore {
    * @param memstoreSize
    *          The delta in memstore size will be passed back via this. This will include both data
    *          size and heap overhead delta.
+   * @param batchSizePerFamily 
    * @return Action that needs to be performed at a later point of time
    */
-  Action addAsync(Collection<Cell> cells, MemstoreSize memstoreSize);
+  Action addAsync(List<Cell> cells, MemstoreSize memstoreSize, int batchSizePerFamily);
 
   /**
    * @return Oldest timestamp of all the Cells in the MemStore
@@ -154,5 +164,5 @@ public interface MemStore {
    */
   default void stopReplayingFromWAL(){return;}
 
-  default void persist() {};
+  default void persist(long seqId) {};
 }

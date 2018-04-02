@@ -20,7 +20,6 @@ package org.apache.hadoop.hbase.regionserver;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.NavigableSet;
 import java.util.SortedSet;
@@ -33,6 +32,7 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellComparator;
 import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.hadoop.hbase.HRegionInfo;
+import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -114,35 +114,62 @@ public abstract class AbstractMemStore implements MemStore {
   public abstract void updateLowestUnflushedSequenceIdInWAL(boolean onlyIfMoreRecent);
 
   @Override
+  public void add(List<Cell> cells, MemstoreSize memstoreSize, int batchSizePerStore) {
+    List<Cell> newCells =
+        this.active.maybeCloneWithAllocator(cells, batchSizePerStore);
+    setOldestEditTimeToNow();
+    for (Cell toAdd : newCells) {
+      active.add(toAdd, true, memstoreSize);
+      checkActiveSize();
+    }
+  }
+
+  @Override
   public void add(List<Cell> cells, MemstoreSize memstoreSize) {
-    for (Cell cell : cells) {
+    // TODO Auto-generated method stub
+    for(Cell cell : cells) {
       add(cell, memstoreSize);
     }
   }
 
   @Override
-  public Action addAsync(Collection<Cell> cells, MemstoreSize memstoreSize) {
+  public Action addAsync(List<Cell> cells, MemstoreSize memstoreSize, int batchSizePerFamily) {
     // This active could change??
     MemstoreAction action = new MemstoreAction(cells.size(), memstoreSize);
     // TODO update of this memstore size happens at the time of async op perform.. Partially this is
     // wrong. The data size update happens then and there and the heap size update only been
     // delayed.
-    for (Cell cell : cells) {
-      add(cell, action);
-    }
+    // TODO : how to reduce the number of sync calls in the replica region? Already we
+    // are in sequence doing one by one batch. One way is to start a thread that wakes
+    // up after a specified interval and then syncs the current updated data alone rather
+    // than calling every batch.?? But that does not gurarentee consistency
+    List<Cell> newCells =
+        this.active.maybeCloneWithAllocator(cells, batchSizePerFamily, false);
+    action.add(newCells);
+    /*for(Cell cell  : newCells) {
+      System.out.println("The cell added to new cell is "+cell);
+      action.add(cell);
+    }*/
     return action;
   }
 
   @Override
-  public void persist() {
-    this.active.persist();
+  public void persist(long seqId) {
+    this.active.persist(seqId);
   }
+
   private void add(Cell cell, MemstoreAction action) {
     // TODO for our case we must copy to MSLAB area. To add such facility down the line.
     Cell toAdd = maybeCloneWithAllocator(cell);
     boolean mslabUsed = (toAdd != cell);
     assert mslabUsed;
     action.add(toAdd);
+  }
+
+  private void add(List<Cell> cells, MemstoreAction action, int totalLength) {
+    // TODO for our case we must copy to MSLAB area. To add such facility down the line.
+    List<Cell> newCells = this.active.maybeCloneWithAllocator(cells, totalLength);
+    action.add(newCells);
   }
 
   @Override
@@ -342,6 +369,10 @@ public abstract class AbstractMemStore implements MemStore {
       this.cells.add(cell);
     }
 
+    public void add(List<Cell> cells) {
+      this.cells.addAll(cells);
+    }
+
     public MemstoreSize getSize() {
       return this.size;
     }
@@ -350,14 +381,19 @@ public abstract class AbstractMemStore implements MemStore {
     public void performAction() {
       lock.readLock().lock();
       try {
+        setOldestEditTimeToNow();
         for (Cell cell : cells) {
           active.add(cell, true, size);
-          setOldestEditTimeToNow();
           checkActiveSize();
         }
       } finally {
         lock.readLock().unlock();
       }
+    }
+    
+    @Override
+    public void postAction() {
+      
     }
   }
 

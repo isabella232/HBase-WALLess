@@ -132,6 +132,7 @@ import org.apache.hadoop.hbase.regionserver.compactions.CompactionProgress;
 import org.apache.hadoop.hbase.regionserver.handler.CloseMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RegionReplicaFlushHandler;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreLabAppender;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.ReplicaGoodStateMarkerHandler;
@@ -501,6 +502,8 @@ public class HRegionServer extends HasThread implements
   private RegionServerSpaceQuotaManager rsSpaceQuotaManager;
 
   protected MemstoreReplicator memstoreReplicator;
+  
+  protected MemstoreLabAppender memstoreLabAppender;
 
   /**
    * Nonce manager. Nonces are used to make operations like increment and append idempotent
@@ -692,6 +695,7 @@ public class HRegionServer extends HasThread implements
     if (memstoreReplicatorType.equals(DEFAULT)) {
       this.memstoreReplicator = new SimpleMemstoreReplicator(conf, this);
     }
+    this.memstoreLabAppender = new MemstoreLabAppender(conf, this);
   }
 
   private void initializeFileSystem() throws IOException {
@@ -2120,6 +2124,11 @@ public class HRegionServer extends HasThread implements
   @Override
   public MemstoreReplicator getMemstoreReplicator() {
     return this.memstoreReplicator;
+  }
+  
+  @Override
+  public MemstoreLabAppender getMemstoreLabAppender() {
+    return this.memstoreLabAppender;
   }
 
   public LogRoller getWalRoller() {

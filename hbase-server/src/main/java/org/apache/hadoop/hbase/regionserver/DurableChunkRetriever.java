@@ -92,7 +92,6 @@ public class DurableChunkRetriever {
       // retrieve the chunk
       long hanlderId = allocator.getHandler(uniqueId);
       DurableChunk<NonVolatileMemAllocator> durableChunk = allocator.retrieveChunk(hanlderId);
-      int count = 1;
       if (durableChunk != null) {
         for (int i = 0; i < maxCount; i++) {
           long offsetToUse = this.offset.getAndAdd(chunkSize);
@@ -113,6 +112,7 @@ public class DurableChunkRetriever {
               Bytes.SIZEOF_BYTE + (3 * Bytes.SIZEOF_INT), regionSize);
             List<Cell> chunkList = this.regionChunks.get(regionName);
             if (chunkList == null) {
+              // TODO : this needs refactor. We need to collect cells per family. so we need unique Id per store
               chunkList = new ArrayList<Cell>();
             }
             this.regionChunks.put(regionName, chunkList);

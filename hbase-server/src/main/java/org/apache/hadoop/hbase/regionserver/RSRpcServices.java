@@ -27,7 +27,6 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -64,6 +63,7 @@ import org.apache.hadoop.hbase.HBaseIOException;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.MultiActionResultTooLarge;
 import org.apache.hadoop.hbase.NotServingRegionException;
 import org.apache.hadoop.hbase.ServerName;
@@ -1144,6 +1144,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
    * constructing MultiResponse to save a possible loop if caller doesn't need MultiResponse.
    * @param region
    * @param familyMaps
+   * @param batchSizePerFamily 
    * @param replicasOffered
    * @param maxSeqId
    * @return an array of OperationStatus which internally contains the OperationStatusCode and the
@@ -1151,17 +1152,19 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
    * @throws IOException
    */
   private Action doReplayBatchOpForMemstoreReplication(HRegion region,
-      NavigableMap<byte[], Collection<Cell>> familyMaps, int replicasOffered, long maxSeqId)
-      throws IOException {
+      NavigableMap<byte[], List<Cell>> familyMaps, NavigableMap<byte[], Integer> batchSizePerFamily,
+      int replicasOffered, long maxSeqId) throws IOException {
     try {
-      //requestCount.add(familyMaps.size());
+      // requestCount.add(familyMaps.size());
       // TODO may be need another counter
       if (!region.getRegionInfo().isMetaTable()) {
-        // why is this been called here? For replica regions this should not be done. only when primary fills up we should
-       // do the snapshotting here and that too when primary says to do so?? - TODO - check
-        //regionServer.cacheFlusher.reclaimMemStoreMemory();
+        // why is this been called here? For replica regions this should not be done. only when
+        // primary fills up we should
+        // do the snapshotting here and that too when primary says to do so?? - TODO - check
+        // regionServer.cacheFlusher.reclaimMemStoreMemory();
       }
-      return region.batchReplayForMemstoreReplication(familyMaps, replicasOffered, maxSeqId);
+      return region.batchReplayForMemstoreReplication(familyMaps, batchSizePerFamily,
+        replicasOffered, maxSeqId);
     } finally {
       // metrics should be updated but need a new one.. Should not directly affect the normal put/delete metrics.
     }
@@ -2265,14 +2268,35 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
       // when reached HRegion.
       // TODO in trunk, we have to use the shaded google class.
       // Important change. Without this things just don't work. MultiMaps needs to be revisited
-      NavigableMap<byte[], Collection<Cell>> familyMaps =
-          new TreeMap<byte[], Collection<Cell>>(Bytes.BYTES_COMPARATOR);
+      NavigableMap<byte[], List<Cell>> familyMaps =
+          new TreeMap<byte[], List<Cell>>(Bytes.BYTES_COMPARATOR);
+      
+      NavigableMap<byte[], Integer> batchSizePerFamily =
+          new TreeMap<byte[], Integer>(Bytes.BYTES_COMPARATOR);
       List<MemstoreReplicationEntry> entries = request.getEntryList();
       long maxSeqId = -1;
       int cellItr = 0;
+      List<Action> actionList = new ArrayList<Action>();
+      // Already the mutations will be sorted at primary region. And we get those in same order
+      // here. So no need for extra sort.
+      // DO this or go with an executor. //TODO : How to shutdown these threads on stop??
+      Integer executorIndex =
+          regionCallBackExecutor.get(region.getRegionInfo().getEncodedName());
+      if (executorIndex == null) {
+        executorIndex = getNextExecutorIndex();
+        regionCallBackExecutor.put(region.getRegionInfo().getEncodedName(), executorIndex);
+      }
+      // TODO : should not be iterating twice
       for (MemstoreReplicationEntry entry : entries) {
-        int count = entry.getAssociatedCellCount();
         maxSeqId = maxSeqId < entry.getSequenceId() ? entry.getSequenceId() : maxSeqId;
+      }
+      for (MemstoreReplicationEntry entry : entries) {
+        familyMaps.clear();
+        batchSizePerFamily.clear();
+        int count = entry.getAssociatedCellCount();
+        //maxSeqId = maxSeqId < entry.getSequenceId() ? entry.getSequenceId() : maxSeqId;
+        int length = 0;
+        long seqId = - 1;
         for (int i = 0; i < count; i++) {
           Cell cell = allCells.get(cellItr);
           cellItr++;
@@ -2282,50 +2306,103 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
           if (CellUtil.matchingFamily(cell, WALEdit.METAFAMILY)) {
             handleMetaMarkerCell(cell, region, replicasOffered);
           } else {
-            Collection<Cell> list = familyMaps.get(CellUtil.cloneFamily(cell));
+            byte[] fam = CellUtil.cloneFamily(cell);
+            List<Cell> list = familyMaps.get(fam);
             if (list == null) {
               list = new ArrayList<Cell>();
             }
+            length = KeyValueUtil.length(cell);
             list.add(cell);
-            familyMaps.put(CellUtil.cloneFamily(cell), list);
+            familyMaps.put(fam, list);
+            if (batchSizePerFamily.get(fam) != null) {
+              length += batchSizePerFamily.get(fam);
+            }
+            batchSizePerFamily.put(fam, length);
           }
+          seqId = entry.getSequenceId();
           CellUtil.setSequenceId(cell, entry.getSequenceId());
         }
-      }
-      Action action = null;
-      if (!familyMaps.isEmpty()) {
-        // Already the mutations will be sorted at primary region. And we get those in same order
-        // here. So no need for extra sort.
-        // DO this or go with an executor. //TODO : How to shutdown these threads on stop??
-        Integer executorIndex = regionCallBackExecutor.get(region.getRegionInfo().getEncodedName());
-        if (executorIndex == null) {
-          executorIndex = getNextExecutorIndex();
-          regionCallBackExecutor.put(region.getRegionInfo().getEncodedName(), executorIndex);
+        Action action = null;
+        if (!familyMaps.isEmpty()) {
+          try {
+            action = doReplayBatchOpForMemstoreReplication(region, familyMaps, batchSizePerFamily,
+              replicasOffered, seqId);
+            actionList.add(action);
+          } catch (Exception e) {
+            // no excpetion will happen here
+            throw new ServiceException(e);
+          }
         }
-        try {
-          action =
-              doReplayBatchOpForMemstoreReplication(region, familyMaps, replicasOffered, maxSeqId);
-        } catch (Exception e) {
-          // no excpetion will happen here
-          throw new ServiceException(e);
-        }
-        // if there is an error then this action is not going to be performed which means we are not
-        // advancing the mvcc
-        try {
-          callbackExecutors[executorIndex].offer(action);
-        } catch (InterruptedException e) {
-          // Handle this case
+        if (action == null) {
+          ReplicateMemstoreResponse.Builder newBuilder = ReplicateMemstoreResponse.newBuilder();
+          // TODO revisist this
+          newBuilder.setReplicasCommitted(1);
+          return newBuilder.build();
         }
       }
-      if (action == null) {
-        ReplicateMemstoreResponse.Builder newBuilder = ReplicateMemstoreResponse.newBuilder();
-        // TODO revisist this
-        newBuilder.setReplicasCommitted(1);
-        return newBuilder.build();
+      // run the persist here. 
+      List<Store> stores = region.getStores();
+      if(LOG.isDebugEnabled()) {
+        LOG.debug("Persisting the current batch of data");
+      }
+      for (Store store : stores) {
+        ((HStore) store).persist(-1);
+      }
+      // if there is an error then this action is not going to be performed which means we are
+      // not
+      // advancing the mvcc
+      try {
+        callbackExecutors[executorIndex]
+            .offer(new ReplayRegionAction(region, maxSeqId, new HRegion.ActionList(actionList)));
+      } catch (InterruptedException e) {
+        // Handle this case
       }
       return response;
     } catch (IOException ie) {
       throw new ServiceException(ie);
+    }
+  }
+
+  public class ReplayRegionAction implements Action {
+
+    // Better to make as a list so that all the callbacks can be handled one by one?
+    private Action memstoreActions;
+    private long seqNo;
+    private HRegion region;
+
+    public ReplayRegionAction(HRegion region, long seqNo, Action memstoreActions) {
+      this.region = region;
+      this.seqNo = seqNo;
+      // get the max seqId while preparing the action. The MVCC has to some how
+      // catch up to this maxseqNo and it need not happen in increasing order.
+      // so the reads to replica regions needs to wait for the mvcc to catch up to this
+      // max seqNo
+      region.currentMaxSeqNo.getAndAccumulate(seqNo, (x, y) -> Math.max(x, y));
+      this.memstoreActions = memstoreActions;
+    }
+
+    @Override
+    public void performAction() {
+      // TODO do we need an update lock here?
+      memstoreActions.performAction();
+      region.addAndGetMemstoreSize(memstoreActions.getSize());
+      // TODO is this correct? WIth this been called, the other change of waitForRead() while
+      // opening readers are incorrect. Here there wont be any waiters.notifyAll
+      // This call will advance readPnt and wrtePnt to given seqNo. Say cur number is 10 amd tow
+      // parallel threads doing this op with 11 and 12 as seqNo. Say 12 wala thread gets 1st chance
+      // and that will change the readPnts to 12 and come out. 11 wal did not get a chance and cells
+      // are not yet added to CSLM. Still we make readPnt advance. In normal writes we hanlde this
+      // kind of cases by completeAndWait() way. In replay only we dont do this because that wl be
+      // any way single threaded. Here we need normal write way I believe. ie. The 1st write op has
+      // to start an mvcc and get a write entry and this op has to finish that
+      // As of now ok as the replication happening from the src region will be single threaded per
+      // the destination region and the action is getting executed by a single thread per region.
+      // When any of these changes it will be an issue
+      region.getMVCC().advanceTo(seqNo);
+    }
+
+    @Override
+    public void postAction() {
     }
   }
 
@@ -2380,6 +2457,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler, AdminService.Blockin
         } catch (InterruptedException e) {
         }
         action.performAction();
+        action.postAction();
       }
     }
   }

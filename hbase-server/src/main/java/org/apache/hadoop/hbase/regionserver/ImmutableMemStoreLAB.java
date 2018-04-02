@@ -97,9 +97,15 @@ public class ImmutableMemStoreLAB implements MemStoreLAB {
   }
   
   @Override
-  public void persist() {
+  public void persist(long seqId, boolean done) {
     for (MemStoreLAB mslab : this.mslabs) {
-      mslab.persist();
+      mslab.persist(seqId, done);
     }
+  }
+
+  @Override
+  public List<Cell> copyCellstoChunk(List<Cell> cells, int batchSize, boolean asyncPersist) {
+    // TODO Auto-generated method stub
+    return null;
   }
 }

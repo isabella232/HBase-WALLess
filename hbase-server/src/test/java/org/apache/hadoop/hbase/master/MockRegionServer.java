@@ -123,6 +123,7 @@ import org.apache.hadoop.hbase.regionserver.RegionServerAccounting;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.SecureBulkLoadManager;
 import org.apache.hadoop.hbase.regionserver.ServerNonceManager;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreLabAppender;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
@@ -768,6 +769,12 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
   @Override
   public RegionReplicaHealthChangeResponse handleBadRegions(RpcController controller,
       RSRegionReplicaHealthChangeRequest request) throws ServiceException {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public MemstoreLabAppender getMemstoreLabAppender() {
     // TODO Auto-generated method stub
     return null;
   }

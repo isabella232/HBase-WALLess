@@ -55,7 +55,6 @@ import org.apache.hadoop.hbase.CompoundConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
-import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.MemoryCompactionPolicy;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.backup.FailedArchiveException;
@@ -73,7 +72,6 @@ import org.apache.hadoop.hbase.io.hfile.HFileDataBlockEncoderImpl;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.io.hfile.InvalidHFileException;
 import org.apache.hadoop.hbase.monitoring.MonitoredTask;
-import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionContext;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionProgress;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionRequest;
@@ -81,8 +79,6 @@ import org.apache.hadoop.hbase.regionserver.compactions.DefaultCompactor;
 import org.apache.hadoop.hbase.regionserver.compactions.OffPeakHours;
 import org.apache.hadoop.hbase.regionserver.querymatcher.ScanQueryMatcher;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
-import org.apache.hadoop.hbase.regionserver.wal.WALEdit;
-import org.apache.hadoop.hbase.regionserver.wal.WALUtil;
 import org.apache.hadoop.hbase.security.EncryptionUtil;
 import org.apache.hadoop.hbase.security.User;
 import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
@@ -711,6 +707,22 @@ public class HStore implements Store {
    * Adds the specified value to the memstore
    * @param cells
    * @param memstoreSize
+   * @param batchSizePerStore 
+   */
+  public void add(final List<Cell> cells, MemstoreSize memstoreSize, int batchSizePerStore) {
+    lock.readLock().lock();
+    try {
+      memstore.add(cells, memstoreSize, batchSizePerStore);
+    } finally {
+      lock.readLock().unlock();
+    }
+  }
+
+  /**
+   * Adds the specified value to the memstore
+   * @param cells
+   * @param memstoreSize
+   * @param batchSizePerStore 
    */
   public void add(final List<Cell> cells, MemstoreSize memstoreSize) {
     lock.readLock().lock();
@@ -725,11 +737,13 @@ public class HStore implements Store {
    * Adds the specified value to the memstore in async way
    * @param cells
    * @param memstoreSize
+   * @param batchSizePerFamily 
    */
-  public Action addAsync(final Collection<Cell> cells, MemstoreSize memstoreSize) {
+  public Action addAsync(final List<Cell> cells, MemstoreSize memstoreSize,
+      int batchSizePerFamily) {
     lock.readLock().lock();
     try {
-      return memstore.addAsync(cells, memstoreSize);
+      return memstore.addAsync(cells, memstoreSize, batchSizePerFamily);
     } finally {
       lock.readLock().unlock();
     }
@@ -2631,7 +2645,7 @@ public class HStore implements Store {
     }
   }
 
-  public void persist() {
-    this.memstore.persist();
+  public void persist(long seqId) {
+    this.memstore.persist(seqId);
   }
 }

@@ -28,6 +28,8 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.UUID;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellScanner;
@@ -41,6 +43,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.wal.WALEdit;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.UnsafeByteOperations;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
@@ -53,6 +56,7 @@ import org.apache.hadoop.hbase.wal.WALKey;
 
 @InterfaceAudience.Private
 public class ReplicationProtbufUtil {
+  private static final Log LOG = LogFactory.getLog(ReplicationProtbufUtil.class);
   /**
    * A helper to replicate a list of WAL entries using admin protocol.
    * @param admin Admin service
@@ -191,6 +195,7 @@ public class ReplicationProtbufUtil {
       MemstoreReplicaProtos.MemstoreReplicationEntry.Builder entryBuilder =
           MemstoreReplicaProtos.MemstoreReplicationEntry.newBuilder();
       entryBuilder.setAssociatedCellCount(cells.size());
+      // TODO : Better to write max seqId here itself
       entryBuilder.setSequenceId(key.getSequenceId());
       reqBuilder.addEntry(entryBuilder.build());
       replicasOffsered = key.getReplicasOffered();// Its ok to overwrite. Write comments.. Handle. TODO

@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.regionserver;
 import static org.apache.hadoop.hbase.regionserver.TestRegionServerNoMaster.closeRegion;
 import static org.apache.hadoop.hbase.regionserver.TestRegionServerNoMaster.openRegion;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
@@ -71,7 +72,6 @@ public class TestRegionReplicasWith3Replicas {
 
   private static final HBaseTestingUtility HTU = new HBaseTestingUtility();
   private static final byte[] f = HConstants.CATALOG_FAMILY;
-
   @BeforeClass
   public static void before() throws Exception {
     // Reduce the hdfs block size and prefetch to trigger the file-link reopen
@@ -120,7 +120,7 @@ public class TestRegionReplicasWith3Replicas {
   private HRegionServer getTertiaryRS() {
     return HTU.getMiniHBaseCluster().getRegionServer(2);
   }
-  
+
   //@Test(timeout = 6000000)
   public void testSimpleFlush() throws Exception {
     try {

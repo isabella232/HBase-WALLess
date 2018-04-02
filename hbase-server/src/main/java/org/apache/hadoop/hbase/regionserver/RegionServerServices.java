@@ -36,6 +36,7 @@ import org.apache.hadoop.hbase.executor.ExecutorService;
 import org.apache.hadoop.hbase.ipc.RpcServerInterface;
 import org.apache.hadoop.hbase.quotas.RegionServerRpcQuotaManager;
 import org.apache.hadoop.hbase.quotas.RegionServerSpaceQuotaManager;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreLabAppender;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionStateTransition.TransitionCode;
@@ -287,6 +288,8 @@ public interface RegionServerServices extends OnlineRegions, FavoredNodesForRegi
   void unassign(byte[] regionName) throws IOException;
 
   MemstoreReplicator getMemstoreReplicator();
+  
+  MemstoreLabAppender getMemstoreLabAppender();
 
   boolean reportReplicaRegionHealthChange(List<HRegionInfo> regions, boolean good);
 }

@@ -652,7 +652,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private final MultiVersionConcurrencyControl mvcc = new MultiVersionConcurrencyControl();
 
   // can this be volatile only??
-  private AtomicLong currentMaxSeqNo = new AtomicLong(-1l);
+  AtomicLong currentMaxSeqNo = new AtomicLong(-1l);
 
   // Coprocessor host
   private RegionCoprocessorHost coprocessorHost;
@@ -674,6 +674,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private final RegionUnassigner regionUnassigner;
   private MemstoreReplicator memstoreReplicator;
   private volatile RegionReplicaReplicator regionReplicator;
+  private volatile int appenderIndex;
+  // having two incase the number of appender and persistor threads are different in number
+  private volatile int persistorIndex;
+  
   /**
    * HRegion constructor. This constructor should only be used for testing and
    * extensions.  Instances of HRegion should be instantiated with the
@@ -812,6 +816,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         recoveringRegions.put(encodedName, this);
       }
       initMemstoreReplication(rsServices);
+      // get the appenderIndex for this region
+      appenderIndex = rsServices.getMemstoreLabAppender().getNextAppender();
+      persistorIndex = rsServices.getMemstoreLabAppender().getNextPersistor();
     } else {
       this.metricsRegionWrapper = null;
       this.metricsRegion = null;
@@ -1040,17 +1047,48 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     MonitoredTask status = TaskMonitor.get().createStatus("Replaying from durable chunk");
     long maxSeqId = -1;
     boolean flush = false;
+    Map<byte[], List<Cell>> familyMap = 
+        new TreeMap<byte[], List<Cell>>(Bytes.BYTES_COMPARATOR);
+    Map<byte[], Integer> batchSizePerFamily = new TreeMap<byte[], Integer>(Bytes.BYTES_COMPARATOR);
+    long curSeqId = -1;
     for (Cell cell : cells) {
       if (cell.getSequenceId() >= maxSeqIdInStoreFiles) {
         if (cell.getSequenceId() > maxSeqId) {
           maxSeqId = cell.getSequenceId();
         }
-        HStore hStore = getHStore(cell);
-        applyToMemstore(hStore, cell, memstoreSize);
       } else {
-        LOG.debug("Skipping cell "+cell+" as already available in file");
+        LOG.debug("Skipping cell " + cell + " as already available in file");
+        continue;
       }
+      if (cell.getSequenceId() != curSeqId) {
+        if (!familyMap.isEmpty()) {
+          applyBatch(memstoreSize, familyMap, batchSizePerFamily, curSeqId, false);
+          familyMap.clear();
+          batchSizePerFamily.clear();
+        }
+        curSeqId = cell.getSequenceId();
+      }
+      byte[] cloneFamily = CellUtil.cloneFamily(cell);
+      List<Cell> cellList = familyMap.get(cloneFamily);
+      if (cellList == null) {
+        cellList = new ArrayList<Cell>();
+      }
+      cellList.add(cell);
+      familyMap.put(cloneFamily, cellList);
+      Integer batchSize = batchSizePerFamily.get(cloneFamily);
+      int len = KeyValueUtil.length(cell);
+      if (batchSize != null) {
+        batchSize += len;
+      } else {
+        batchSize = len;
+      }
+      batchSizePerFamily.put(cloneFamily, batchSize);
     }
+    // send the last batch also
+    if (!familyMap.isEmpty()) {
+      applyBatch(memstoreSize, familyMap, batchSizePerFamily, curSeqId, false);
+    }
+ 
     // add it to the RSAccounting so that we do the accounting of these edits from durable chunk
     if (this.rsAccounting != null) {
       rsAccounting.addRegionReplayEditsSize(getRegionInfo().getRegionName(), memstoreSize);
@@ -1064,6 +1102,29 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       internalFlushcache(null, maxSeqId, stores.values(), status, false);
     }
     return maxSeqId;
+  }
+
+  private MemstoreBatcher applyBatch(MemstoreSize memstoreSize, Map<byte[], List<Cell>> familyMap,
+      Map<byte[], Integer> batchSizePerFamily, long curSeqId, boolean async) {
+    MemstoreBatcher batcher = new MemstoreBatcher(this, familyMap.entrySet(), batchSizePerFamily,
+        memstoreSize, curSeqId, async);
+    this.getRegionServerServices().getMemstoreLabAppender().offerForAppend(appenderIndex, batcher);
+    // applyToMemstore(getStore(entry.getKey()), entry.getValue(), false, memstoreSize,
+    // batchSizePerFamily.get(entry.getKey()));
+    if (!async) {
+      this.getRegionServerServices().getMemstoreLabAppender().offerForPersist(persistorIndex,
+        batcher);
+    }
+    // we won't do the persist here if it is for replica regions. together it will be done after the
+    // entire replicateMemstore() call is completed
+    // TODO : rework here
+    try {
+      batcher.getFuture().get(40000, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+      e.printStackTrace();
+    }
+    batcher.waitForComplete();
+    return batcher;
   }
 
   /**
@@ -1337,7 +1398,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * @return Instance of {@link RegionServerServices} used by this HRegion.
    * Can be null.
    */
-  RegionServerServices getRegionServerServices() {
+  public RegionServerServices getRegionServerServices() {
     return this.rsServices;
   }
 
@@ -3311,9 +3372,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     this.throwErrorOnScan = throwError;
   }
   
-  public Action batchReplayForMemstoreReplication(NavigableMap<byte[], Collection<Cell>> familyMaps,
-      int replicasOffered, long maxSeqId) throws IOException {
-    return batchMutateForMemstoreReplication(familyMaps, replicasOffered, maxSeqId);
+  public Action batchReplayForMemstoreReplication(NavigableMap<byte[], List<Cell>> familyMaps,
+      NavigableMap<byte[], Integer> batchSizePerFamily, int replicasOffered, long maxSeqId)
+      throws IOException {
+    return batchMutateForMemstoreReplication(familyMaps, batchSizePerFamily, replicasOffered,
+      maxSeqId);
   }
 
   /**
@@ -3352,8 +3415,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return batchOp.retCodeDetails;
   }
 
-  Action batchMutateForMemstoreReplication(NavigableMap<byte[], Collection<Cell>> familyMaps,
-      int replicasOffered, long maxSeqId) throws IOException {
+  Action batchMutateForMemstoreReplication(NavigableMap<byte[], List<Cell>> familyMaps,
+      NavigableMap<byte[], Integer> batchSizePerFamily, int replicasOffered, long maxSeqId)
+      throws IOException {
     startRegionOperation(Operation.REPLAY_BATCH_MUTATE);
     try {
       // TODO We will be in replay mode. This will never happen. Do we need to check this for
@@ -3367,7 +3431,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
       // TODO need whole new type of metrics
       //this.writeRequestsCount.add(batchOp.operations.length);
-      return doMiniBatchMutateForMemstoreReplication(familyMaps, replicasOffered, maxSeqId);
+      return doMiniBatchMutateForMemstoreReplication(familyMaps, batchSizePerFamily, replicasOffered, maxSeqId);
     } finally {
       closeRegionOperation(Operation.REPLAY_BATCH_MUTATE);
     }
@@ -3412,49 +3476,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
-  private class ReplayRegionAction implements Action {
-
-    // Better to make as a list so that all the callbacks can be handled one by one?
-    private Action memstoreAction;
-    private long seqNo;
-
-    public ReplayRegionAction(long seqNo, Action memstoreAction) {
-      this.seqNo = seqNo;
-      // get the max seqId while preparing the action. The MVCC has to some how
-      // catch up to this maxseqNo and it need not happen in increasing order.
-      // so the reads to replica regions needs to wait for the mvcc to catch up to this
-      // max seqNo
-      currentMaxSeqNo.getAndAccumulate(seqNo, (x, y) -> Math.max(x, y));
-      this.memstoreAction = memstoreAction;
-    }
-
-    @Override
-    public void performAction() {
-      // TODO do we need an update lock here?
-      memstoreAction.performAction();
-      addAndGetMemstoreSize(memstoreAction.getSize());
-      // TODO is this correct? WIth this been called, the other change of waitForRead() while
-      // opening readers are incorrect. Here there wont be any waiters.notifyAll
-      // This call will advance readPnt and wrtePnt to given seqNo. Say cur number is 10 amd tow
-      // parallel threads doing this op with 11 and 12 as seqNo. Say 12 wala thread gets 1st chance
-      // and that will change the readPnts to 12 and come out. 11 wal did not get a chance and cells
-      // are not yet added to CSLM. Still we make readPnt advance. In normal writes we hanlde this
-      // kind of cases by completeAndWait() way. In replay only we dont do this because that wl be
-      // any way single threaded. Here we need normal write way I believe. ie. The 1st write op has
-      // to start an mvcc and get a write entry and this op has to finish that
-      // As of now ok as the replication happening from the src region will be single threaded per
-      // the destination region and the action is getting executed by a single thread per region.
-      // When any of these changes it will be an issue
-      mvcc.advanceTo(seqNo);
-    }
-  }
-
+  
   @edu.umd.cs.findbugs.annotations.SuppressWarnings(value="UL_UNRELEASED_LOCK",
       justification="Findbugs seems to be confused on this.")
   @SuppressWarnings("unchecked")
   private Action doMiniBatchMutateForMemstoreReplication(
-      NavigableMap<byte[], Collection<Cell>> familyMaps, int replicasOffered, long maxSeqId)
-      throws IOException {
+      NavigableMap<byte[], List<Cell>> familyMaps, NavigableMap<byte[], Integer> batchSizePerFamily,
+      int replicasOffered, long maxSeqId) throws IOException {
     boolean locked = false;
     // We dont need row locking here at all.. This method is executed at the replica regions. The
     // primary or other replica regions call RPC with a batch of Mutaions each containing Cells. We
@@ -3467,12 +3495,15 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       locked = true;
       // shall we replicate this way only? But I think doing it like the WALEdit way will ensure
       // we reuse most of the code
-      Action action = applyFamilyMapToMemstoreForMemstoreReplication(familyMaps, memstoreSize);
+      MemstoreBatcher batcher =
+          applyBatch(memstoreSize, familyMaps, batchSizePerFamily, maxSeqId, true);
+      Action action = batcher.getAction();
       if (locked) {
         this.updatesLock.readLock().unlock();
         locked = false;
       }
-      return new ReplayRegionAction(maxSeqId, action);
+      return action;
+      // return new ReplayRegionAction(maxSeqId, action);
     } finally {
       if (locked) {
         this.updatesLock.readLock().unlock();
@@ -3639,12 +3670,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // TODO this cellCount is not correct here.
       memstoreEdits =  new MemstoreEdits(cellCount);// We wont have replay mode any more!
       Durability durability = Durability.USE_DEFAULT;
+      Map<byte[], Integer> batchSizePerFamily = new TreeMap<byte[], Integer>(Bytes.BYTES_COMPARATOR);
       for (int i = firstIndex; i < lastIndexExclusive; i++) {
         // Skip puts that were determined to be invalid during preprocessing
         if (batchOp.retCodeDetails[i].getOperationStatusCode() != OperationStatusCode.NOT_RUN) {
           continue;
         }
-        addFamilyMapToMemstoreEdit(familyMaps[i], memstoreEdits);
+        addFamilyMapToMemstoreEdit(familyMaps[i], memstoreEdits, batchSizePerFamily);
         Mutation m = batchOp.getMutation(i);
         Durability tmpDur = getEffectiveDurability(m.getDurability());
         if (tmpDur.ordinal() > durability.ordinal()) {
@@ -3698,6 +3730,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         }
       }
       // STEP 5. Write back to memstore
+      // TODO : better collect it one short??
+      Map<byte[], List<Cell>> cellsPerFamily = new TreeMap<byte[], List<Cell>>(Bytes.BYTES_COMPARATOR);
       for (int i = firstIndex; i < lastIndexExclusive; i++) {
         if (batchOp.retCodeDetails[i].getOperationStatusCode() != OperationStatusCode.NOT_RUN) {
           continue;
@@ -3708,30 +3742,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // we use durability of the original mutation for the mutation passed by CP.
         this.updateSequenceId(familyMaps[i].values(),
           replay ? batchOp.getReplaySequenceId() : writeEntry.getWriteNumber());
-        applyFamilyMapToMemstore(familyMaps[i], memstoreSize);
+        applyFamilyMapToMemstore(familyMaps[i], memstoreSize, batchSizePerFamily, cellsPerFamily);
       }
-
-      Set<Store> processed = new HashSet<Store>();
-      // execute the persiste here
-      for (int i = firstIndex; i < lastIndexExclusive; i++) {
-        if (batchOp.retCodeDetails[i].getOperationStatusCode() != OperationStatusCode.NOT_RUN) {
-          continue;
-        }
-        
-        Map<byte[], List<Cell>> values = familyMaps[i];
-        Set<byte[]> keySet = values.keySet();
-        for (byte[] storeName : keySet) {
-          // persist after the batch
-          Store store = getStore(storeName);
-          if (!processed.contains(store)) {
-            ((HStore) store).persist();
-            processed.add(store);
-          }
-        }
-      }
-      // update memstore size
-      this.addAndGetMemstoreSize(memstoreSize);
-
+      // this is where actual batching happens
+      MemstoreBatcher batcher  = applyBatch(memstoreSize, cellsPerFamily, batchSizePerFamily,
+        replay ? batchOp.getReplaySequenceId() : writeEntry.getWriteNumber(), false);
+      // increase the memstore size. After the batch is completed
+      this.addAndGetMemstoreSize(batcher.getMemstoresize());
+      //System.out.println("the size is "+size);
       // calling the post CP hook for batch mutation
       if (!replay && coprocessorHost != null) {
         MiniBatchOperationInProgress<Mutation> miniBatchOp =
@@ -3779,7 +3797,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           }
         }
       }
-
       success = true;
     } finally {
       // Call complete rather than completeAndWait because we probably had error if walKey != null
@@ -3822,7 +3839,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           batchOp.retCodeDetails, batchOp.walEditsFromCoprocessors, firstIndex, lastIndexExclusive);
         coprocessorHost.postBatchMutateIndispensably(miniBatchOp, success);
       }
-
       batchOp.nextIndexToProcess = lastIndexExclusive;
     }
   }
@@ -3851,13 +3867,22 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
-  private void addFamilyMapToMemstoreEdit(Map<byte[], ? extends Collection<Cell>> familyMap,
-      MemstoreEdits memstoreEdits) {
-    for (Collection<Cell> cells : familyMap.values()) {
-      for (Cell cell : cells) {
+  private Map<byte[], Integer> addFamilyMapToMemstoreEdit(
+      Map<byte[], ? extends Collection<Cell>> familyMap, MemstoreEdits memstoreEdits,
+      Map<byte[], Integer> batchSizePerFamily) {
+    // create this per batch instead of every time
+    for (Entry<byte[], ? extends Collection<Cell>> cells : familyMap.entrySet()) {
+      int length = 0;
+      for (Cell cell : cells.getValue()) {
         memstoreEdits.add(cell);
+        length += KeyValueUtil.length(cell);
       }
+      if (batchSizePerFamily.get(cells.getKey()) != null) {
+        length += batchSizePerFamily.get(cells.getKey());
+      }
+      batchSizePerFamily.put(cells.getKey(), length);
     }
+    return batchSizePerFamily;
   }
  
   private void mergeFamilyMaps(Map<byte[], List<Cell>> familyMap,
@@ -4298,13 +4323,18 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * @param familyMap Map of Cells by family
    * @param memstoreSize
    */
-  private void applyFamilyMapToMemstore(Map<byte[], List<Cell>> familyMap,
-      MemstoreSize memstoreSize) throws IOException {
+  private void applyFamilyMapToMemstore(Map<byte[], List<Cell>> familyMap, MemstoreSize memstoreSize,
+      Map<byte[], Integer> batchSizePerFamily, Map<byte[], List<Cell>> cellsPerFamily)
+      throws IOException {
     for (Map.Entry<byte[], List<Cell>> e : familyMap.entrySet()) {
       byte[] family = e.getKey();
-      List<Cell> cells = e.getValue();
-      assert cells instanceof RandomAccess;
-      applyToMemstore(getStore(family), cells, false, memstoreSize);
+      List<Cell> cells = cellsPerFamily.get(family);
+      if(cells == null) {
+        cells = new ArrayList<Cell>(batchSizePerFamily.get(family));
+        cellsPerFamily.put(family, cells);
+      } 
+      cells.addAll(e.getValue());
+      //applyToMemstore(getStore(family), cells, false, memstoreSize, batchSizePerFamily.get(family));
     }
   }
   
@@ -4317,25 +4347,17 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * @param familyMap Map of Cells by family
    * @param memstoreSize
    */
-  private Action applyFamilyMapToMemstoreForMemstoreReplication(
-      NavigableMap<byte[], Collection<Cell>> familyMaps, MemstoreSize memstoreSize)
-      throws IOException {
-    List<Action> actions = new ArrayList<>(familyMaps.size());
-    for (Entry<byte[], Collection<Cell>> e : familyMaps.entrySet()) {
-      HStore store = getHStore(e.getKey());
-      Action action = store.addAsync(e.getValue(), memstoreSize);
-      store.persist();
-      // This is a bug
-      actions.add(action);
-    }
-    return new ActionList(actions);
+  public Action applyFamilyMapToMemstoreForMemstoreReplication(HStore store, List<Cell> cells,
+      MemstoreSize memstoreSize, int batchSizePerFamily) throws IOException {
+    Action action = store.addAsync(cells, memstoreSize, batchSizePerFamily);
+    return action;
   }
 
-  private static class ActionList implements Action {
+  public static class ActionList implements Action {
 
     private List<Action> actionList;
 
-    ActionList(List<Action> actions) {
+    public ActionList(List<Action> actions) {
       this.actionList = actions;
     }
 
@@ -4346,6 +4368,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
     }
 
+    @Override
+    public void postAction() {
+      // execute the mvcc here
+      actionList.get(actionList.size() - 1).postAction();
+    }
     @Override
     public MemstoreSize getSize() {
       MemstoreSize size = new MemstoreSize();
@@ -4362,7 +4389,24 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    *  that do not make sense otherwise.
    * @see #applyToMemstore(Store, Cell, long)
    */
-  private void applyToMemstore(final Store store, final List<Cell> cells, final boolean delta,
+  public void applyToMemstore(final Store store, final List<Cell> cells, final boolean delta,
+      MemstoreSize memstoreSize, int batchSizePerStore) throws IOException {
+    // Any change in how we update Store/MemStore needs to also be done in other applyToMemstore!!!!
+    boolean upsert = delta && store.getFamily().getMaxVersions() == 1;
+    if (upsert) {
+      ((HStore) store).upsert(cells, getSmallestReadPoint(), memstoreSize);
+    } else {
+      ((HStore) store).add(cells, memstoreSize, batchSizePerStore);
+    }
+  }
+
+  /*
+   * @param delta If we are doing delta changes -- e.g. increment/append -- then this flag will be
+   *  set; when set we will run operations that make sense in the increment/append scenario but
+   *  that do not make sense otherwise.
+   * @see #applyToMemstore(Store, Cell, long)
+   */
+  public void applyToMemstore(final Store store, final List<Cell> cells, final boolean delta,
       MemstoreSize memstoreSize) throws IOException {
     // Any change in how we update Store/MemStore needs to also be done in other applyToMemstore!!!!
     boolean upsert = delta && store.getFamily().getMaxVersions() == 1;
@@ -4372,7 +4416,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       ((HStore) store).add(cells, memstoreSize);
     }
   }
-
   /*
    * @see #applyToMemstore(Store, List, boolean, boolean, long)
    */
@@ -6168,7 +6211,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           }
         }
       }
-
       isSuccessful = true;
     } finally {
       if (wal != null && !storeFiles.isEmpty()) {

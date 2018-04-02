@@ -170,9 +170,27 @@ public abstract class Segment {
     return (cellFromMslab != null) ? cellFromMslab : cell;
   }
 
-  public void persist() {
+  public List<Cell> maybeCloneWithAllocator(List<Cell> cells, int batchSize) {
+    return maybeCloneWithAllocator(cells, batchSize, true);
+  }
+  /**
+   * If the segment has a memory allocator the cell is being cloned to this space, and returned;
+   * otherwise the given cell is returned
+   * @param memstoreSize 
+   * @param cells 
+   * @return 
+   * @return either the given cell or its clone
+   */
+  public List<Cell> maybeCloneWithAllocator(List<Cell> cells, int batchSize, boolean asyncPersist) {
+    if (this.memStoreLAB == null) {
+      return null;
+    }
+    return this.memStoreLAB.copyCellstoChunk(cells, batchSize, asyncPersist);
+  }
+
+  public void persist(long seqId) {
     if (this.memStoreLAB != null) {
-      this.memStoreLAB.persist();
+      this.memStoreLAB.persist(seqId, false);
     }
   }
   /**

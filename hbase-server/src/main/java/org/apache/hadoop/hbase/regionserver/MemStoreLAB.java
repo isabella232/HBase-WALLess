@@ -17,6 +17,8 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
+import java.util.List;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
@@ -53,7 +55,8 @@ public interface MemStoreLAB {
   String CHUNK_SIZE_KEY = "hbase.hregion.memstore.mslab.chunksize";
   int CHUNK_SIZE_DEFAULT = 2048 * 1024;
   String MAX_ALLOC_KEY = "hbase.hregion.memstore.mslab.max.allocation";
-  int MAX_ALLOC_DEFAULT = 256 * 1024; // allocs bigger than this don't go through
+  // TODO : Decide a value here
+  int MAX_ALLOC_DEFAULT = CHUNK_SIZE_DEFAULT - 1 ; // allocs bigger than this don't go through
                                                    // allocator
 
   // MSLAB pool related configs
@@ -67,6 +70,16 @@ public interface MemStoreLAB {
    * over the copied the data. When this MemStoreLAB can not copy this Cell, it returns null.
    */
   Cell copyCellInto(Cell cell);
+
+  /**
+   * Return the chunk to which we would copy the batch of given size
+   * @param memstoreSize 
+   * @param cells 
+   * @param batchSize
+   * @param asyncPersist 
+   * @return the chunk to which the batch is copied
+   */
+  List<Cell> copyCellstoChunk(List<Cell> cells, int batchSize, boolean asyncPersist);
 
   /**
    * Close instance since it won't be used any more, try to put the chunks back to pool
@@ -100,5 +113,5 @@ public interface MemStoreLAB {
     return conf.getBoolean(USEMSLAB_KEY, USEMSLAB_DEFAULT);
   }
 
-  void persist();
+  default void persist(long seqId, boolean done) {};
 }

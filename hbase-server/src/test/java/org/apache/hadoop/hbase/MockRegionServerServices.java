@@ -50,6 +50,7 @@ import org.apache.hadoop.hbase.regionserver.RegionServerAccounting;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.SecureBulkLoadManager;
 import org.apache.hadoop.hbase.regionserver.ServerNonceManager;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreLabAppender;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -367,5 +368,11 @@ public class MockRegionServerServices implements RegionServerServices {
   public boolean reportReplicaRegionHealthChange(List<HRegionInfo> regions, boolean good) {
     // TODO Auto-generated method stub
     return false;
+  }
+
+  @Override
+  public MemstoreLabAppender getMemstoreLabAppender() {
+    // TODO Auto-generated method stub
+    return null;
   }
 }

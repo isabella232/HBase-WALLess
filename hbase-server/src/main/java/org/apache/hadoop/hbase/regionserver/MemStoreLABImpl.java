@@ -19,6 +19,9 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -35,6 +38,7 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
+import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -83,6 +87,9 @@ public class MemStoreLABImpl implements MemStoreLAB {
   // This flag is for closing this instance, its set when clearing snapshot of
   // memstore
   private volatile boolean closed = false;
+  // Used to collect seqIds so that we need to wait for the persist() to really wait till
+  // we complete it
+  private Set<Long> seqIds = new HashSet<Long>();
   // This flag is for reclaiming chunks. Its set when putting chunks back to
   // pool
   private AtomicBoolean reclaimed = new AtomicBoolean(false);
@@ -106,6 +113,50 @@ public class MemStoreLABImpl implements MemStoreLAB {
     this.regionName = regionName;
   }
 
+  public List<Cell> copyCellstoChunk(List<Cell> cells, int batchSize, boolean asyncPersist) {
+    // Callers should satisfy large allocations directly from JVM since they
+    // don't cause fragmentation as badly.
+    if (batchSize > maxAlloc) {
+      LOG.info("Returning null");
+      return null;
+    }
+    Chunk c = null;
+    int allocOffset = 0;
+    while (true) {
+      // Try to get the chunk
+      c = getOrMakeChunk();
+      // we may get null because the some other thread succeeded in getting the lock
+      // and so the current thread has to try again to make its chunk or grab the chunk
+      // that the other thread created
+      // Try to allocate from this chunk
+      if (c != null) {
+        allocOffset = c.alloc(cells.size(), batchSize);
+        if (allocOffset != -1) {
+          // We succeeded - this is the common case - small alloc
+          // from a big buffer
+          break;
+        }
+        c.markReturned();
+        // not enough space!
+        // try to retire this chunk
+        // make the persistence here
+        tryRetireChunk(c);
+      }
+    }
+    List<Cell> result = copyCellsToChunk(cells, c.getData(), allocOffset, batchSize,
+      (c instanceof DurableSlicedChunk));
+    c.updateOffsetAndLength(allocOffset, batchSize + c.getBatchMetaDataLength(cells.size()));
+    if (asyncPersist) {
+      synchronized (this) {
+        // TODO : need not do this in the replica side. Can be removed.
+        seqIds.add(cells.get(0).getSequenceId());
+      }
+    }
+    return result;
+    //c.persist();
+    //return returnCell;
+  }
+
   @Override
   public Cell copyCellInto(Cell cell) {
     int size = KeyValueUtil.length(cell);
@@ -125,7 +176,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
       // that the other thread created
       // Try to allocate from this chunk
       if (c != null) {
-        allocOffset = c.alloc(size);
+        allocOffset = c.alloc(1, size);
         if (allocOffset != -1) {
           // We succeeded - this is the common case - small alloc
           // from a big buffer
@@ -143,9 +194,28 @@ public class MemStoreLABImpl implements MemStoreLAB {
   }
 
   @Override
-  public void persist() {
+  public void persist(long seqId, boolean done) {
+    // how to avoid this? We should not iterate over all the chunks
+    // avoid this
+    synchronized (this) {
+      // TODO - passing -1 seems dirty trick. But for now it will do.
+      if (seqId != -1) {
+        while (!seqIds.contains(seqId)) {
+          try {
+            wait(10);
+          } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+          }
+        }
+        seqIds.remove(seqId);
+      } else {
+        // just clear
+        seqIds.clear();
+      }
+    }
     for(int chunkId : chunks) {
-      this.chunkCreator.getChunk(chunkId).persist();
+      this.chunkCreator.getChunk(chunkId).persist(done);
     }
   }
 
@@ -160,7 +230,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
       if (durableChunk) {
         // this new object creation every time should be avoided
         // TODO : Write seqID
-        codec.encode((ExtendedCell)cell, offset, buf);
+        codec.encode((ExtendedCell)cell, offset, buf, len);
         offset += Bytes.SIZEOF_INT;
       } else {
         ((ExtendedCell) cell).write(buf, offset);
@@ -178,10 +248,69 @@ public class MemStoreLABImpl implements MemStoreLAB {
       // which directly return tagsLen as 0. So we avoid parsing many length components in
       // reading the tagLength stored in the backing buffer. The Memstore addition of every Cell
       // call getTagsLength().
-      return new NoTagByteBufferChunkCell(buf, offset, len, cell.getSequenceId());
+      Cell res = new NoTagByteBufferChunkCell(buf, offset, len, cell.getSequenceId());
+      return res;
     } else {
       return new ByteBufferChunkCell(buf, offset, len, cell.getSequenceId());
     }
+  }
+  
+  /**
+   * Clone the passed cell by copying its data into the passed buf and create a cell with a chunkid
+   * out of it
+   * @param b 
+   * @param b 
+   */
+  private List<Cell> copyCellsToChunk(List<Cell> cells, ByteBuffer buf, int offset, int totalLength, boolean durableChunk) {
+    List<Cell> result = new ArrayList<Cell>(cells.size());
+    // first write the seqId. So that while decoding we always read the seqId first and then start
+    // read the cells
+    // The structure is
+    // 1) Write the seqId as long.
+    // 2) the number of cells in the batch
+    // 3) Then the cell in the batch
+    //   3 a) the length of each cell
+    //   3 b) the actual cell
+    if (durableChunk) {
+      ByteBufferUtils.putLong(buf, offset, cells.get(0).getSequenceId());
+      offset += Bytes.SIZEOF_LONG;
+      // write the number of cells in batch
+      ByteBufferUtils.putInt(buf, offset, cells.size());
+      offset += Bytes.SIZEOF_INT;
+    }
+    for (Cell cell : cells) {
+      int len = KeyValueUtil.length(cell);
+      int tagsLen = cell.getTagsLength();
+      if (cell instanceof ExtendedCell) {
+        if (durableChunk) {
+          // this new object creation every time should be avoided
+          // TODO : Write seqID
+          codec.encode((ExtendedCell) cell, offset, buf, len);
+          offset += Bytes.SIZEOF_INT;
+        } else {
+          ((ExtendedCell) cell).write(buf, offset);
+        }
+      } else {
+        // Normally all Cell impls within Server will be of type ExtendedCell. Just considering the
+        // other case also. The data fragments within Cell is copied into buf as in KeyValue
+        // serialization format only.
+        KeyValueUtil.appendTo(cell, buf, offset, true);
+      }
+      // TODO : write the seqid here. For writing seqId we should create a new cell type so
+      // that seqId is not used as the state
+      if (tagsLen == 0) {
+        // When tagsLen is 0, make a NoTagsByteBufferKeyValue version. This is an optimized class
+        // which directly return tagsLen as 0. So we avoid parsing many length components in
+        // reading the tagLength stored in the backing buffer. The Memstore addition of every Cell
+        // call getTagsLength().
+        Cell res = new NoTagByteBufferChunkCell(buf, offset, len, cell.getSequenceId());
+        result.add(res);
+      } else {
+        result.add(new ByteBufferChunkCell(buf, offset, len, cell.getSequenceId()));
+      }
+      offset += len;
+    }
+    return result;
   }
 
   /**
@@ -195,6 +324,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
     // opening scanner which will read their data
     int count  = openScannerCount.get();
     if(count == 0) {
+      seqIds.clear();
       recycleChunks();
     }
   }

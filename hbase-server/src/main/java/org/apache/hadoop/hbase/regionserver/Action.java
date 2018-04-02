@@ -31,5 +31,7 @@ public interface Action {
   public default MemstoreSize getSize() {
     return null;
   }
+  
+  public void postAction();
 }
 

@@ -38,42 +38,47 @@ public class DurableCellChunkCodec {
    * Every cell is written with following format
    * 1) an int representing the len of the cell (excludes seqId)
    * 2) the actual cell
-   * 3) the seqId of the cell.
    * Note that to recreate the cell only use the len of the cell and read the seqId
    * per cell to be used while recreating the cells from the chunks
    * @param cell
    * @param offset
    * @param chunkBuffer
    */
-  public void encode(ExtendedCell cell, int offset, ByteBuffer chunkBuffer) {
-    int serializedSize = cell.getSerializedSize(true);
-    ByteBufferUtils.putInt(chunkBuffer, offset, serializedSize);
+  public void encode(ExtendedCell cell, int offset, ByteBuffer chunkBuffer, int length) {
+    ByteBufferUtils.putInt(chunkBuffer, offset, length);
     cell.write(chunkBuffer, offset + Bytes.SIZEOF_INT);
     // write the seqId also
-    ByteBufferUtils.putLong(chunkBuffer, offset + Bytes.SIZEOF_INT + serializedSize,
-      cell.getSequenceId());
+    /*ByteBufferUtils.putLong(chunkBuffer, offset + Bytes.SIZEOF_INT + length,
+      cell.getSequenceId());*/
     // lets write the end offset at the beginning of the chunk after the chunk id and the inUse byte.
-    ByteBufferUtils.putInt(chunkBuffer,  Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE,
-      offset + Bytes.SIZEOF_INT + serializedSize + Bytes.SIZEOF_LONG);
+    // TODO : Update this after every persist operation
   }
 
   public List<Cell> decode(int startOffset, ByteBuffer chunkBuffer, int endOffset) {
     List<Cell> cells = new ArrayList<Cell>();
     int off = startOffset;
-    for (; off < endOffset;) {
-      int size = ByteBufferUtils.toInt(chunkBuffer, off);
-      // get the seqID
-      long seqID = ByteBufferUtils.toLong(chunkBuffer, off + Bytes.SIZEOF_INT + size);
-      // we need to deepClone here. Otherwise the new chunkCreator for this
-      // RS will overwrite and corrupt the exisitng Mnemonic chunk
-      Cell cell = new ByteBufferKeyValue(chunkBuffer, off + Bytes.SIZEOF_INT, size).deepClone();
-      try {
-        CellUtil.setSequenceId(cell, seqID);
-      } catch (IOException e) {
-        // won't haappen
+    for (; off < endOffset + startOffset;) {
+      long seqID = ByteBufferUtils.toLong(chunkBuffer, off);
+      off += Bytes.SIZEOF_LONG;
+      int noOfCells = ByteBufferUtils.toInt(chunkBuffer, off);
+      off += Bytes.SIZEOF_INT;
+      int batchStart =  off;
+      for (int i = 0; i < noOfCells; i++) {
+        int size = ByteBufferUtils.toInt(chunkBuffer, batchStart);
+        // get the seqID
+        // we need to deepClone here. Otherwise the new chunkCreator for this
+        // RS will overwrite and corrupt the exisitng Mnemonic chunk
+        Cell cell =
+            new ByteBufferKeyValue(chunkBuffer, batchStart + Bytes.SIZEOF_INT, size).deepClone();
+        try {
+          CellUtil.setSequenceId(cell, seqID);
+        } catch (IOException e) {
+          // won't haappen
+        }
+        cells.add(cell);
+        batchStart += Bytes.SIZEOF_INT + size;
       }
-      cells.add(cell);
-      off += Bytes.SIZEOF_INT + size + Bytes.SIZEOF_LONG;
+      off = batchStart;
     }
     return cells;
   }

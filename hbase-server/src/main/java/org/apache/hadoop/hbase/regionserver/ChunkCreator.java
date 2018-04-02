@@ -18,7 +18,6 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
-import java.io.File;
 import java.lang.ref.SoftReference;
 import java.util.Iterator;
 import java.util.Map;
@@ -34,10 +33,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.classification.InterfaceAudience;
 import org.apache.hadoop.hbase.regionserver.HeapMemoryManager.HeapMemoryTuneObserver;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.util.StringUtils;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -310,7 +307,8 @@ public class ChunkCreator {
             if (chunk.data != null) {
               // put back the chunk by ensuring that the chunk is not used any more so that while
               // retrieving all such chunks can be omitted
-              chunk.data.put(Bytes.SIZEOF_INT, (byte) 0);
+              //TODO : Ensure this byte is persisted
+              chunk.persist(true);
             }
             reclaimedChunks.add(chunk);
           }

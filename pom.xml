@@ -82,7 +82,7 @@
     <module>hbase-checkstyle</module>
     <module>hbase-external-blockcache</module>
     <module>hbase-shaded</module>
-    <module>hbase-spark</module>
+    <!--<module>hbase-spark</module>-->
     <module>hbase-archetypes</module>
     <module>hbase-metrics-api</module>
     <module>hbase-metrics</module>

@@ -48,8 +48,16 @@ import com.google.common.base.Preconditions;
 public class DurableSlicedChunk extends Chunk {
 
   private DurableChunk<NonVolatileMemAllocator> durableChunk;
-  private long offset;
   private ChunkBuffer chunkBuffer;
+ // private SyncInfo syncInfo;
+  private long offset;
+  private volatile int length;
+  private volatile long persistedOffset;
+  private volatile boolean returned;
+  // TODO : Use this
+  private volatile long currentOffset;
+  private volatile boolean dataAdded = false;
+
 
   public DurableSlicedChunk(int id, DurableChunk<NonVolatileMemAllocator> durableBigChunk,
       long offset, int size) {
@@ -71,17 +79,28 @@ public class DurableSlicedChunk extends Chunk {
    // Mark that it's ready for use
    // Move 4 bytes since the first 4 bytes are having the chunkid in it
    // indicating that this chunk has been in  use
-   boolean initted = false;
+    boolean initted = false;
     if (regionName != null) {
       initted = nextFreeOffset.compareAndSet(UNINITIALIZED,
         3 * Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE + Bytes.toBytes(regionName).length);
     } else {
       initted = nextFreeOffset.compareAndSet(UNINITIALIZED, Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE);
     }
+    persistedOffset = currentOffset = nextFreeOffset.get();
+    returned = false;
    // We should always succeed the above CAS since only one thread
    // calls init()!
    Preconditions.checkState(initted, "Multiple threads tried to init same chunk");
  }
+
+  @Override
+  public synchronized void updateOffsetAndLength(long offset, int length) {
+    // TODO : Use this
+    this.currentOffset = offset;
+    dataAdded = true;
+    this.length += length;
+    notifyAll();
+  }
 
   /**
    * Reset the offset to UNINITIALIZED before before reusing an old chunk
@@ -92,14 +111,25 @@ public class DurableSlicedChunk extends Chunk {
       // Indicates this chunk has been in use
       // reset this so that if really we read a chunk back we know if it was an used on or unused one
       if (data != null) {
-        data.put(Bytes.SIZEOF_INT, (byte) 0);
+        data.put(Bytes.SIZEOF_INT, (byte) 1);
       }
+      returned = false;
+      syncEndPremable();
       allocCount.set(0);
     }
   }
 
   @Override
-  public int alloc(int size) {
+  public synchronized void markReturned() {
+    returned = true;
+  }
+
+  private void syncEndPremable() {
+    chunkBuffer.syncToLocal(Bytes.SIZEOF_INT, Bytes.SIZEOF_BYTE);
+  }
+
+  @Override
+  public int alloc(int count, int size) {
     while (true) {
       int oldOffset = nextFreeOffset.get();
       if (oldOffset == UNINITIALIZED) {
@@ -117,13 +147,16 @@ public class DurableSlicedChunk extends Chunk {
 
       //this is the end preamble
       // See whether we have enough space to write the INT representing the length of cell,
-      // the actual cell and the seqId following it
-      if (oldOffset + size + Bytes.SIZEOF_INT + Bytes.SIZEOF_LONG > data.capacity()) {
+      // the actual cell, for the entire batch we write the seqId once and then the length of the
+      // batch
+      if (oldOffset + size + (count * Bytes.SIZEOF_INT) + Bytes.SIZEOF_INT
+          + Bytes.SIZEOF_LONG > data.capacity()) {
+        // so we are done here. So call persist with the before this chunk becomes unusable
         return -1; // alloc doesn't fit
       }
       // Try to atomically claim this chunk
       if (nextFreeOffset.compareAndSet(oldOffset,
-        oldOffset + size + Bytes.SIZEOF_INT + Bytes.SIZEOF_LONG)) {
+        oldOffset + size + (count * Bytes.SIZEOF_INT) + Bytes.SIZEOF_INT + Bytes.SIZEOF_LONG)) {
         // we got the alloc
         allocCount.incrementAndGet();
         return oldOffset;
@@ -131,6 +164,7 @@ public class DurableSlicedChunk extends Chunk {
       // we raced and lost alloc, try again
     }
   }
+
   @Override
   void allocateDataBuffer(String regionName) {
     if (data == null) {
@@ -147,8 +181,9 @@ public class DurableSlicedChunk extends Chunk {
       data = chunkBuffer.get();
       data.putInt(0, this.getId());
       // Indicates this chunk has been in use
-      data.put(Bytes.SIZEOF_INT, (byte)1);
-      // next 4 bytes will inidcate the endPreamble.  will be filled in after every cell is written
+      data.put(Bytes.SIZEOF_INT, (byte) 1);
+      chunkBuffer.syncToLocal(0, Bytes.SIZEOF_BYTE + Bytes.SIZEOF_INT);
+      // next 4 bytes will inidcate the endPreamble. will be filled in after every cell is written
       // this should be int or short?
       if (regionName != null) {
         if (LOG.isDebugEnabled()) {
@@ -156,17 +191,62 @@ public class DurableSlicedChunk extends Chunk {
         }
       }
       if (regionName != null) {
-        data.putInt(2* Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE, regionName.length());
+        data.putInt(2 * Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE, regionName.length());
         // better pass the name in byte[] only instead of string
         byte[] bytes = Bytes.toBytes(regionName);
-        ByteBufferUtils.copyFromArrayToBuffer(data,
-          3 * Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE, bytes, 0, bytes.length);
+        ByteBufferUtils.copyFromArrayToBuffer(data, 3 * Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE, bytes,
+          0, bytes.length);
+        // TODO : Make it one sync call?
+        chunkBuffer.syncToLocal(Bytes.SIZEOF_BYTE + (2 * Bytes.SIZEOF_INT),
+          Bytes.SIZEOF_INT + bytes.length);
       }
+    } else {
+      // mark it in use
+      data.put(Bytes.SIZEOF_INT, (byte) 1);
+      syncEndPremable();
     }
   }
 
-  public void persist() {
-    this.chunkBuffer.syncToNonVolatileMemory();
-    //this.chunkBuffer.syncToLocal();
+  public synchronized void persist(boolean done) {
+    if (done) {
+      // forcefully persist as we are done with the chunks
+      data.put(Bytes.SIZEOF_INT, (byte) 0);
+      // done with this
+      markReturned();
+      syncEndPremable();
+      return;
+    }
+    if (this.returned) {
+      if(dataAdded) { 
+        syncInternal();
+      }
+      return;
+    }
+    if (persistedOffset == this.length) {
+      return;
+    }
+    while (!dataAdded) {
+      try {
+        // TODO : Make this better.
+        wait(10);
+      } catch (InterruptedException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
+    }
+    syncInternal();
+  }
+
+  private void syncInternal() {
+    dataAdded = false;
+    long temp = persistedOffset;
+    // not seeing much of a diff with syncToNonVolatileMemory
+    this.chunkBuffer.syncToLocal(temp, (int) (length - temp));
+    persistedOffset += (length - temp);
+    ByteBufferUtils.putInt(data, Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE, length);
+    // sync the length part also
+    // TODO : add persist here - but it becomes two sync calls
+    // not seeing much of a diff with syncToNonVolatileMemory
+    this.chunkBuffer.syncToLocal(Bytes.SIZEOF_INT + Bytes.SIZEOF_BYTE, Bytes.SIZEOF_INT);
   }
 }

@@ -2056,8 +2056,8 @@ public final class CellUtil {
         tag = Bytes.toStringBinary(cell.getTagsArray(), cell.getTagsOffset(), cell.getTagsLength());
       }
       if (!(cell instanceof KeyValue.KeyOnlyKeyValue)) {
-        value = Bytes.toStringBinary(cell.getValueArray(), cell.getValueOffset(),
-            cell.getValueLength());
+        //value = Bytes.toStringBinary(cell.getValueArray(), cell.getValueOffset(),
+            //cell.getValueLength());
       }
     }
 

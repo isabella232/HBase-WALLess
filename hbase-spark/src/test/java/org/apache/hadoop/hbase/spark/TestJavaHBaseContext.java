@@ -455,7 +455,7 @@ public class TestJavaHBaseContext implements Serializable {
         if (rowKey == null) {
           rowKey = new ByteArrayWrapper(Bytes.toBytes(strs[0]));
         }
-        fqv.add(Bytes.toBytes(strs[1]), Bytes.toBytes(strs[2]), Bytes.toBytes(strs[3]));
+        fqv.copyCellsTo(Bytes.toBytes(strs[1]), Bytes.toBytes(strs[2]), Bytes.toBytes(strs[3]));
       }
       return new Pair(rowKey, fqv);
     }

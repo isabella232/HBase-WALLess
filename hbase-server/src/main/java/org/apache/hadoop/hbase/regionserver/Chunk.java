@@ -112,8 +112,7 @@ public abstract class Chunk {
 
   abstract void allocateDataBuffer(String regionName);
 
-  public void persist() {
-    
+  public void persist(boolean b) {
   }
   /**
    * Reset the offset to UNINITIALIZED before before reusing an old chunk
@@ -131,7 +130,7 @@ public abstract class Chunk {
    * will be in busy-wait state as it will keep looping till the nextFreeOffset is set.
    * @return the offset of the successful allocation, or -1 to indicate not-enough-space
    */
-  public int alloc(int size) {
+  public int alloc(int count, int size) {
     while (true) {
       int oldOffset = nextFreeOffset.get();
       if (oldOffset == UNINITIALIZED) {
@@ -177,5 +176,20 @@ public abstract class Chunk {
   @VisibleForTesting
   int getNextFreeOffset() {
     return this.nextFreeOffset.get();
+  }
+
+  public void updateOffsetAndLength(long offset, int length) {
+  }
+
+  // The meta data occupied by every batch
+  public int getBatchMetaDataLength(int numOfCells) {
+    // Unused
+    return 0;
+  }
+
+  public void persist(int allocOffset, int length) {
+  }
+
+  public void markReturned() {
   }
 }
