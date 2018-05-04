@@ -65,8 +65,8 @@ public class TestMemStoreLAB {
 
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
-    ChunkCreator.initialize(1 * 1024, false, 50 * 1024000L, 0.2f,
-        MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null);
+    ChunkCreatorFactory.createChunkCreator(1 * 1024, false, 50 * 1024000L, 0.2f,
+        MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
   }
 
   @AfterClass
@@ -74,8 +74,8 @@ public class TestMemStoreLAB {
     long globalMemStoreLimit =
         (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getMax()
             * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
-    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, globalMemStoreLimit, 0.2f,
-      MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
+        globalMemStoreLimit, 0.2f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
   }
 
   /**
@@ -216,8 +216,8 @@ public class TestMemStoreLAB {
       // reconstruct mslab
       long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
           .getMax() * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
-      ChunkCreator.initialize(MemStoreLABImpl.MAX_ALLOC_DEFAULT, false,
-        globalMemStoreLimit, 0.1f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null);
+      ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.MAX_ALLOC_DEFAULT, false,
+        globalMemStoreLimit, 0.1f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
       ChunkCreator.clearDisableFlag();
       mslab = new MemStoreLABImpl(conf);
       // launch multiple threads to trigger frequent chunk retirement

@@ -2447,7 +2447,8 @@ public class TestHRegion {
     FSHLog hLog = new FSHLog(fs, rootDir, "testDataInMemoryWithoutWAL", CONF);
     // This chunk creation is done throughout the code base. Do we want to move it into core?
     // It is missing from this test. W/o it we NPE.
-    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
+        null);
     HRegion region = initHRegion(tableName, null, null, false, Durability.SYNC_WAL, hLog,
         COLUMN_FAMILY_BYTES);
 
@@ -2720,7 +2721,8 @@ public class TestHRegion {
     hcd.setMaxVersions(maxVersions);
     HTableDescriptor htd = new HTableDescriptor(TableName.valueOf("testFilterAndColumnTracker"));
     htd.addFamily(hcd);
-    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
+        null);
     HRegionInfo info = new HRegionInfo(htd.getTableName(), null, null, false);
     Path logDir = TEST_UTIL.getDataTestDirOnTestFS(method + ".log");
     final WAL wal = HBaseTestingUtility.createWal(TEST_UTIL.getConfiguration(), logDir, info);
@@ -5061,7 +5063,8 @@ public class TestHRegion {
       String callingMethod, Configuration conf, boolean isReadOnly, byte[]... families)
       throws IOException {
     Path logDir = TEST_UTIL.getDataTestDirOnTestFS(callingMethod + ".log");
-    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
+        null);
     HRegionInfo hri = new HRegionInfo(tableName, startKey, stopKey);
     final WAL wal = HBaseTestingUtility.createWal(conf, logDir, hri);
     return initHRegion(tableName, startKey, stopKey, isReadOnly,

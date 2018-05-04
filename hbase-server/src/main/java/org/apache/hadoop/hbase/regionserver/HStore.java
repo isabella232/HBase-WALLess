@@ -350,14 +350,16 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
     }
     switch (inMemoryCompaction) {
       case NONE:
-        ms = ReflectionUtils.newInstance(DefaultMemStore.class,
-            new Object[]{conf, this.comparator});
+        ms = ReflectionUtils.newInstance(DefaultMemStore.class, new Object[] {
+          this.getRegionInfo().getRegionName(), this.family.getName(), conf, this.comparator });
         break;
       default:
         Class<? extends CompactingMemStore> clz = conf.getClass(MEMSTORE_CLASS_NAME,
             CompactingMemStore.class, CompactingMemStore.class);
-        ms = ReflectionUtils.newInstance(clz, new Object[]{conf, this.comparator, this,
-            this.getHRegion().getRegionServicesForStores(), inMemoryCompaction});
+        ms = ReflectionUtils.newInstance(clz,
+          new Object[] { this.getRegionInfo().getRegionName(), this.family.getName(), conf,
+              this.comparator, this, this.getHRegion().getRegionServicesForStores(),
+              inMemoryCompaction });
     }
     return ms;
   }

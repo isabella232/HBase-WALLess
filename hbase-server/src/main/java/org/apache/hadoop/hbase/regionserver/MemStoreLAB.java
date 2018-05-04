@@ -110,12 +110,13 @@ public interface MemStoreLAB {
   */
   Chunk getNewExternalChunk(int size);
 
-  static MemStoreLAB newInstance(Configuration conf) {
+  static MemStoreLAB newInstance(byte[] regionName, byte[] cfName, Configuration conf) {
     MemStoreLAB memStoreLAB = null;
     if (isEnabled(conf)) {
       String className = conf.get(MSLAB_CLASS_NAME, MemStoreLABImpl.class.getName());
       memStoreLAB = ReflectionUtils.instantiateWithCustomCtor(className,
-          new Class[] { Configuration.class }, new Object[] { conf });
+          new Class[] { byte[].class, byte[].class, Configuration.class },
+          new Object[] { regionName, cfName, conf });
     }
     return memStoreLAB;
   }

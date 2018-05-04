@@ -1,0 +1,96 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.hadoop.hbase.regionserver;
+
+import org.apache.hadoop.hbase.util.ByteBufferUtils;
+import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.mnemonic.ChunkBuffer;
+import org.apache.mnemonic.DurableChunk;
+import org.apache.mnemonic.NonVolatileMemAllocator;
+import org.apache.yetus.audience.InterfaceAudience;
+
+/**
+ * Notes on what this chunk should have
+ * 1) this chunk should have the region name to which the current chunk is associated. Every MSLabImpl
+ * gets a chunk and that chunk is used till it is full. Every MSLAbImpl is created per region and on flush
+ * a new one is created.
+ * 2) For easy deserialization of a cell we need cell length before every cell.
+ * 3) We need to know where the chunk has ended. Either write the end byte after every cell and keep
+ * overwriting as and when the next cell comes or write it as the end (as fixed set of bytes).
+ * I think going with end bytes is better
+ * 4) Another thing to be done is that  while returning this chunk to the pool after a flush we have to mark that this chunk
+ * is no longer in use. So that if a server crashes just after this we should not try reading the cells from this chunk
+ * as already it has been flushed.
+ * 5) We may have to write the seqId also in the Chunks. Otherwise when we need to get back the cell we may not know
+ * what is the actual seqId of the cell - TODO - discuss
+ */
+@InterfaceAudience.Private
+public class DurableSlicedChunk extends Chunk {
+
+  private DurableChunk<NonVolatileMemAllocator> durableChunk;
+  private ChunkBuffer chunkBuffer;
+ // private SyncInfo syncInfo;
+  private long offset;
+  private volatile int length;
+  private volatile long persistedOffset;
+  private volatile boolean returned;
+  // TODO : Use this
+  private volatile long currentOffset;
+  private volatile boolean dataAdded = false;
+
+  public DurableSlicedChunk(int id, DurableChunk<NonVolatileMemAllocator> durableBigChunk,
+      long offset, int size) {
+    super(size, id, true);// Durable chunks are always created out of pool.
+    this.offset = offset;
+    this.durableChunk = durableBigChunk;
+  }
+
+  @Override
+  int allocateDataBuffer(byte[] regionName, byte[] cfName) {
+    if (data == null) {
+      chunkBuffer = durableChunk.getChunkBuffer(offset, size);
+      data = chunkBuffer.get();
+      data.putInt(0, this.getId());// Write the chunk ID
+    }
+    // createBuffer.cancelAutoReclaim(); this causes NPE
+    // fill the data here
+    // Every chunk will have
+    // 1) The chunk id (integer)
+    // 2) The region name (Region Name length as int and then name bytes)
+    // 3) The CF name (CF Name length as int and then name bytes)
+    // 4) The end offset - An integer upto which the data was actually synced
+    
+    int offset = Bytes.SIZEOF_INT;
+    // next 4 bytes will inidcate the endPreamble. will be filled in after every cell is written
+    // this should be int or short?
+    if (regionName != null) {
+      assert cfName != null;
+      data.putInt(offset, regionName.length);// Write regionName
+      offset += Bytes.SIZEOF_INT;
+      ByteBufferUtils.copyFromArrayToBuffer(this.data, offset, regionName, 0, regionName.length);
+      offset += regionName.length;
+      data.putInt(offset, cfName.length);// Write cfName
+      offset += Bytes.SIZEOF_INT;
+      ByteBufferUtils.copyFromArrayToBuffer(this.data, offset, cfName, 0, cfName.length);
+      offset += cfName.length;
+      chunkBuffer.syncToLocal(0, offset);
+      // Next 4 bytes will be used for storing the end offset until which the cells are added.
+    }
+    return offset + Bytes.SIZEOF_INT;
+  }
+}

@@ -53,9 +53,11 @@ public abstract class AbstractMemStore implements MemStore {
   protected volatile long snapshotId;
   // Used to track when to flush
   private volatile long timeOfOldestEdit;
+  protected byte[] regionName;
+  protected byte[] cfName;
 
   public final static long FIXED_OVERHEAD = (long) ClassSize.OBJECT
-          + (4 * ClassSize.REFERENCE)
+          + (6 * ClassSize.REFERENCE)
           + (2 * Bytes.SIZEOF_LONG); // snapshotId, timeOfOldestEdit
 
   public final static long DEEP_OVERHEAD = FIXED_OVERHEAD;
@@ -72,7 +74,10 @@ public abstract class AbstractMemStore implements MemStore {
     scanners.add(segment.getScanner(readPt));
   }
 
-  protected AbstractMemStore(final Configuration conf, final CellComparator c) {
+  protected AbstractMemStore(byte[] regionName, byte[] cfName, final Configuration conf,
+      final CellComparator c) {
+    this.regionName = regionName;
+    this.cfName = cfName;
     this.conf = conf;
     this.comparator = c;
     resetActive();
@@ -82,7 +87,8 @@ public abstract class AbstractMemStore implements MemStore {
 
   protected void resetActive() {
     // Reset heap to not include any keys
-    this.active = SegmentFactory.instance().createMutableSegment(conf, comparator);
+    this.active = SegmentFactory.instance().createMutableSegment(this.regionName, this.cfName, conf,
+        comparator);
     this.timeOfOldestEdit = Long.MAX_VALUE;
   }
 

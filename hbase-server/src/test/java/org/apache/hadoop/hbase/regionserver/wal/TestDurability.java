@@ -38,7 +38,7 @@ import org.apache.hadoop.hbase.client.RegionInfoBuilder;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.TableDescriptor;
 import org.apache.hadoop.hbase.client.TableDescriptorBuilder;
-import org.apache.hadoop.hbase.regionserver.ChunkCreator;
+import org.apache.hadoop.hbase.regionserver.ChunkCreatorFactory;
 import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.regionserver.MemStoreLABImpl;
 import org.apache.hadoop.hbase.testclassification.MediumTests;
@@ -299,7 +299,8 @@ public class TestDurability {
         throw new IOException("Failed delete of " + path);
       }
     }
-    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
+        null);
     return HRegion.createHRegion(info, path, CONF, htd, wals.getWAL(info));
   }
 
@@ -311,7 +312,8 @@ public class TestDurability {
         throw new IOException("Failed delete of " + path);
       }
     }
-    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
+        null);
     return HRegion.createHRegion(info, path, CONF, td, wal);
   }
 }

@@ -21,7 +21,6 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.yetus.audience.InterfaceAudience;
-import org.apache.hadoop.hbase.util.Bytes;
 
 import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hbase.thirdparty.com.google.common.base.Preconditions;
@@ -31,6 +30,9 @@ import org.apache.hbase.thirdparty.com.google.common.base.Preconditions;
  */
 @InterfaceAudience.Private
 public abstract class Chunk {
+
+  private static final byte[] UNKNOWN = null;
+
   /** Actual underlying data */
   protected ByteBuffer data;
 
@@ -93,15 +95,20 @@ public abstract class Chunk {
     return size == ChunkCreator.getInstance().getChunkSize(ChunkCreator.ChunkType.INDEX_CHUNK);
   }
 
+  public void init() {
+    init(UNKNOWN, UNKNOWN);
+  }
+
   /**
    * Actually claim the memory for this chunk. This should only be called from the thread that
    * constructed the chunk. It is thread-safe against other threads calling alloc(), who will block
    * until the allocation is complete.
    */
-  public void init() {
+  public void init(byte[] regionName, byte[] cfName) {
     assert nextFreeOffset.get() == UNINITIALIZED;
+    int freeOffset;
     try {
-      allocateDataBuffer();
+      freeOffset = allocateDataBuffer(regionName, cfName);
     } catch (OutOfMemoryError e) {
       boolean failInit = nextFreeOffset.compareAndSet(UNINITIALIZED, OOM);
       assert failInit; // should be true.
@@ -109,13 +116,18 @@ public abstract class Chunk {
     }
     // Mark that it's ready for use
     // Move 4 bytes since the first 4 bytes are having the chunkid in it
-    boolean initted = nextFreeOffset.compareAndSet(UNINITIALIZED, Bytes.SIZEOF_INT);
+    boolean initted = nextFreeOffset.compareAndSet(UNINITIALIZED, freeOffset);
     // We should always succeed the above CAS since only one thread
     // calls init()!
     Preconditions.checkState(initted, "Multiple threads tried to init same chunk");
   }
 
-  abstract void allocateDataBuffer();
+  /**
+   * @param regionName
+   * @param cfName
+   * @return The free offset within the allocated data buffer, from where we can start writing. 
+   */
+  abstract int allocateDataBuffer(byte[] regionName, byte[] cfName);
 
   /**
    * Reset the offset to UNINITIALIZED before before reusing an old chunk

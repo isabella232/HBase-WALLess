@@ -51,7 +51,7 @@ import org.apache.hadoop.hbase.io.Reference;
 import org.apache.hadoop.hbase.master.CatalogJanitor.SplitParentFirstComparator;
 import org.apache.hadoop.hbase.master.assignment.MockMasterServices;
 import org.apache.hadoop.hbase.procedure2.ProcedureTestingUtility;
-import org.apache.hadoop.hbase.regionserver.ChunkCreator;
+import org.apache.hadoop.hbase.regionserver.ChunkCreatorFactory;
 import org.apache.hadoop.hbase.regionserver.HStore;
 import org.apache.hadoop.hbase.regionserver.MemStoreLABImpl;
 import org.apache.hadoop.hbase.testclassification.MasterTests;
@@ -86,7 +86,7 @@ public class TestCatalogJanitor {
 
   @BeforeClass
   public static void beforeClass() throws Exception {
-    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null, null);
   }
 
   @Before

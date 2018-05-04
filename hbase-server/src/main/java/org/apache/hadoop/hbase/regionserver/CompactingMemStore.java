@@ -101,10 +101,10 @@ public class CompactingMemStore extends AbstractMemStore {
       + 2 * ClassSize.ATOMIC_BOOLEAN// inMemoryFlushInProgress and allowCompaction
       + CompactionPipeline.DEEP_OVERHEAD + MemStoreCompactor.DEEP_OVERHEAD);
 
-  public CompactingMemStore(Configuration conf, CellComparator c,
+  public CompactingMemStore(byte[] regionName, byte[] cfName, Configuration conf, CellComparator c,
       HStore store, RegionServicesForStores regionServices,
       MemoryCompactionPolicy compactionPolicy) throws IOException {
-    super(conf, c);
+    super(regionName, cfName, conf, c);
     this.store = store;
     this.regionServices = regionServices;
     this.pipeline = new CompactionPipeline(getRegionServices());

@@ -181,7 +181,8 @@ public class TestCompactionArchiveIOException {
 
   private HRegion initHRegion(TableDescriptor htd, RegionInfo info) throws IOException {
     Configuration conf = testUtil.getConfiguration();
-    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
+        null);
     Path tableDir = FSUtils.getTableDir(testDir, htd.getTableName());
     Path regionDir = new Path(tableDir, info.getEncodedName());
     Path storeDir = new Path(regionDir, htd.getColumnFamilies()[0].getNameAsString());

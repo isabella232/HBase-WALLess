@@ -47,7 +47,7 @@ import org.apache.hbase.thirdparty.com.google.common.util.concurrent.ThreadFacto
 public class ChunkCreator {
   private static final Logger LOG = LoggerFactory.getLogger(ChunkCreator.class);
   // monotonically increasing chunkid
-  private AtomicInteger chunkID = new AtomicInteger(1);
+  protected AtomicInteger chunkID = new AtomicInteger(1);
   // maps the chunk against the monotonically increasing chunk id. We need to preserve the
   // natural ordering of the key
   // CellChunkMap creation should convert the weak ref to hard reference
@@ -123,7 +123,7 @@ public class ChunkCreator {
   @edu.umd.cs.findbugs.annotations.SuppressWarnings(value = "LI_LAZY_INIT_STATIC",
           justification = "Method is called by single thread at the starting of RS")
   @VisibleForTesting
-  public static ChunkCreator initialize(int chunkSize, boolean offheap, long globalMemStoreSize,
+  /*public static ChunkCreator initialize(int chunkSize, boolean offheap, long globalMemStoreSize,
                                         float poolSizePercentage, float initialCountPercentage,
                                         HeapMemoryManager heapMemoryManager) {
     if (instance != null) {
@@ -133,7 +133,7 @@ public class ChunkCreator {
             initialCountPercentage, heapMemoryManager,
             MemStoreLABImpl.INDEX_CHUNK_PERCENTAGE_DEFAULT);
     return instance;
-  }
+  }*/
 
   static ChunkCreator getInstance() {
     return instance;
@@ -143,41 +143,43 @@ public class ChunkCreator {
    * Creates and inits a chunk. The default implementation for a specific chunk size.
    * @return the chunk that was initialized
    */
-  Chunk getChunk(ChunkType chunkType) {
-    return getChunk(CompactingMemStore.IndexType.ARRAY_MAP, chunkType);
+  Chunk getChunk(byte[] regionName, byte[] cfName, ChunkType chunkType) {
+    return getChunk(regionName, cfName, CompactingMemStore.IndexType.ARRAY_MAP, chunkType);
   }
 
   /**
    * Creates and inits a chunk. The default implementation.
    * @return the chunk that was initialized
    */
-  Chunk getChunk() {
-    return getChunk(CompactingMemStore.IndexType.ARRAY_MAP, ChunkType.DATA_CHUNK);
+  Chunk getChunk(byte[] regionName, byte[] cfName) {
+    return getChunk(regionName, cfName, CompactingMemStore.IndexType.ARRAY_MAP,
+        ChunkType.DATA_CHUNK);
   }
 
   /**
    * Creates and inits a chunk. The default implementation for a specific index type.
    * @return the chunk that was initialized
    */
-  Chunk getChunk(CompactingMemStore.IndexType chunkIndexType) {
-    return getChunk(chunkIndexType, ChunkType.DATA_CHUNK);
+  Chunk getChunk(byte[] regionName, byte[] cfName, CompactingMemStore.IndexType chunkIndexType) {
+    return getChunk(regionName, cfName, chunkIndexType, ChunkType.DATA_CHUNK);
   }
 
   /**
    * Creates and inits a chunk with specific index type and type.
    * @return the chunk that was initialized
    */
-  Chunk getChunk(CompactingMemStore.IndexType chunkIndexType, ChunkType chunkType) {
+  Chunk getChunk(byte[] regionName, byte[] cfName, CompactingMemStore.IndexType chunkIndexType,
+      ChunkType chunkType) {
     switch (chunkType) {
       case INDEX_CHUNK:
         if (indexChunksPool != null) {
-          return getChunk(chunkIndexType, indexChunksPool.getChunkSize());
+          return getChunk(regionName, cfName, chunkIndexType, indexChunksPool.getChunkSize());
         }
       case DATA_CHUNK:
         if (dataChunksPool == null) {
-          return getChunk(chunkIndexType, chunkSize);
+          return getChunk(regionName, cfName, chunkIndexType, chunkSize);
         } else {
-          return getChunk(chunkIndexType, dataChunksPool.getChunkSize());
+          return getChunk(regionName, cfName, chunkIndexType, dataChunksPool.getChunkSize());
         }
       default:
         throw new IllegalArgumentException(
@@ -191,7 +193,8 @@ public class ChunkCreator {
    * @param chunkIndexType whether the requested chunk is going to be used with CellChunkMap index
    * @param size the size of the chunk to be allocated, in bytes
    */
-  Chunk getChunk(CompactingMemStore.IndexType chunkIndexType, int size) {
+  Chunk getChunk(byte[] regionName, byte[] cfName, CompactingMemStore.IndexType chunkIndexType,
+      int size) {
     Chunk chunk = null;
     MemStoreChunkPool pool = null;
 
@@ -223,7 +226,7 @@ public class ChunkCreator {
 
     // now we need to actually do the expensive memory allocation step in case of a new chunk,
     // else only the offset is set to the beginning of the chunk to accept allocations
-    chunk.init();
+    chunk.init(regionName, cfName);
     return chunk;
   }
 
@@ -233,16 +236,16 @@ public class ChunkCreator {
    * @return the chunk that was initialized
    * @param jumboSize the special size to be used
    */
-  Chunk getJumboChunk(int jumboSize) {
+  Chunk getJumboChunk(byte[] regionName, byte[] cfName, int jumboSize) {
     int allocSize = jumboSize + SIZEOF_CHUNK_HEADER;
     if (allocSize <= dataChunksPool.getChunkSize()) {
       LOG.warn("Jumbo chunk size " + jumboSize + " must be more than regular chunk size "
               + dataChunksPool.getChunkSize() + ". Converting to regular chunk.");
-      return getChunk(CompactingMemStore.IndexType.CHUNK_MAP);
+      return getChunk(regionName, cfName, CompactingMemStore.IndexType.CHUNK_MAP);
     }
     // the new chunk is going to hold the jumbo cell data and needs to be referenced by
     // a strong map. Therefore the CCM index type
-    return getChunk(CompactingMemStore.IndexType.CHUNK_MAP, allocSize);
+    return getChunk(regionName, cfName, CompactingMemStore.IndexType.CHUNK_MAP, allocSize);
   }
 
   /**
@@ -252,7 +255,7 @@ public class ChunkCreator {
    * @param size the size of the chunk to be allocated, in bytes
    * @return the chunk
    */
-  private Chunk createChunk(boolean pool, CompactingMemStore.IndexType chunkIndexType, int size) {
+  protected Chunk createChunk(boolean pool, CompactingMemStore.IndexType chunkIndexType, int size) {
     Chunk chunk = null;
     int id = chunkID.getAndIncrement();
     assert id > 0;
@@ -273,7 +276,7 @@ public class ChunkCreator {
   // TODO: change to CHUNK_MAP if it is generally defined
   private Chunk createChunkForPool(CompactingMemStore.IndexType chunkIndexType, int chunkSize) {
     if (chunkSize != dataChunksPool.getChunkSize() &&
-            chunkSize != indexChunksPool.getChunkSize()) {
+            (indexChunksPool == null || chunkSize != indexChunksPool.getChunkSize())) {
       return null;
     }
     return createChunk(true, chunkIndexType, chunkSize);
@@ -499,7 +502,7 @@ public class ChunkCreator {
         label, StringUtils.byteDesc(chunkSize), maxCount, initialCount);
     MemStoreChunkPool memStoreChunkPool = new MemStoreChunkPool(label, chunkSize, maxCount,
             initialCount, poolSizePercentage);
-    if (heapMemoryManager != null && memStoreChunkPool != null) {
+    if (!(this.offheap) && heapMemoryManager != null && memStoreChunkPool != null) {
       // Register with Heap Memory manager
       heapMemoryManager.registerTuneObserver(memStoreChunkPool);
     }

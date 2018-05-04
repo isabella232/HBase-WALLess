@@ -98,8 +98,9 @@ public class TestDefaultMemStore {
   public void setUp() throws Exception {
     internalSetUp();
     // no pool
-    this.chunkCreator =
-        ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
+        null);
+    this.chunkCreator = ChunkCreatorFactory.getChunkCreator();
     this.memstore = new DefaultMemStore();
   }
 
@@ -538,7 +539,7 @@ public class TestDefaultMemStore {
 
   @Test
   public void testMultipleVersionsSimple() throws Exception {
-    DefaultMemStore m = new DefaultMemStore(new Configuration(), CellComparatorImpl.COMPARATOR);
+    DefaultMemStore m = new DefaultMemStore();
     byte [] row = Bytes.toBytes("testRow");
     byte [] family = Bytes.toBytes("testFamily");
     byte [] qf = Bytes.toBytes("testQualifier");
@@ -820,8 +821,7 @@ public class TestDefaultMemStore {
    */
   @Test
   public void testUpsertMemstoreSize() throws Exception {
-    Configuration conf = HBaseConfiguration.create();
-    memstore = new DefaultMemStore(conf, CellComparatorImpl.COMPARATOR);
+    memstore = new DefaultMemStore();
     MemStoreSize oldSize = memstore.size();
 
     List<Cell> l = new ArrayList<>();

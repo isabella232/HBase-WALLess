@@ -19,6 +19,7 @@ package org.apache.hadoop.hbase.regionserver;
 
 import java.nio.ByteBuffer;
 
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.yetus.audience.InterfaceAudience;
 
 /**
@@ -36,10 +37,11 @@ public class OnheapChunk extends Chunk {
   }
 
   @Override
-  void allocateDataBuffer() {
+  int allocateDataBuffer(byte[] regionName, byte[] cfName) {
     if (data == null) {
       data = ByteBuffer.allocate(this.size);
       data.putInt(0, this.getId());
     }
+    return Bytes.SIZEOF_INT;
   }
 }

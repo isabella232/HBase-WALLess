@@ -117,9 +117,9 @@ public class TestCompactingMemStore extends TestDefaultMemStore {
 
     long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
         .getMax() * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
-    chunkCreator = ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
-        globalMemStoreLimit, 0.4f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT,
-            null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
+        globalMemStoreLimit, 0.4f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
+    chunkCreator = ChunkCreatorFactory.getChunkCreator();
     assertTrue(chunkCreator != null);
   }
 
@@ -153,7 +153,7 @@ public class TestCompactingMemStore extends TestDefaultMemStore {
     verifyScanAcrossSnapshot2(kv1, kv2);
 
     // use case 3: first in snapshot second in kvset
-    this.memstore = new CompactingMemStore(HBaseConfiguration.create(),
+    this.memstore = new CompactingMemStore(null, null, HBaseConfiguration.create(),
         CellComparator.getInstance(), store, regionServicesForStores,
         MemoryCompactionPolicy.EAGER);
     this.memstore.add(kv1.clone(), null);
@@ -881,7 +881,7 @@ public class TestCompactingMemStore extends TestDefaultMemStore {
     public MyCompactingMemStore(Configuration conf, CellComparator c, HStore store,
         RegionServicesForStores regionServices, MemoryCompactionPolicy compactionPolicy)
         throws IOException {
-      super(conf, c, store, regionServices, compactionPolicy);
+      super(null, null, conf, c, store, regionServices, compactionPolicy);
     }
 
     void disableCompaction() {

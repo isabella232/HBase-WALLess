@@ -99,8 +99,10 @@ public class TestReversibleScanners {
 
   @BeforeClass
   public static void setUp() {
-    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
+        null);
   }
+
   @Test
   public void testReversibleStoreFileScanner() throws IOException {
     FileSystem fs = TEST_UTIL.getTestFileSystem();

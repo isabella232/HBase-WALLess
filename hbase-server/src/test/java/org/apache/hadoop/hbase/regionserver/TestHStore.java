@@ -212,8 +212,8 @@ public class TestHStore {
     FileSystem fs = FileSystem.get(conf);
 
     fs.delete(logdir, true);
-    ChunkCreator.initialize(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
-      MemStoreLABImpl.CHUNK_SIZE_DEFAULT, 1, 0, null);
+    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
+        MemStoreLABImpl.CHUNK_SIZE_DEFAULT, 1, 0, null, null);
     RegionInfo info = RegionInfoBuilder.newBuilder(htd.getTableName()).build();
     Configuration walConf = new Configuration(conf);
     FSUtils.setRootDir(walConf, basedir);
@@ -1756,7 +1756,7 @@ public class TestHStore {
     public MyCompactingMemStoreWithCustomCompactor(Configuration conf, CellComparatorImpl c,
         HStore store, RegionServicesForStores regionServices,
         MemoryCompactionPolicy compactionPolicy) throws IOException {
-      super(conf, c, store, regionServices, compactionPolicy);
+      super(null, null, conf, c, store, regionServices, compactionPolicy);
     }
 
     @Override
@@ -1785,7 +1785,7 @@ public class TestHStore {
     public MyCompactingMemStore(Configuration conf, CellComparatorImpl c,
         HStore store, RegionServicesForStores regionServices,
         MemoryCompactionPolicy compactionPolicy) throws IOException {
-      super(conf, c, store, regionServices, compactionPolicy);
+      super(null, null, conf, c, store, regionServices, compactionPolicy);
     }
 
     @Override

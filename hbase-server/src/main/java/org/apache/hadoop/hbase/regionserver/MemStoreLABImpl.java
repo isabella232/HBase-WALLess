@@ -88,12 +88,22 @@ public class MemStoreLABImpl implements MemStoreLAB {
   // Current count of open scanners which reading data from this MemStoreLAB
   private final AtomicInteger openScannerCount = new AtomicInteger();
 
+  private byte[] regionName;
+  private byte[] cfName;
+
   // Used in testing
   public MemStoreLABImpl() {
-    this(new Configuration());
+    this(null, null, new Configuration());
   }
 
+  // Used in testing
   public MemStoreLABImpl(Configuration conf) {
+    this(null, null, conf);
+  }
+
+  public MemStoreLABImpl(byte[] regionName, byte[] cfName, Configuration conf) {
+    this.regionName = regionName;
+    this.cfName = cfName;
     dataChunkSize = conf.getInt(CHUNK_SIZE_KEY, CHUNK_SIZE_DEFAULT);
     maxAlloc = conf.getInt(MAX_ALLOC_KEY, MAX_ALLOC_DEFAULT);
     this.chunkCreator = ChunkCreator.getInstance();
@@ -270,7 +280,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
         if (c != null) {
           return c;
         }
-        c = this.chunkCreator.getChunk(idxType);
+        c = this.chunkCreator.getChunk(this.regionName, this.cfName, idxType);
         if (c != null) {
           // set the curChunk. No need of CAS as only one thread will be here
           currChunk.set(c);
@@ -294,7 +304,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
     switch (chunkType) {
       case INDEX_CHUNK:
       case DATA_CHUNK:
-        Chunk c = this.chunkCreator.getChunk(chunkType);
+        Chunk c = this.chunkCreator.getChunk(this.regionName, this.cfName, chunkType);
         chunks.add(c.getId());
         return c;
       case JUMBO_CHUNK: // a jumbo chunk doesn't have a fixed size
@@ -315,7 +325,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
     if (allocSize <= ChunkCreator.getInstance().getChunkSize()) {
       return getNewExternalChunk(ChunkCreator.ChunkType.DATA_CHUNK);
     } else {
-      Chunk c = this.chunkCreator.getJumboChunk(size);
+      Chunk c = this.chunkCreator.getJumboChunk(this.regionName, this.cfName, size);
       chunks.add(c.getId());
       return c;
     }
