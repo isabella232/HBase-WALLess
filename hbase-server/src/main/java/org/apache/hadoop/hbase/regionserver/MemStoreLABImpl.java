@@ -19,6 +19,8 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -366,5 +368,15 @@ public class MemStoreLABImpl implements MemStoreLAB {
       }
     }
     return i;
+  }
+
+  @Override
+  public List<Cell> copyCellsInto(List<Cell> cells) {
+    List<Cell> toReturn = new ArrayList<>();
+    for (Cell cell : cells) {
+      Cell newCell = copyCellInto(cell);
+      toReturn.add((newCell == null) ? cell : newCell);
+    }
+    return toReturn;
   }
 }

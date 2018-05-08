@@ -17,6 +17,8 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
+import java.util.List;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -128,4 +130,6 @@ public interface MemStoreLAB {
   boolean isOnHeap();
 
   boolean isOffHeap();
+
+  List<Cell> copyCellsInto(List<Cell> cells);
 }

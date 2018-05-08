@@ -722,6 +722,7 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
   /**
    * Adds a value to the memstore
    */
+  // TODO remove this and Memstore#remove(Cell)
   public void add(final Cell cell, MemStoreSizing memstoreSizing) {
     lock.readLock().lock();
     try {
@@ -739,7 +740,7 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
   /**
    * Adds the specified value to the memstore
    */
-  public void add(final Iterable<Cell> cells, MemStoreSizing memstoreSizing) {
+  public void add(final List<Cell> cells, MemStoreSizing memstoreSizing) {
     lock.readLock().lock();
     try {
       if (this.currentParallelPutCount.getAndIncrement() > this.parallelPutCountPrintThreshold) {

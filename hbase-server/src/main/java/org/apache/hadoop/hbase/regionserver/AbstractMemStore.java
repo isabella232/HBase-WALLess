@@ -100,9 +100,25 @@ public abstract class AbstractMemStore implements MemStore {
   public abstract void updateLowestUnflushedSequenceIdInWAL(boolean onlyIfMoreRecent);
 
   @Override
-  public void add(Iterable<Cell> cells, MemStoreSizing memstoreSizing) {
-    for (Cell cell : cells) {
-      add(cell, memstoreSizing);
+  public void add(List<Cell> cells, MemStoreSizing memstoreSizing) {
+    List<Cell> copiedCells = active.maybeCloneWithAllocator(cells, false);
+    for (int i = 0; i < cells.size(); i++) {
+      Cell cell = cells.get(i);
+      Cell copiedCell = copiedCells.get(i);
+      boolean mslabUsed = (cell != copiedCell);
+      // This cell data is backed by the same byte[] where we read request in RPC(See HBASE-15180). By
+      // default MSLAB is ON and we might have copied cell to MSLAB area. If not we must do below deep
+      // copy. Or else we will keep referring to the bigger chunk of memory and prevent it from
+      // getting GCed.
+      // Copy to MSLAB would not have happened if
+      // 1. MSLAB is turned OFF. See "hbase.hregion.memstore.mslab.enabled"
+      // 2. When the size of the cell is bigger than the max size supported by MSLAB. See
+      // "hbase.hregion.memstore.mslab.max.allocation". This defaults to 256 KB
+      // 3. When cells are from Append/Increment operation.
+      if (!mslabUsed) {
+        copiedCell = deepCopyIfNeeded(cell);
+      }
+      internalAdd(copiedCell, mslabUsed, memstoreSizing);
     }
   }
 
@@ -230,6 +246,7 @@ public abstract class AbstractMemStore implements MemStore {
     // This cell data is backed by the same byte[] where we read request in RPC(See HBASE-15180). We
     // must do below deep copy. Or else we will keep referring to the bigger chunk of memory and
     // prevent it from getting GCed.
+    // TODO Here also ask the MSLAB impl whether to copy into or not
     cell = deepCopyIfNeeded(cell);
     this.active.upsert(cell, readpoint, memstoreSizing);
     setOldestEditTimeToNow();

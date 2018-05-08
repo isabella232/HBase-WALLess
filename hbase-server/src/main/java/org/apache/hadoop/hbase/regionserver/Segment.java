@@ -58,7 +58,7 @@ public abstract class Segment {
   private AtomicReference<CellSet> cellSet= new AtomicReference<>();
   private final CellComparator comparator;
   protected long minSequenceId;
-  private MemStoreLAB memStoreLAB;
+  protected MemStoreLAB memStoreLAB;
   // Sum of sizes of all Cells added to this Segment. Cell's heapSize is considered. This is not
   // including the heap overhead of this class.
   protected final MemStoreSizing segmentSize;

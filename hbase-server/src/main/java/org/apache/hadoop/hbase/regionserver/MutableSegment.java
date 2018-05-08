@@ -19,6 +19,7 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.SortedSet;
 
 import org.apache.hadoop.hbase.Cell;
@@ -116,5 +117,14 @@ public class MutableSegment extends Segment {
 
   @Override protected long indexEntrySize() {
       return ClassSize.CONCURRENT_SKIPLISTMAP_ENTRY;
+  }
+
+  public List<Cell> maybeCloneWithAllocator(List<Cell> cells, boolean forceCloneOfBigCell) {
+    if (this.memStoreLAB == null) {
+      return cells;
+    }
+    // TODO handle forceCloneOfBigCell = true case?
+    List<Cell> cellsFromMslab = this.memStoreLAB.copyCellsInto(cells);
+    return cellsFromMslab;
   }
 }

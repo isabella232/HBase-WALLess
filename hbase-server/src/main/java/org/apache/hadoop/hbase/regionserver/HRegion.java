@@ -7486,6 +7486,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
                 // If no WAL, need to stamp it here.
                 PrivateCellUtil.setSequenceId(cell, sequenceId);
               }
+              // TODO call as a List of cells here too
               applyToMemStore(getStore(cell), cell, memstoreAccounting);
             }
           }

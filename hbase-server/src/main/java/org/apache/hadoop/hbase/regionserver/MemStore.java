@@ -79,7 +79,7 @@ public interface MemStore {
    * @param memstoreSizing The delta in memstore size will be passed back via this.
    *        This will include both data size and heap overhead delta.
    */
-  void add(Iterable<Cell> cells, MemStoreSizing memstoreSizing);
+  void add(List<Cell> cells, MemStoreSizing memstoreSizing);
 
   /**
    * @return Oldest timestamp of all the Cells in the MemStore

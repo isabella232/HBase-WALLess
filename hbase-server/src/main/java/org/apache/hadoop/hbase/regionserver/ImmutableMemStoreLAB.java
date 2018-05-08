@@ -138,5 +138,8 @@ public class ImmutableMemStoreLAB implements MemStoreLAB {
     return ChunkCreator.getInstance().isOffheap();
   }
 
-
+  @Override
+  public List<Cell> copyCellsInto(List<Cell> cells) {
+    throw new IllegalStateException("This is an Immutable MemStoreLAB.");
+  }
 }
