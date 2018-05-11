@@ -42,6 +42,11 @@ import org.apache.yetus.audience.InterfaceAudience;
 @InterfaceAudience.Private
 public class DurableSlicedChunk extends Chunk {
 
+  public static final int OFFSET_TO_SEQID = Bytes.SIZEOF_INT;
+  public static final int SIZE_OF_SEQID = Bytes.SIZEOF_SHORT;
+  public static final int OFFSET_TO_OFFSETMETA = OFFSET_TO_SEQID + SIZE_OF_SEQID;
+  public static final int SIZE_OF_OFFSETMETA = Bytes.SIZEOF_LONG;
+
   private DurableChunk<NonVolatileMemAllocator> durableChunk;
   private ChunkBuffer chunkBuffer;
  // private SyncInfo syncInfo;
@@ -71,11 +76,15 @@ public class DurableSlicedChunk extends Chunk {
     // fill the data here
     // Every chunk will have
     // 1) The chunk id (integer)
-    // 2) The region name (Region Name length as int and then name bytes)
-    // 3) The CF name (CF Name length as int and then name bytes)
-    // 4) The end offset - An integer upto which the data was actually synced
-    
-    int offset = Bytes.SIZEOF_INT;
+    // 2) SeqId Short value representing seqId of this chunk within this region:cf
+    // 3) The end offset - A long value representing upto which the data was actually synced.
+    //    4 bytes of last chunk's seqId followed by 4 bytes of offset within it. 
+    // 4) The region name (Region Name length as int and then name bytes)
+    // 5) The CF name (CF Name length as int and then name bytes)
+
+    // 4 bytes taken by chunkId and 2 bytes by seqId for this chunk. ChunkId at the global
+    // ChunkCreator level where as the seqId is at MSLAB impl level sequencing.
+    int offset = OFFSET_TO_SEQID + SIZE_OF_SEQID + SIZE_OF_OFFSETMETA;
     // next 4 bytes will inidcate the endPreamble. will be filled in after every cell is written
     // this should be int or short?
     if (regionName != null) {
@@ -91,6 +100,14 @@ public class DurableSlicedChunk extends Chunk {
       chunkBuffer.syncToLocal(0, offset);
       // Next 4 bytes will be used for storing the end offset until which the cells are added.
     }
-    return offset + Bytes.SIZEOF_INT;
+    return offset;
+  }
+
+  public void persist(long offset, int len) {
+    this.chunkBuffer.syncToLocal(offset, len);
+  }
+
+  public void persist() {
+    this.chunkBuffer.syncToLocal();
   }
 }

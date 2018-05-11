@@ -69,9 +69,9 @@ public class MemStoreLABImpl implements MemStoreLAB {
 
   static final Logger LOG = LoggerFactory.getLogger(MemStoreLABImpl.class);
 
-  private AtomicReference<Chunk> currChunk = new AtomicReference<>();
+  protected AtomicReference<Chunk> currChunk = new AtomicReference<>();
   // Lock to manage multiple handlers requesting for a chunk
-  private ReentrantLock lock = new ReentrantLock();
+  protected ReentrantLock lock = new ReentrantLock();
 
   // A set of chunks contained by this memstore LAB
   @VisibleForTesting
@@ -181,7 +181,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
    * Clone the passed cell by copying its data into the passed buf and create a cell with a chunkid
    * out of it
    */
-  private Cell copyToChunkCell(Cell cell, ByteBuffer buf, int offset, int len) {
+  protected Cell copyToChunkCell(Cell cell, ByteBuffer buf, int offset, int len) {
     int tagsLen = cell.getTagsLength();
     if (cell instanceof ExtendedCell) {
       ((ExtendedCell) cell).write(buf, offset);
@@ -251,7 +251,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
    * @param c the chunk to retire
    * @return true if we won the race to retire the chunk
    */
-  private void tryRetireChunk(Chunk c) {
+  protected void tryRetireChunk(Chunk c) {
     currChunk.compareAndSet(c, null);
     // If the CAS succeeds, that means that we won the race
     // to retire the chunk. We could use this opportunity to
@@ -265,7 +265,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
    * Get the current chunk, or, if there is no current chunk,
    * allocate a new one from the JVM.
    */
-  private Chunk getOrMakeChunk() {
+  protected Chunk getOrMakeChunk() {
     // Try to get the chunk
     Chunk c;
     c = currChunk.get();
@@ -287,6 +287,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
           // set the curChunk. No need of CAS as only one thread will be here
           currChunk.set(c);
           chunks.add(c.getId());
+          processNewChunk(c);
           return c;
         }
       } finally {
@@ -294,6 +295,10 @@ public class MemStoreLABImpl implements MemStoreLAB {
       }
     }
     return null;
+  }
+
+  protected void processNewChunk(Chunk c) {
+
   }
 
   /* Returning a new pool chunk, without replacing current chunk,
