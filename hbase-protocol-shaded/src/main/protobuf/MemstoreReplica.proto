@@ -1,0 +1,45 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package hbase.pb;
+
+option java_package = "org.apache.hadoop.hbase.shaded.protobuf.generated";
+option java_outer_classname = "MemstoreReplicaProtos";
+option java_generic_services = false;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+message MemstoreReplicationEntry {
+  // TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
+  required uint32 associated_cell_count = 1;
+  // TODO seems we can remove this?
+  required uint64 sequence_id = 2;
+}
+
+message ReplicateMemstoreRequest {
+  required bytes encoded_region_name = 1;
+  required uint32 replicas_offered = 2;
+  repeated MemstoreReplicationEntry entry = 3;
+  // It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
+  repeated uint32 replicas = 4;
+}
+
+message ReplicateMemstoreResponse {
+// TODO add a max sequence_id field. 
+  repeated uint32 failed_replicas = 1;
+  required uint32 replicas_committed = 2;
+}
