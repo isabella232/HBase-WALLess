@@ -28,6 +28,7 @@ import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.PipelineException;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
+import org.apache.yetus.audience.InterfaceAudience;
 
 // This is a per Region instance 
 //TODO better name
@@ -75,6 +76,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.R
  * process can not see the corresponding location in regionLocations for the given replica id, it
  * will reload it from META.
  */
+@InterfaceAudience.Private
 public class RegionReplicaReplicator {
   private static final long UNSET = -1L;
   private final Configuration conf;

@@ -85,6 +85,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.UpdateFavor
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.UpdateFavoredNodesResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.WarmupRegionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.WarmupRegionResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
 
@@ -450,6 +452,13 @@ public class TestReplicator extends TestReplicationBase {
       public ClearRegionBlockCacheResponse clearRegionBlockCache(RpcController controller,
           ClearRegionBlockCacheRequest request) throws ServiceException {
         return delegate.clearRegionBlockCache(controller, request);
+      }
+
+      @Override
+      public ReplicateMemstoreResponse replicateMemstore(RpcController controller,
+          ReplicateMemstoreRequest request) throws ServiceException {
+        // TODO Auto-generated method stub
+        return null;
       }
     }
 

@@ -33,12 +33,14 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.util.HasThread;
+import org.apache.yetus.audience.InterfaceAudience;
 
 /**
  * Responsible for adding and persisting the mutations to the memstore  LABs. It has threads
  * for doing the actual data copy to the MSLAB and threads to do the persistence (syncing)
  * the MSLABs to the pmem devices
  */
+@InterfaceAudience.Private
 public class MemstoreLabAppender {
 
  /* private final Configuration conf;

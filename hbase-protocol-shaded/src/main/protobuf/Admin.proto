@@ -29,6 +29,7 @@ import "ClusterStatus.proto";
 import "HBase.proto";
 import "WAL.proto";
 import "Quota.proto";
+import "MemstoreReplica.proto";
 
 message GetRegionInfoRequest {
   required RegionSpecifier region = 1;
@@ -332,4 +333,7 @@ service AdminService {
 
   rpc ExecuteProcedures(ExecuteProceduresRequest)
     returns(ExecuteProceduresResponse);
+
+  rpc ReplicateMemstore (ReplicateMemstoreRequest)
+    returns (ReplicateMemstoreResponse);
 }
