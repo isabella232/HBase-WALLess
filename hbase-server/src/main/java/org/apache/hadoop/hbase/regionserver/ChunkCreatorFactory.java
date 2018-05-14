@@ -50,6 +50,7 @@ public class ChunkCreatorFactory {
           initialCountPercentage, heapMemoryManager,
           MemStoreLABImpl.INDEX_CHUNK_PERCENTAGE_DEFAULT);
     }
+    ChunkCreator.instance = chunkCreator;
   }
 
   public static ChunkCreator getChunkCreator() {
