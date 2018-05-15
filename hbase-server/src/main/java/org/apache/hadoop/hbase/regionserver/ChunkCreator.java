@@ -89,12 +89,10 @@ public class ChunkCreator {
                float indexChunkSizePercentage) {
     this.offheap = offheap;
     this.chunkSize = chunkSize; // in case pools are not allocated
-    initializePools(chunkSize, globalMemStoreSize, poolSizePercentage, indexChunkSizePercentage,
-            initialCountPercentage, heapMemoryManager);
   }
 
   @VisibleForTesting
-  private void initializePools(int chunkSize, long globalMemStoreSize,
+  void initializePools(int chunkSize, long globalMemStoreSize,
                                float poolSizePercentage, float indexChunkSizePercentage,
                                float initialCountPercentage,
                                HeapMemoryManager heapMemoryManager) {

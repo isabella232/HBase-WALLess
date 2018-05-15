@@ -50,6 +50,9 @@ public class ChunkCreatorFactory {
           initialCountPercentage, heapMemoryManager,
           MemStoreLABImpl.INDEX_CHUNK_PERCENTAGE_DEFAULT);
     }
+    // create the pool here
+    chunkCreator.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage,
+      MemStoreLABImpl.INDEX_CHUNK_PERCENTAGE_DEFAULT, initialCountPercentage, heapMemoryManager);
     ChunkCreator.instance = chunkCreator;
   }
 

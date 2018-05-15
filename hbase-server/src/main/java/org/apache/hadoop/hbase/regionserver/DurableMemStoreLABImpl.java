@@ -18,10 +18,8 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.hadoop.conf.Configuration;
@@ -30,7 +28,6 @@ import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ObjectIntPair;
-import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
 
 @InterfaceAudience.Private
@@ -216,7 +213,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
           // TODO need to handle any?
         }
         // We are been acked. Check now whether our write is persisted.
-        if (this.writeQueue.getFirst().seqNo > writeEntry.seqNo) {
+        if (!this.writeQueue.isEmpty() && (this.writeQueue.getFirst().seqNo > writeEntry.seqNo)) {
           break;
         }
         // we are not yet done. Just continue to wait!
