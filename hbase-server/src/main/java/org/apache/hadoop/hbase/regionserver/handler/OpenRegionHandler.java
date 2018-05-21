@@ -121,7 +121,7 @@ public class OpenRegionHandler extends EventHandler {
       }
 
       // Successful region open, and add it to MutableOnlineRegions
-      this.rsServices.addRegion(region);
+      addToOnlineRegions(region);
       openSuccessful = true;
 
       // Done!  Successful region open
@@ -154,6 +154,16 @@ public class OpenRegionHandler extends EventHandler {
     }
   }
 
+  protected void addToOnlineRegions(HRegion region) {
+    this.rsServices.addRegion(region);
+  }
+
+  protected PostOpenDeployTasksThread createPostOpenDeployTasksThread(final Region r,
+      final AtomicBoolean signaller, long masterSystemTime) {
+    return new PostOpenDeployTasksThread((HRegion) r, this.server, this.rsServices, signaller,
+        masterSystemTime);
+  }
+
   private void doCleanUpOnFailedOpen(HRegion region)
       throws IOException {
     try {
@@ -180,8 +190,7 @@ public class OpenRegionHandler extends EventHandler {
     // Object we do wait/notify on.  Make it boolean.  If set, we're done.
     // Else, wait.
     final AtomicBoolean signaller = new AtomicBoolean(false);
-    PostOpenDeployTasksThread t = new PostOpenDeployTasksThread(r,
-      this.server, this.rsServices, signaller, masterSystemTime);
+    PostOpenDeployTasksThread t = createPostOpenDeployTasksThread(r, signaller, masterSystemTime);
     t.start();
     // Post open deploy task:
     //   meta => update meta location in ZK

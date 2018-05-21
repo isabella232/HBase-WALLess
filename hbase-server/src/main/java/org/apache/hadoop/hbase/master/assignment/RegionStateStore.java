@@ -31,6 +31,7 @@ import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.RegionInfo;
+import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.client.TableDescriptor;
@@ -137,6 +138,28 @@ public class RegionStateStore {
     }
   }
 
+  // TODO new API. Check for method and param names
+  public void updateReplicaRegionHealth(List<RegionInfo> regions, boolean good) throws IOException {
+    assert regions.size() > 0;
+    Put put = null;
+    for (RegionInfo region : regions) {
+      int replicaId = region.getReplicaId();
+      // Should never get called for def deplica
+      if (!RegionReplicaUtil.isDefaultReplica(region)) {
+        if (put == null) put = new Put(MetaTableAccessor.getMetaKeyForRegion(region));
+        put.addImmutable(HConstants.CATALOG_FAMILY, getReplicaHealthColumn(replicaId),
+            Bytes.toBytes(good));
+      }
+    }
+    if (put == null) throw new IOException("No replica regions been passed");
+    updateRegionLocation(null, null, put);
+  }
+
+  private static byte[] getReplicaHealthColumn(int replicaId) {
+    return Bytes.toBytes(HConstants.HEALTH_QUALIFIER_STR + META_REPLICA_ID_DELIMITER
+        + String.format(RegionInfo.REPLICA_ID_FORMAT, replicaId));
+  }
+
   private void updateMetaLocation(final RegionInfo regionInfo, final ServerName serverName)
       throws IOException {
     try {
@@ -202,7 +225,7 @@ public class RegionStateStore {
       // TODO: Revist!!!! Means that if a server is loaded, then we will abort our host!
       // In tests we abort the Master!
       String msg = String.format("FAILED persisting region=%s state=%s",
-        regionInfo.getShortNameToLog(), state);
+        regionInfo.getShortNameToLog(), state != null ? state : "null");
       LOG.error(msg, e);
       master.abort(msg, e);
       throw e;

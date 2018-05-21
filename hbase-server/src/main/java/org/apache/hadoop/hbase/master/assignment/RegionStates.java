@@ -39,12 +39,14 @@ import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.RegionInfo;
+import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
 import org.apache.hadoop.hbase.master.RegionState;
 import org.apache.hadoop.hbase.master.RegionState.State;
 import org.apache.hadoop.hbase.procedure2.ProcedureEvent;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,6 +120,8 @@ public class RegionStates {
     private volatile long lastUpdate = 0;
 
     private volatile long openSeqNum = HConstants.NO_SEQNUM;
+
+    private volatile boolean goodHealth = true;
 
     public RegionStateNode(final RegionInfo regionInfo) {
       this.regionInfo = regionInfo;
@@ -506,6 +510,33 @@ public class RegionStates {
 
   Collection<RegionStateNode> getRegionStateNodes() {
     return regionsMap.values();
+  }
+
+  RegionStateNode getRegionNodeFromName(final byte[] regionName) {
+    return regionsMap.get(regionName);
+  }
+
+  protected RegionStateNode getRegionNode(final RegionInfo regionInfo) {
+    return getRegionNodeFromName(regionInfo.getRegionName());
+  }
+
+  // TODO : Check if this API returns the server name such that replicas are in same server.
+  // Faced this issue in the old branch
+  public Pair<RegionInfo, ServerName> getNextReplicaRegion(RegionInfo primaryRegion) {
+    // removed the hashing part from here.
+    Collection<RegionStateNode> regions =
+        this.regionsMap.tailMap(primaryRegion.getRegionName()).values();
+    for (RegionStateNode region : regions) {
+      if (!region.getTable().equals(primaryRegion.getTable())) break;
+      if (!Bytes.equals(region.regionInfo.getStartKey(), primaryRegion.getStartKey())) {
+        break;
+      }
+      if (region.regionInfo.equals(primaryRegion)) continue;
+      if (region.goodHealth && region.state == State.OPEN) {
+        return new Pair<RegionInfo, ServerName>(region.regionInfo, region.regionLocation);
+      }
+    }
+    return null;
   }
 
   public ArrayList<RegionState> getRegionStates() {

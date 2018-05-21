@@ -33,6 +33,7 @@ import org.apache.hadoop.hbase.master.assignment.RegionStates.RegionStateNode;
 import org.apache.hadoop.hbase.master.procedure.MasterProcedureEnv;
 import org.apache.hadoop.hbase.master.procedure.RSProcedureDispatcher.RegionCloseOperation;
 import org.apache.hadoop.hbase.master.procedure.ServerCrashException;
+import org.apache.hadoop.hbase.procedure2.Procedure;
 import org.apache.hadoop.hbase.procedure2.ProcedureMetrics;
 import org.apache.hadoop.hbase.procedure2.ProcedureStateSerializer;
 import org.apache.hadoop.hbase.procedure2.RemoteProcedureDispatcher.RemoteOperation;
@@ -206,7 +207,7 @@ public class UnassignProcedure extends RegionTransitionProcedure {
   }
 
   @Override
-  protected void finishTransition(final MasterProcedureEnv env, final RegionStateNode regionNode)
+  protected Procedure finishTransition(final MasterProcedureEnv env, final RegionStateNode regionNode)
       throws IOException {
     AssignmentManager am = env.getAssignmentManager();
     RegionInfo regionInfo = getRegionInfo();
@@ -222,6 +223,7 @@ public class UnassignProcedure extends RegionTransitionProcedure {
         fnm.deleteFavoredNodesForRegions(Lists.newArrayList(regionInfo));
       }
     }
+    return null;
   }
 
   @Override
@@ -294,6 +296,10 @@ public class UnassignProcedure extends RegionTransitionProcedure {
   @Override
   public ServerName getServer(final MasterProcedureEnv env) {
     return this.hostingServer;
+  }
+
+  @Override
+  protected void postFinish(MasterProcedureEnv env, RegionStateNode regionNode) {
   }
 
   @Override

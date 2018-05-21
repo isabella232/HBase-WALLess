@@ -122,6 +122,7 @@ import org.apache.hadoop.hbase.regionserver.Leases.LeaseStillHeldException;
 import org.apache.hadoop.hbase.regionserver.Region.Operation;
 import org.apache.hadoop.hbase.regionserver.ScannerContext.LimitScope;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionLifeCycleTracker;
+import org.apache.hadoop.hbase.regionserver.handler.ConvertReplicaToPrimaryRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.OpenMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.OpenPriorityRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.OpenRegionHandler;
@@ -1971,6 +1972,8 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
 
     for (RegionOpenInfo regionOpenInfo : request.getOpenInfoList()) {
       final RegionInfo region = ProtobufUtil.toRegionInfo(regionOpenInfo.getRegion());
+      RegionInfo destinationRegionInfo = regionOpenInfo.hasDestinationRegion()
+          ? ProtobufUtil.toRegionInfo(regionOpenInfo.getDestinationRegion()) : null;
       TableDescriptor htd;
       try {
         String encodedName = region.getEncodedName();
@@ -1985,6 +1988,14 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
           //throw new IOException(error);
           builder.addOpeningState(RegionOpeningState.OPENED);
           continue;
+        }
+        if (destinationRegionInfo != null
+            && regionServer.getRegion(destinationRegionInfo.getEncodedName()) == null) {
+          String error = "Received OPEN with destination region:"
+              + destinationRegionInfo.getRegionNameAsString()
+              + ", which is not online in this server";
+          LOG.warn(error);
+          throw new IOException(error);
         }
         LOG.info("Open " + region.getRegionNameAsString());
 
@@ -2035,12 +2046,16 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
                 regionServer.updateRegionFavoredNodesMapping(region.getEncodedName(),
                 regionOpenInfo.getFavoredNodesList());
               }
-              if (htd.getPriority() >= HConstants.ADMIN_QOS || region.getTable().isSystemTable()) {
-                regionServer.executorService.submit(new OpenPriorityRegionHandler(
-                regionServer, regionServer, region, htd, masterSystemTime));
+              if (destinationRegionInfo != null) {
+                regionServer.executorService.submit(new ConvertReplicaToPrimaryRegionHandler(regionServer,
+                    regionServer, region, destinationRegionInfo, htd, masterSystemTime));
+              } else if (htd.getPriority() >= HConstants.ADMIN_QOS
+                  || region.getTable().isSystemTable()) {
+                regionServer.executorService.submit(new OpenPriorityRegionHandler(regionServer,
+                    regionServer, region, htd, masterSystemTime));
               } else {
-                regionServer.executorService.submit(new OpenRegionHandler(
-                regionServer, regionServer, region, htd, masterSystemTime));
+                regionServer.executorService.submit(
+                  new OpenRegionHandler(regionServer, regionServer, region, htd, masterSystemTime));
               }
             }
           }

@@ -235,10 +235,10 @@
           </systemPropertyVariables>
         </configuration>
       </plugin>
-      <plugin>
+      <!--<plugin>
         <groupId>net.revelc.code</groupId>
         <artifactId>warbucks-maven-plugin</artifactId>
-      </plugin>
+      </plugin>-->
     </plugins>
     <!-- General Resources -->
     <pluginManagement>

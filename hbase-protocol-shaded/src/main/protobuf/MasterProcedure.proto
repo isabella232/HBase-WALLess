@@ -317,6 +317,7 @@ enum RegionTransitionState {
   REGION_TRANSITION_QUEUE = 1;
   REGION_TRANSITION_DISPATCH = 2;
   REGION_TRANSITION_FINISH = 3;
+  PRIMARY_REGION_REPLICA_SWTICH_OVER=4;
 }
 
 message AssignRegionStateData {
@@ -324,6 +325,14 @@ message AssignRegionStateData {
   required RegionInfo region_info = 2;
   optional bool force_new_plan = 3 [default = false];
   optional ServerName target_server = 4;
+}
+
+message AssignReplicaRegionAsPrimaryStateData {
+	required RegionTransitionState transition_state = 1;
+	required RegionInfo region_info = 2;
+	optional bool force_new_plan = 3 [default = false];
+	optional ServerName target_server = 4;
+	required RegionInfo destination_region = 5;
 }
 
 message UnassignRegionStateData {

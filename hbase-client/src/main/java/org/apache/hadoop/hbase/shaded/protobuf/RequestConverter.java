@@ -31,6 +31,7 @@ import org.apache.hadoop.hbase.ClusterMetrics.Option;
 import org.apache.hadoop.hbase.ClusterMetricsBuilder;
 import org.apache.hadoop.hbase.DoNotRetryIOException;
 import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.NamespaceDescriptor;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
@@ -953,6 +954,21 @@ public final class RequestConverter {
     }
     // send the master's wall clock time as well, so that the RS can refer to it
     builder.setMasterSystemTime(EnvironmentEdgeManager.currentTime());
+    return builder.build();
+  }
+
+  public static RegionOpenInfo buildRegionOpenInfo(RegionInfo region,
+      RegionInfo destinationRegion, List<ServerName> favoredNodes) {
+    RegionOpenInfo.Builder builder = RegionOpenInfo.newBuilder();
+    builder.setRegion(ProtobufUtil.toRegionInfo(region));
+    if (favoredNodes != null) {
+      for (ServerName server : favoredNodes) {
+        builder.addFavoredNodes(ProtobufUtil.toServerName(server));
+      }
+    }
+    if (destinationRegion != null) {
+      builder.setDestinationRegion(ProtobufUtil.toRegionInfo(destinationRegion));
+    }
     return builder.build();
   }
 

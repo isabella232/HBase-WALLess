@@ -31,7 +31,9 @@ import org.apache.hadoop.hbase.master.RegionState.State;
 import org.apache.hadoop.hbase.master.TableStateManager;
 import org.apache.hadoop.hbase.master.assignment.RegionStates.RegionStateNode;
 import org.apache.hadoop.hbase.master.procedure.MasterProcedureEnv;
-import org.apache.hadoop.hbase.master.procedure.RSProcedureDispatcher.RegionOpenOperation;
+import org.apache.hadoop.hbase.master.procedure.RSProcedureDispatcher.NormalRegionOpenOperation;
+//import org.apache.hadoop.hbase.master.procedure.RSProcedureDispatcher.RegionOpenOperation;
+import org.apache.hadoop.hbase.procedure2.Procedure;
 import org.apache.hadoop.hbase.procedure2.ProcedureMetrics;
 import org.apache.hadoop.hbase.procedure2.ProcedureStateSerializer;
 import org.apache.hadoop.hbase.procedure2.ProcedureSuspendedException;
@@ -75,7 +77,7 @@ public class AssignProcedure extends RegionTransitionProcedure {
   /**
    * Set to true when we need recalibrate -- choose a new target -- because original assign failed.
    */
-  private boolean forceNewPlan = false;
+  protected boolean forceNewPlan = false;
 
   /**
    * Gets set as desired target on move, merge, etc., when we want to go to a particular server.
@@ -105,6 +107,12 @@ public class AssignProcedure extends RegionTransitionProcedure {
   public AssignProcedure(final RegionInfo regionInfo, final ServerName destinationServer) {
     super(regionInfo);
     this.targetServer = destinationServer;
+  }
+
+  public AssignProcedure(final RegionInfo regionInfo, final boolean forceNewPlan) {
+    super(regionInfo);
+    this.forceNewPlan = forceNewPlan;
+    this.targetServer = null;
   }
 
   @Override
@@ -210,8 +218,15 @@ public class AssignProcedure extends RegionTransitionProcedure {
     LOG.info("Starting " + this + "; " + regionNode.toShortString() +
         "; forceNewPlan=" + this.forceNewPlan +
         ", retain=" + retain);
-    env.getAssignmentManager().queueAssign(regionNode);
+    queueForBalance(regionNode, env, retain);
     return true;
+  }
+
+  protected void queueForBalance(RegionStateNode regionNode, MasterProcedureEnv env,
+      boolean retain) {
+    LOG.info("Start " + this + "; " + regionNode.toShortString() + "; forceNewPlan="
+        + this.forceNewPlan + ", retain=" + retain);
+    env.getAssignmentManager().queueAssign(regionNode);
   }
 
   @Override
@@ -265,12 +280,13 @@ public class AssignProcedure extends RegionTransitionProcedure {
   }
 
   @Override
-  protected void finishTransition(final MasterProcedureEnv env, final RegionStateNode regionNode)
+  protected Procedure finishTransition(final MasterProcedureEnv env, final RegionStateNode regionNode)
       throws IOException {
     env.getAssignmentManager().markRegionAsOpened(regionNode);
     // This success may have been after we failed open a few times. Be sure to cleanup any
     // failed open references. See #incrementAndCheckMaxAttempts and where it is called.
     env.getAssignmentManager().getRegionStates().removeFromFailedOpen(regionNode.getRegionInfo());
+    return null;
   }
 
   @Override
@@ -321,7 +337,11 @@ public class AssignProcedure extends RegionTransitionProcedure {
     setTransitionState(RegionTransitionState.REGION_TRANSITION_QUEUE);
   }
 
-  private boolean incrementAndCheckMaxAttempts(final MasterProcedureEnv env,
+  @Override
+  protected void postFinish(MasterProcedureEnv env, RegionStateNode regionNode) {
+  }
+
+  protected boolean incrementAndCheckMaxAttempts(final MasterProcedureEnv env,
       final RegionStateNode regionNode) {
     final int retries = env.getAssignmentManager().getRegionStates().
         addToFailedOpen(regionNode).incrementAndGetRetries();
@@ -334,7 +354,7 @@ public class AssignProcedure extends RegionTransitionProcedure {
   @Override
   public RemoteOperation remoteCallBuild(final MasterProcedureEnv env, final ServerName serverName) {
     assert serverName.equals(getRegionState(env).getRegionLocation());
-    return new RegionOpenOperation(this, getRegionInfo(),
+    return new NormalRegionOpenOperation(this, getRegionInfo(),
         env.getAssignmentManager().getFavoredNodes(getRegionInfo()), false);
   }
 

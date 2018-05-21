@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import org.apache.hadoop.hbase.DoNotRetryIOException;
+import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.ipc.ServerNotRunningYetException;
@@ -228,7 +229,7 @@ public class RSProcedureDispatcher
   }
 
   private interface RemoteProcedureResolver {
-    void dispatchOpenRequests(MasterProcedureEnv env, List<RegionOpenOperation> operations);
+    void dispatchOpenRequests(MasterProcedureEnv env, List<? extends RegionOpenOperation> operations);
 
     void dispatchCloseRequests(MasterProcedureEnv env, List<RegionCloseOperation> operations);
 
@@ -250,11 +251,26 @@ public class RSProcedureDispatcher
     ArrayListMultimap<Class<?>, RemoteOperation> reqsByType =
       buildAndGroupRequestByType(env, serverName, operations);
 
-    List<RegionOpenOperation> openOps = fetchType(reqsByType, RegionOpenOperation.class);
+    List<NormalRegionOpenOperation> openOps = fetchType(reqsByType, NormalRegionOpenOperation.class);
     if (!openOps.isEmpty()) {
       resolver.dispatchOpenRequests(env, openOps);
     }
 
+    // TODO : We have to send this also along with Normal region open operation. But the util
+    // methods
+    // for doing this using generics is not flexbile. Need changes there.
+    /**
+     * The dispatcher extracts out regionopen operation and regionclose operation. Here by generics
+     * they extract out only those type of operations. Though ReplicaToPrimaryRegionConvertOperation
+     * is a type of RegionOpenOperation it still expects specific type. Hence for now we are
+     * collecting ReplicaToPrimaryRegionConvertOperation seperately and doing this call in a
+     * seperate RPC.
+     */
+    final List<ReplicaToPrimaryRegionConvertOperation> replicaToPrimaryOps =
+        fetchType(reqsByType, ReplicaToPrimaryRegionConvertOperation.class);
+    if (!replicaToPrimaryOps.isEmpty()) {
+      resolver.dispatchOpenRequests(env, replicaToPrimaryOps);
+    } 
     List<RegionCloseOperation> closeOps = fetchType(reqsByType, RegionCloseOperation.class);
     if (!closeOps.isEmpty()) {
       resolver.dispatchCloseRequests(env, closeOps);
@@ -308,7 +324,7 @@ public class RSProcedureDispatcher
 
     @Override
     public void dispatchOpenRequests(final MasterProcedureEnv env,
-        final List<RegionOpenOperation> operations) {
+        final List<? extends RegionOpenOperation> operations) {
       request.addOpenRegion(buildOpenRegionRequest(env, getServerName(), operations));
     }
 
@@ -342,7 +358,7 @@ public class RSProcedureDispatcher
   }
 
   private static OpenRegionRequest buildOpenRegionRequest(final MasterProcedureEnv env,
-      final ServerName serverName, final List<RegionOpenOperation> operations) {
+      final ServerName serverName, final List<? extends RegionOpenOperation> operations) {
     final OpenRegionRequest.Builder builder = OpenRegionRequest.newBuilder();
     builder.setServerStartCode(serverName.getStartcode());
     builder.setMasterSystemTime(EnvironmentEdgeManager.currentTime());
@@ -362,10 +378,10 @@ public class RSProcedureDispatcher
    * {@link AdminService#openRegion(RpcController, OpenRegionRequest, RpcCallback)} rpc.
    */
   private final class OpenRegionRemoteCall extends AbstractRSRemoteCall {
-    private final List<RegionOpenOperation> operations;
+    private final List<? extends RegionOpenOperation> operations;
 
     public OpenRegionRemoteCall(final ServerName serverName,
-        final List<RegionOpenOperation> operations) {
+        final List<? extends RegionOpenOperation> operations) {
       super(serverName);
       this.operations = operations;
     }
@@ -475,7 +491,7 @@ public class RSProcedureDispatcher
 
     @Override
     public void dispatchOpenRequests(final MasterProcedureEnv env,
-        final List<RegionOpenOperation> operations) {
+        final List<? extends RegionOpenOperation> operations) {
       submitTask(new OpenRegionRemoteCall(serverName, operations));
     }
 
@@ -535,7 +551,7 @@ public class RSProcedureDispatcher
     }
   }
 
-  public static class RegionOpenOperation extends RegionOperation {
+  public abstract static class RegionOpenOperation extends RegionOperation {
     private final List<ServerName> favoredNodes;
     private final boolean openForReplay;
     private boolean failedOpen;
@@ -556,9 +572,39 @@ public class RSProcedureDispatcher
       return failedOpen;
     }
 
+    public abstract OpenRegionRequest.RegionOpenInfo buildRegionOpenInfoRequest(
+        final MasterProcedureEnv env);
+  }
+
+  public static class NormalRegionOpenOperation extends RegionOpenOperation {
+
+    public NormalRegionOpenOperation(RemoteProcedure remoteProcedure, RegionInfo regionInfo,
+        List<ServerName> favoredNodes, boolean openForReplay) {
+      super(remoteProcedure, regionInfo, favoredNodes, openForReplay);
+      // TODO Auto-generated constructor stub
+    }
+ 
     public OpenRegionRequest.RegionOpenInfo buildRegionOpenInfoRequest(
         final MasterProcedureEnv env) {
       return RequestConverter.buildRegionOpenInfo(getRegionInfo(),
+        env.getAssignmentManager().getFavoredNodes(getRegionInfo()));
+    }
+  }
+
+  public static class ReplicaToPrimaryRegionConvertOperation extends RegionOpenOperation {
+
+    private final RegionInfo destinationRegion;
+
+    public ReplicaToPrimaryRegionConvertOperation(RemoteProcedure remoteProcedure,
+        RegionInfo regionInfo, List<ServerName> favoredNodes, boolean openForReplay,
+        RegionInfo destinationRegion) {
+      super(remoteProcedure, regionInfo, favoredNodes, openForReplay);
+      this.destinationRegion = destinationRegion;
+    }
+
+    public OpenRegionRequest.RegionOpenInfo
+        buildRegionOpenInfoRequest(final MasterProcedureEnv env) {
+      return RequestConverter.buildRegionOpenInfo(getRegionInfo(), this.destinationRegion,
         env.getAssignmentManager().getFavoredNodes(getRegionInfo()));
     }
   }

@@ -77,7 +77,7 @@ public class HRegionFileSystem {
   /** Temporary subdirectory of the region directory used for compaction output. */
   @VisibleForTesting static final String REGION_TEMP_DIR = ".tmp";
 
-  private final RegionInfo regionInfo;
+  private RegionInfo regionInfo;
   //regionInfo for interacting with FS (getting encodedName, etc)
   private final RegionInfo regionInfoForFs;
   private final Configuration conf;
@@ -1034,6 +1034,9 @@ public class HRegionFileSystem {
     return regionFs;
   }
 
+  public void convertAsPrimaryRegion() {
+    this.regionInfo = regionInfoForFs;
+  }
   /**
    * Remove the region from the table directory, archiving the region's hfiles.
    * @param conf the {@link Configuration} to use

@@ -48,7 +48,7 @@ public class RegionReplicaUtil {
   /**
    * The default replicaId for the region
    */
-  static final int DEFAULT_REPLICA_ID = 0;
+  public static final int DEFAULT_REPLICA_ID = 0;
 
   /**
    * Returns the RegionInfo for the given replicaId.
@@ -177,8 +177,8 @@ public class RegionReplicaUtil {
     List<RegionInfo> hRegionInfos = new ArrayList<>((newReplicaCount) * regions.size());
     for (int i = 0; i < regions.size(); i++) {
       if (RegionReplicaUtil.isDefaultReplica(regions.get(i))) {
-        // region level replica index starts from 0. So if oldReplicaCount was 2 then the max replicaId for
-        // the existing regions would be 1
+        // region level replica index starts from 0. So if oldReplicaCount was 2 then the max
+        // replicaId for the existing regions would be 1
         for (int j = oldReplicaCount; j < newReplicaCount; j++) {
           hRegionInfos.add(RegionReplicaUtil.getRegionInfoForReplica(regions.get(i), j));
         }

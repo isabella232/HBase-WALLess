@@ -167,7 +167,7 @@ implements ServerProcedureInterface {
             List<RegionInfo> toAssign = handleRIT(env, regionsOnCrashedServer);
             AssignmentManager am = env.getAssignmentManager();
             // CreateAssignProcedure will try to use the old location for the region deploy.
-            addChildProcedure(am.createAssignProcedures(toAssign));
+            addChildProcedure(am.createAssignProcedures(toAssign, true));
             setNextState(ServerCrashState.SERVER_CRASH_HANDLE_RIT2);
           } else {
             setNextState(ServerCrashState.SERVER_CRASH_FINISH);

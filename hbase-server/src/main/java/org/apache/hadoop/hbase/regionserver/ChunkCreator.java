@@ -158,7 +158,7 @@ public class ChunkCreator {
    * Creates and inits a chunk. The default implementation for a specific index type.
    * @return the chunk that was initialized
    */
-  Chunk getChunk(byte[] regionName, byte[] cfName, CompactingMemStore.IndexType chunkIndexType) {
+  public Chunk getChunk(byte[] regionName, byte[] cfName, CompactingMemStore.IndexType chunkIndexType) {
     return getChunk(regionName, cfName, chunkIndexType, ChunkType.DATA_CHUNK);
   }
 

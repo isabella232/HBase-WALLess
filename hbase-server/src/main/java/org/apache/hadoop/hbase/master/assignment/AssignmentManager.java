@@ -652,6 +652,48 @@ public class AssignmentManager implements ServerListener {
     return procedures;
   }
 
+  public AssignProcedure[] createAssignProcedures(final List<RegionInfo> hris,
+      final boolean assignReplicasAsPrimary) {
+    if (hris.isEmpty()) {
+      return null;
+    }
+    int index = 0;
+    AssignProcedure [] procedures = new AssignProcedure[hris.size()];
+    for (RegionInfo hri : hris) {
+      // Sort the procedures so meta and system regions are first in the returned array.
+      if (assignReplicasAsPrimary) {
+        if (RegionReplicaUtil.isDefaultReplica(hri)) {
+          Pair<RegionInfo, ServerName> nextReplicaRegion = this.getNextReplicaRegion(hri);
+          // TODO : make this change more robust. Seems fragile
+          if (nextReplicaRegion != null) {
+            LOG.info("Assigning the primary region " + hri + " to next replica "
+                + nextReplicaRegion.getFirst() + " " + nextReplicaRegion.getSecond());
+            if (nextReplicaRegion.getFirst() != null & nextReplicaRegion.getSecond() != null) {
+              procedures[index++] = createAssignReplicaAsPrimaryProcedure(hri,
+                nextReplicaRegion.getSecond(), nextReplicaRegion.getFirst());
+              continue;
+            }
+          }
+        }
+      }
+      procedures[index++] = createAssignProcedure(hri);
+    }
+    if (procedures.length > 1) {
+      // Sort the procedures so meta and system regions are first in the returned array.
+      Arrays.sort(procedures, AssignProcedure.COMPARATOR);
+    }
+    return procedures;
+  }
+
+  private AssignProcedure createAssignReplicaAsPrimaryProcedure(RegionInfo hri,
+      ServerName destinationServer, RegionInfo destinationRegion) {
+    // this will be called only for primary.. Let the caller take care of it
+    AssignProcedure proc =
+        new AssignReplicaAsPrimaryRegionProcedure(hri, destinationServer, destinationRegion);
+    proc.setOwner(getProcedureEnvironment().getRequestUser().getShortName());
+    return proc;
+  }
+
   // Make this static for the method below where we use it typing the AssignProcedure array we
   // return as result.
   private static final AssignProcedure [] ASSIGN_PROCEDURE_ARRAY_TYPE = new AssignProcedure[] {};
@@ -1471,6 +1513,10 @@ public class AssignmentManager implements ServerListener {
     return regionState != null ? regionState.getRegionInfo() : null;
   }
 
+  // TODO
+  public Pair<RegionInfo, ServerName> getNextReplicaRegion(RegionInfo primaryRegion) {
+    return this.regionStates.getNextReplicaRegion(primaryRegion);
+  }
   // ============================================================================================
   //  TODO: Region Status update
   // ============================================================================================
@@ -1913,6 +1959,21 @@ public class AssignmentManager implements ServerListener {
       regionNode.offline();
     }*/
     master.getServerManager().expireServer(serverNode.getServerName());
+  }
+
+/*  public void updateReplicaRegionHealth(List<RegionInfo> regions, boolean goodState)
+      throws IOException {
+    regionStates.updateReplicaRegionHealth(regions, goodState);
+    regionStateStore.updateReplicaRegionHealth(regions, goodState);
+  }*/
+
+  public void markRegionAsOffline(RegionInfo region) throws IOException {
+    RegionStateNode regionNode = this.regionStates.getRegionNode(region);
+    synchronized (regionNode) {
+      regionNode.offline();
+    }
+    // also mark this replica region, which is going to be opened now, as BAD health.
+    this.regionStateStore.updateReplicaRegionHealth(Arrays.asList(region), false);
   }
 
   /**
