@@ -31,6 +31,7 @@ import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.MemStoreAsyncAddHandler;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ClassSize;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
@@ -120,6 +121,12 @@ public abstract class AbstractMemStore implements MemStore {
       }
       internalAdd(copiedCell, mslabUsed, memstoreSizing);
     }
+  }
+
+  @Override
+  public void addAsync(List<Cell> cells, MemStoreAsyncAddHandler asyncHandler) {
+    List<Cell> copiedCells = active.maybeCloneWithAllocator(cells, false);
+    asyncHandler.append(this, copiedCells);
   }
 
   @Override
@@ -321,6 +328,10 @@ public abstract class AbstractMemStore implements MemStore {
     active.add(toAdd, mslabUsed, memstoreSizing);
     setOldestEditTimeToNow();
     checkActiveSize();
+  }
+
+  public void internalAdd(Cell toAdd, MemStoreSizing memstoreSizing) {
+    internalAdd(toAdd, true, memstoreSizing);
   }
 
   private void setOldestEditTimeToNow() {

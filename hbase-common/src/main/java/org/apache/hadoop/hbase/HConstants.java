@@ -1093,6 +1093,7 @@ public final class HConstants {
   public static final int NORMAL_QOS = 0;
   public static final int REPLICATION_QOS = 5;
   public static final int REPLAY_QOS = 6;
+  public static final int MEMSTORE_REPLICATION_QOS = 7;
   public static final int QOS_THRESHOLD = 10;
   public static final int ADMIN_QOS = 100;
   public static final int HIGH_QOS = 200;
@@ -1354,6 +1355,9 @@ public final class HConstants {
       "hbase-failsafe-{snapshot.name}-{restore.timestamp}";
 
   public static final String NOT_IMPLEMENTED = "Not implemented";
+
+  public static final String REGION_SERVER_MEMSTORE_REPLICATION_HANDLER_COUNT =
+      "hbase.regionserver.replication.handler.count";
 
   private HConstants() {
     // Can't be instantiated with this ctor.

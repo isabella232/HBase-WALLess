@@ -144,6 +144,11 @@ import org.apache.hadoop.hbase.regionserver.ScannerContext.LimitScope;
 import org.apache.hadoop.hbase.regionserver.ScannerContext.NextState;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionContext;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionLifeCycleTracker;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.MemStoreAsyncAddHandler;
 import org.apache.hadoop.hbase.regionserver.throttle.CompactionThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.NoLimitThroughputController;
 import org.apache.hadoop.hbase.regionserver.throttle.StoreHotnessProtector;
@@ -194,6 +199,9 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.CoprocessorServiceCall;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.RegionLoad;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.StoreSequenceId;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.SnapshotProtos.SnapshotDescription;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.CompactionDescriptor;
@@ -388,6 +396,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   // Used for testing.
   private volatile Long timeoutForWriteLock = null;
+
+  private MemstoreReplicator memstoreReplicator;
+  private volatile RegionReplicaReplicator regionReplicator;
+  private org.apache.hadoop.hbase.executor.ExecutorService executor;
 
   /**
    * @return The smallest mvcc readPoint across all the scanners in this
@@ -818,6 +830,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       this.coprocessorHost = new RegionCoprocessorHost(this, rsServices, conf);
       this.metricsRegionWrapper = new MetricsRegionWrapperImpl(this);
       this.metricsRegion = new MetricsRegion(this.metricsRegionWrapper);
+      initMemstoreReplication(rsServices);
+      this.executor = this.rsServices.getExecutorService();
     } else {
       this.metricsRegionWrapper = null;
       this.metricsRegion = null;
@@ -1077,6 +1091,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     } finally {
       status.markComplete("Done warming up.");
     }
+  }
+
+  private void initMemstoreReplication(RegionServerServices rsServices) {
+    this.memstoreReplicator = rsServices.getMemstoreReplicator();
+    int replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
+    this.regionReplicator = new RegionReplicaReplicator(this.conf, this.getRegionInfo(),
+        this.htableDescriptor.getMinRegionReplication(), replicationThreadIndex);
   }
 
   /**
@@ -3322,6 +3343,21 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       return walEdits;
     }
 
+    public MemstoreEdits buildMemstoreEdit(
+        final MiniBatchOperationInProgress<Mutation> miniBatchOp) throws IOException {
+      final MemstoreEdits memstoreEdits = new MemstoreEdits();
+      visitBatchOperations(true, nextIndexToProcess + miniBatchOp.size(), new Visitor() {
+        @Override
+        public boolean visit(int index) throws IOException {
+          // TODO skip this checking some thing like SKIP_WAL.
+          // TODO handle cells from CP.
+          addFamilyMapToMemstoreEdit(familyCellMaps[index], memstoreEdits);
+          return true;
+        }
+      });
+      return memstoreEdits;
+    }
+
     /**
      * This method completes mini-batch operations by calling postBatchMutate() CP hook (if
      * required) and completing mvcc.
@@ -3403,6 +3439,20 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         for (int i=0; i < listSize; i++) {
           Cell cell = edits.get(i);
           walEdit.add(cell);
+        }
+      }
+    }
+
+    private void addFamilyMapToMemstoreEdit(Map<byte[], List<Cell>> familyMap,
+        MemstoreEdits memstoreEdits) {
+      for (List<Cell> edits : familyMap.values()) {
+        // Optimization: 'foreach' loop is not used. See:
+        // HBASE-12023 HRegion.applyFamilyMapToMemstore creates too many iterator objects
+        assert edits instanceof RandomAccess;
+        int listSize = edits.size();
+        for (int i=0; i < listSize; i++) {
+          Cell cell = edits.get(i);
+          memstoreEdits.add(cell);
         }
       }
     }
@@ -3930,6 +3980,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private void doMiniBatchMutate(BatchOperation<?> batchOp) throws IOException {
     boolean success = false;
     WALEdit walEdit = null;
+    MemstoreEdits memstoreEdit = null;
     WriteEntry writeEntry = null;
     boolean locked = false;
     // We try to set up a batch in the range [batchOp.nextIndexToProcess,lastIndexExclusive)
@@ -3959,6 +4010,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
       // STEP 3. Build WAL edit
       List<Pair<NonceKey, WALEdit>> walEdits = batchOp.buildWALEdits(miniBatchOp);
+      // Build MemstoreEdit to be replicated to replica regions.
+      memstoreEdit = batchOp.buildMemstoreEdit(miniBatchOp);
 
       // STEP 4. Append the WALEdits to WAL and sync.
       for(Iterator<Pair<NonceKey, WALEdit>> it = walEdits.iterator(); it.hasNext();) {
@@ -3978,6 +4031,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         }
       }
 
+      // Replicate memstoreEdit to replica regions
+      // TODO this logic should be part of a WAL impl and fully plugged in with out any core changes
+      // as here. It is just a PoC
+      if (writeEntry == null) {
+        writeEntry = mvcc.begin();
+      }
+      if (!memstoreEdit.isEmpty() && !this.getRegionInfo().getTable().isSystemTable()) {
+        replicateCurrentBatch(memstoreEdit, 1, writeEntry.getWriteNumber());
+      }
+      
       // STEP 5. Write back to memStore
       // NOTE: writeEntry can be null here
       writeEntry = batchOp.writeMiniBatchOperationsToMemStore(miniBatchOp, writeEntry);
@@ -4009,6 +4072,175 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
       batchOp.nextIndexToProcess = finalLastIndexExclusive;
     }
+  }
+
+  private ReplicateMemstoreResponse replicateCurrentBatch(MemstoreEdits memstoreEdits,
+      int replicasOffered, long seqId) throws IOException {
+    MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
+        this.getRegionInfo().getEncodedNameAsBytes(), replicasOffered);
+    // replicasOffered is +1ed considering this region write will be success now.
+    memstoreReplicationKey.setSequenceId(seqId);
+    try {
+      // ensure that we do things in order (probably easier for flush special entry? We need
+      // that to be done.)
+      ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
+          memstoreEdits, regionReplicator);
+      checkIfMinWriteReplicSatisfied(response);
+      // TODO : need to handle all exceptions - make things synchronous in terms of
+      // replication to all the replicas. End the mvcc in case of exception
+      return response;
+    } catch (IOException e) {
+      //updateLocationOnException(null);
+      // TODO no need to catch. Just added with rethrow as not sure whether
+      // updateLocationOnException is still needed. I think no. Also to add a Debug level log at
+      // least? Or doing in upper layers?
+      throw e;
+    }
+  }
+
+  private void checkIfMinWriteReplicSatisfied(ReplicateMemstoreResponse response)
+      throws IOException {
+    if (response.getFailedReplicasCount() > 0) {
+      //updateLocationOnException(response.getFailedReplicasList());
+      List<Integer> failedReplicas = response.getFailedReplicasList();
+      List<Integer> newFailedReplicas = this.regionReplicator
+          .processBadReplicas(response.getFailedReplicasList());
+      // only primary should do this
+      if (RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
+        if (newFailedReplicas.size() > 0) {
+          // mark the replicas as bad in META
+          if (markBadReplicasInMETA(newFailedReplicas)) {
+            this.regionReplicator.onReplicasBadInMeta(newFailedReplicas);
+          }
+        }
+        // TODO ReplicasCommitted include this region write count also (?)
+        // TODO we need to rollback writes from the successful replicas.
+        // TODO Throwing these IOE will make client to rety na?
+        if (response.getReplicasCommitted() < this.getTableDescriptor().getMinRegionReplication()) {
+          throw new IOException("Minimum write replica not satisfied "
+              + this.getTableDescriptor().getMinRegionReplication());
+        }
+        if (!this.regionReplicator.isReplicasBadInMeta(failedReplicas)) {
+          throw new IOException();
+        }
+      }
+    }
+  }
+
+  private boolean markBadReplicasInMETA(List<Integer> failedReplicas) {
+    List<RegionInfo> failedReplicaRegionInfos = new ArrayList<>(failedReplicas.size());
+    for (int replicaId : failedReplicas) {
+      failedReplicaRegionInfos
+          .add(RegionReplicaUtil.getRegionInfoForReplica(this.getRegionInfo(), replicaId));
+    }
+    LOG.info("Marking " + failedReplicaRegionInfos + " regions as BAD health in META");
+    // TODO call the RSS API
+    /*return this.getRegionServerServices().reportReplicaRegionHealthChange(failedReplicaRegionInfos,
+        false);*/
+    return true;
+  }
+
+  public ReplicateMemstoreResponse replicateMemstore(ReplicateMemstoreRequest request,
+      List<Cell> allCells) throws IOException {
+    ReplicateMemstoreResponse response;
+    try {
+      response = this.memstoreReplicator.replicate(request, allCells, this.regionReplicator);
+      if (response != null) {
+        checkIfMinWriteReplicSatisfied(response);
+      }
+    } catch (IOException e) {
+      // TODO no need to catch. Just added with rethrow as not sure whether
+      // updateLocationOnException is still needed. I think no. Also to add a Debug level log at
+      // least? Or doing in upper layers?
+      throw e;
+    }
+    // Separate the Cells in to a family specific Map so as to pass them to appropriate Memstores
+    // when reached HRegion.
+    // TODO in trunk, we have to use the shaded google class.
+    // Important change. Without this things just don't work. MultiMaps needs to be revisited
+    NavigableMap<byte[], List<Cell>> familyMap = new TreeMap<byte[], List<Cell>>(
+        Bytes.BYTES_COMPARATOR);
+    long[] seqIds = splitCells(request, allCells, familyMap);
+    doBatchOpForMemstoreReplication(familyMap, seqIds, 0);
+    return response;
+  }
+
+  // TODO what doing with replicasOffered
+  private void doBatchOpForMemstoreReplication(NavigableMap<byte[], List<Cell>> familyMap, long[] seqIds,
+      int replicasOffered) throws IOException {
+    startRegionOperation(Operation.REPLAY_BATCH_MUTATE);
+    try {
+      // TODO We will be in replay mode. This will never happen. Do we need to check this for
+      // replication also?
+      // checkReadOnly();
+      // Should we call this or just leave it?? I think not to call it because primary is yet to
+      // update its size?? TODO - check for now commenting
+      // checkResources();
+      /*
+       * if (throwError) { throw new IOException("Purposefully throwing error"); }
+       */
+      // We don't need row locking here at all.. This method is executed at the replica regions. The
+      // primary or other replica regions call RPC with a batch of Mutaions each containing Cells.
+      // We wont be calling other methods which required write row locks directly on this replica
+      // regions.(Like checkAndPut, increment etc).. Only plain Cell write op will come to here. We
+      // don't really worry abt what kind of Mutation it is.
+      lock(this.updatesLock.readLock(), familyMap.size());
+      WriteEntry[] writeEntries = new WriteEntry[seqIds.length];
+      for (int i = 0; i < seqIds.length; i++) {
+        writeEntries[i] = this.mvcc.begin(seqIds[i]);
+      }
+      MemStoreAsyncAddHandler handler = new MemStoreAsyncAddHandler(this.mvcc, writeEntries);
+      try {
+        for (Map.Entry<byte[], List<Cell>> e : familyMap.entrySet()) {
+          HStore store = this.getStore(e.getKey());
+          // TODO handle upsert
+          store.addAsync(e.getValue(), handler);
+        }
+      } finally {
+        this.updatesLock.readLock().unlock();
+      }
+      this.executor.submit(handler);
+    } finally {
+      closeRegionOperation(Operation.REPLAY_BATCH_MUTATE);
+      // TODO metrics should be updated but need a new one.. Should not directly affect the normal
+      // put/delete metrics.
+    }
+  }
+
+  private long[] splitCells(ReplicateMemstoreRequest request, List<Cell> cells,
+      NavigableMap<byte[], List<Cell>> familyMap) throws IOException {
+    List<MemstoreReplicationEntry> entries = request.getEntryList();
+    long[] seqIds = new long[entries.size()];
+    int cellCounter = 0;
+    int entryCounter = 0;
+    for (MemstoreReplicationEntry entry : entries) {
+      seqIds[entryCounter++] = entry.getSequenceId();
+      int count = entry.getAssociatedCellCount();
+      for (int i = 0; i < count; i++) {
+        Cell cell = cells.get(cellCounter);
+        cellCounter++;
+        if (cell == null) {
+          throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
+        }
+        if (CellUtil.matchingFamily(cell, WALEdit.METAFAMILY)) {
+          // TODO
+          // A Marker cell should come as single entry in Req with no other Mutations. I think this
+          // happens this way only. Just confirm
+          // handleMetaMarkerCell(cell, region, replicasOffered);
+        } else {
+          byte[] fam = CellUtil.cloneFamily(cell);
+          List<Cell> list = familyMap.get(fam);
+          if (list == null) {
+            list = new ArrayList<Cell>();
+          }
+          list.add(cell);
+          familyMap.put(fam, list);
+        }
+        CellUtil.setSequenceId(cell, entry.getSequenceId());
+      }
+    }
+    Arrays.sort(seqIds);
+    return seqIds;
   }
 
   /**

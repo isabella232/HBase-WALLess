@@ -44,9 +44,9 @@ import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
 import org.apache.hadoop.hbase.exceptions.TimeoutIOException;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
-import org.apache.hadoop.hbase.protobuf.ReplicationProtbufUtil;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.protobuf.MemstoreReplicationProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
@@ -349,7 +349,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         if (entries != null && !entries.isEmpty()) {
           MemstoreReplicationEntry[] entriesArray = new MemstoreReplicationEntry[entries.size()];
           entriesArray = entries.toArray(entriesArray);
-          Pair<ReplicateMemstoreRequest, List<Cell>> pair = ReplicationProtbufUtil
+          Pair<ReplicateMemstoreRequest, List<Cell>> pair = MemstoreReplicationProtobufUtil
               .buildReplicateMemstoreEntryRequest(entriesArray, initialEncodedRegionName, pipeline);
           this.request = new RequestEntryHolder(pair.getFirst(), pair.getSecond(), null);
         }
@@ -366,7 +366,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         initialEncodedRegionName)) {
         skip = true;
       }
-      controller.setCellScanner(ReplicationProtbufUtil.getCellScannerOnCells(request.getCells()));
+      controller.setCellScanner(
+          MemstoreReplicationProtobufUtil.getCellScannerOnCells(request.getCells()));
       if (primaryRegion) {
         // already request is created
         return stub.replicateMemstore(controller, request.getRequest());

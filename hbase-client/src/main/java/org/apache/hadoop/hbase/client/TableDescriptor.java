@@ -160,6 +160,11 @@ public interface TableDescriptor {
   int getRegionReplication();
 
   /**
+   * @return returns the minimum number of region replicas for the writes to be successful.
+   */
+  int getMinRegionReplication();
+
+  /**
    * This gets the class associated with the region split policy which
    * determines when a region split should occur. The class used by default is
    * defined in org.apache.hadoop.hbase.regionserver.RegionSplitPolicy

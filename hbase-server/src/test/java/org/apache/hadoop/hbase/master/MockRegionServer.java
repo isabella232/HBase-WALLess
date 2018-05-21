@@ -64,6 +64,7 @@ import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.SecureBulkLoadManager;
 import org.apache.hadoop.hbase.regionserver.ServerNonceManager;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionRequester;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.wal.WAL;
@@ -702,6 +703,12 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
   @Override
   public ReplicateMemstoreResponse replicateMemstore(RpcController controller,
       ReplicateMemstoreRequest request) throws ServiceException {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public MemstoreReplicator getMemstoreReplicator() {
     // TODO Auto-generated method stub
     return null;
   }

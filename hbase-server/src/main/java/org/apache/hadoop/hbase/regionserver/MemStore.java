@@ -23,6 +23,7 @@ import java.util.List;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.MemStoreAsyncAddHandler;
 
 /**
  * The MemStore holds in-memory modifications to the Store. Modifications are {@link Cell}s.
@@ -80,6 +81,8 @@ public interface MemStore {
    *        This will include both data size and heap overhead delta.
    */
   void add(List<Cell> cells, MemStoreSizing memstoreSizing);
+
+  void addAsync(List<Cell> cells, MemStoreAsyncAddHandler asyncHandler);
 
   /**
    * @return Oldest timestamp of all the Cells in the MemStore

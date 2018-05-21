@@ -142,6 +142,18 @@ public class MultiVersionConcurrencyControl {
     }
   }
 
+  public WriteEntry begin(long writeNumber) {
+    synchronized (writeQueue) {
+      if (writeNumber <= writePoint.get()) {
+        throw new IllegalStateException();
+      }
+      writePoint.set(writeNumber);
+      WriteEntry e = new WriteEntry(writeNumber);
+      writeQueue.add(e);
+      return e;
+    }
+  }
+
   /**
    * Wait until the read point catches up to the write point; i.e. wait on all outstanding mvccs
    * to complete.

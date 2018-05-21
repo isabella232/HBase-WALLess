@@ -129,6 +129,8 @@ import org.apache.hadoop.hbase.regionserver.handler.CloseMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RSProcedureHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RegionReplicaFlushHandler;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.FlushThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.replication.ReplicationUtils;
@@ -522,6 +524,9 @@ public class HRegionServer extends HasThread implements
    * purpose is as a Replication-stream sink; see HBASE-18846 for more.
    */
   private final boolean masterless;
+
+  protected MemstoreReplicator memstoreReplicator;
+
   static final String MASTERLESS_CONFIG_NAME = "hbase.masterless";
 
   /**
@@ -635,6 +640,7 @@ public class HRegionServer extends HasThread implements
       // class HRS. TODO.
       this.choreService = new ChoreService(getName(), true);
       this.executorService = new ExecutorService(getName());
+      this.memstoreReplicator = new SimpleMemstoreReplicator(conf, this);
       putUpWebUI();
     } catch (Throwable t) {
       // Make sure we log the exception. HRegionServer is often started via reflection and the
@@ -1920,6 +1926,8 @@ public class HRegionServer extends HasThread implements
     }
     this.executorService.startExecutorService(ExecutorType.RS_REFRESH_PEER,
       conf.getInt("hbase.regionserver.executor.refresh.peer.threads", 2));
+    this.executorService.startExecutorService(ExecutorType.RS_REGION_REPLICA_MEMSTORE_ASYNC_ADD,
+        conf.getInt("hbase.regionserver.memstore.replication.async.add.threads", 10));
 
     Threads.setDaemonThreadRunning(this.walRoller.getThread(), getName() + ".logRoller",
     uncaughtExceptionHandler);
@@ -3785,5 +3793,10 @@ public class HRegionServer extends HasThread implements
 
   public boolean isShutDown() {
     return shutDown;
+  }
+
+  @Override
+  public MemstoreReplicator getMemstoreReplicator() {
+    return this.memstoreReplicator;
   }
 }

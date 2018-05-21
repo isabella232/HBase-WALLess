@@ -35,11 +35,15 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import org.apache.commons.lang3.mutable.MutableObject;
@@ -57,6 +61,7 @@ import org.apache.hadoop.hbase.DoNotRetryIOException;
 import org.apache.hadoop.hbase.DroppedSnapshotException;
 import org.apache.hadoop.hbase.HBaseIOException;
 import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.MultiActionResultTooLarge;
 import org.apache.hadoop.hbase.NotServingRegionException;
 import org.apache.hadoop.hbase.PrivateCellUtil;
@@ -127,6 +132,7 @@ import org.apache.hadoop.hbase.security.access.Permission;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.DNS;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+import org.apache.hadoop.hbase.util.HasThread;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.util.ServerRegionReplicaUtil;
 import org.apache.hadoop.hbase.util.Strings;
@@ -229,6 +235,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.NameInt64Pa
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier.RegionSpecifierType;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MapReduceProtos.ScanMetrics;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
@@ -3605,9 +3612,40 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
   }
 
   @Override
+  @QosPriority(priority=HConstants.MEMSTORE_REPLICATION_QOS)
   public ReplicateMemstoreResponse replicateMemstore(RpcController controller,
       ReplicateMemstoreRequest request) throws ServiceException {
-    // TODO Auto-generated method stub
-    return null;
+    // Probably pass this request also so that it can be used for the next replica.
+    // But do not forgot to change replicaOfferd and replicaCommitted
+    CellScanner cells = ((HBaseRpcController) controller).cellScanner();
+    try {
+      checkOpen();
+      // TODO No need to decode cells here for the next replica replication usages. Again we will
+      // end up encoding at the RPC server. We should have a Special controller and Call which carry
+      // the payload buf directly and we should be able to use that directy here
+      List<Cell> allCells = new ArrayList<>();
+      try {
+        while (cells.advance()) {
+          allCells.add(cells.current());
+        }
+      } catch (Exception e) {
+        throw new ServiceException(e);
+      }
+      ByteString regionName = request.getEncodedRegionName();
+      //int replicasOffered = request.getReplicasOffered();
+      HRegion region = (HRegion) regionServer.getRegionByEncodedName(regionName.toStringUtf8());
+      assert !(ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo()));
+      ReplicateMemstoreResponse response = null;
+      try {
+        response = region.replicateMemstore(request, allCells);
+      } catch (IOException e1) {
+        LOG.error("Exception in getting the memstore response from the pipeline " + e1 + " "
+            + region.getRegionInfo());
+        throw new ServiceException(e1);
+      }
+      return response;
+    } catch (IOException ie) {
+      throw new ServiceException(ie);
+    }
   }
 }

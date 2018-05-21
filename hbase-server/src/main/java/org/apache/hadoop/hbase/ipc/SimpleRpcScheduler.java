@@ -40,6 +40,7 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
   private final RpcExecutor callExecutor;
   private final RpcExecutor priorityExecutor;
   private final RpcExecutor replicationExecutor;
+  private final RpcExecutor memstoreReplicationExecutor;
 
   /** What level a high priority call is at. */
   private final int highPriorityLevel;
@@ -59,6 +60,7 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
       int handlerCount,
       int priorityHandlerCount,
       int replicationHandlerCount,
+      int memstoreReplicationHandlerCount,
       PriorityFunction priority,
       Abortable server,
       int highPriorityLevel) {
@@ -97,6 +99,11 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
     this.replicationExecutor = replicationHandlerCount > 0 ? new FastPathBalancedQueueRpcExecutor(
         "replication.FPBQ", replicationHandlerCount, RpcExecutor.CALL_QUEUE_TYPE_FIFO_CONF_VALUE,
         maxQueueLength, priority, conf, abortable) : null;
+    this.memstoreReplicationExecutor = memstoreReplicationHandlerCount > 0
+        ? new FastPathBalancedQueueRpcExecutor("memstore.replication.FPBQ",
+            memstoreReplicationHandlerCount, RpcExecutor.CALL_QUEUE_TYPE_FIFO_CONF_VALUE,
+            maxQueueLength, priority, conf, abortable)
+        : null;
   }
 
 
@@ -107,7 +114,7 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
 	      int replicationHandlerCount,
 	      PriorityFunction priority,
 	      int highPriorityLevel) {
-	  this(conf, handlerCount, priorityHandlerCount, replicationHandlerCount, priority,
+	  this(conf, handlerCount, priorityHandlerCount, replicationHandlerCount, handlerCount, priority,
 	    null, highPriorityLevel);
   }
 
@@ -124,7 +131,9 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
     if (replicationExecutor != null) {
       replicationExecutor.resizeQueues(conf);
     }
-
+    if (memstoreReplicationExecutor != null) {
+      memstoreReplicationExecutor.resizeQueues(conf);
+    }
     String callQueueType = conf.get(RpcExecutor.CALL_QUEUE_TYPE_CONF_KEY,
       RpcExecutor.CALL_QUEUE_TYPE_CONF_DEFAULT);
     if (RpcExecutor.isCodelQueueType(callQueueType)) {
@@ -142,6 +151,7 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
     callExecutor.start(port);
     if (priorityExecutor != null) priorityExecutor.start(port);
     if (replicationExecutor != null) replicationExecutor.start(port);
+    if (memstoreReplicationExecutor != null) memstoreReplicationExecutor.start(port);
   }
 
   @Override
@@ -149,6 +159,7 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
     callExecutor.stop();
     if (priorityExecutor != null) priorityExecutor.stop();
     if (replicationExecutor != null) replicationExecutor.stop();
+    if (memstoreReplicationExecutor != null) memstoreReplicationExecutor.stop();
   }
 
   @Override
@@ -161,6 +172,9 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
     }
     if (priorityExecutor != null && level > highPriorityLevel) {
       return priorityExecutor.dispatch(callTask);
+    } else if (memstoreReplicationExecutor != null
+        && level == HConstants.MEMSTORE_REPLICATION_QOS) {
+      return memstoreReplicationExecutor.dispatch(callTask);
     } else if (replicationExecutor != null && level == HConstants.REPLICATION_QOS) {
       return replicationExecutor.dispatch(callTask);
     } else {

@@ -88,6 +88,7 @@ import org.apache.hadoop.hbase.regionserver.compactions.CompactionProgress;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionRequestImpl;
 import org.apache.hadoop.hbase.regionserver.compactions.DefaultCompactor;
 import org.apache.hadoop.hbase.regionserver.compactions.OffPeakHours;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.MemStoreAsyncAddHandler;
 import org.apache.hadoop.hbase.regionserver.querymatcher.ScanQueryMatcher;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.regionserver.wal.WALUtil;
@@ -751,6 +752,15 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
     } finally {
       lock.readLock().unlock();
       currentParallelPutCount.decrementAndGet();
+    }
+  }
+
+  public void addAsync(List<Cell> cells, MemStoreAsyncAddHandler asyncHandler) {
+    lock.readLock().lock();
+    try {
+      memstore.addAsync(cells, asyncHandler);
+    } finally {
+      lock.readLock().unlock();
     }
   }
 

@@ -51,6 +51,8 @@ import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.SecureBulkLoadManager;
 import org.apache.hadoop.hbase.regionserver.ServerNonceManager;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionRequester;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.wal.WAL;
@@ -352,5 +354,10 @@ public class MockRegionServerServices implements RegionServerServices {
   @Override
   public boolean isClusterUp() {
     return true;
+  }
+
+  @Override
+  public MemstoreReplicator getMemstoreReplicator() {
+    return new SimpleMemstoreReplicator(this.conf, this);
   }
 }

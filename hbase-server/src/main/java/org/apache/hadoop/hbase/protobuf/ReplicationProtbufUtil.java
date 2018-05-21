@@ -38,15 +38,11 @@ import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.hadoop.hbase.io.SizedCellScanner;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.HBaseRpcControllerImpl;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
 import org.apache.hadoop.hbase.wal.WALEdit;
 import org.apache.hbase.thirdparty.com.google.protobuf.UnsafeByteOperations;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.AdminProtos.AdminService;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.wal.WAL.Entry;
@@ -174,37 +170,6 @@ public class ReplicationProtbufUtil {
       getCellScanner(allCells, size));
   }
 
-  public static Pair<MemstoreReplicaProtos.ReplicateMemstoreRequest, List<Cell>>
-      buildReplicateMemstoreEntryRequest(final MemstoreReplicationEntry[] entries,
-          byte[] encodedRegionName, List<Integer> pipeline) {
-    // Accumulate all the Cells seen in here.
-    List<Cell> allCells = new ArrayList<>();
-    MemstoreReplicaProtos.ReplicateMemstoreRequest.Builder reqBuilder =
-        MemstoreReplicaProtos.ReplicateMemstoreRequest.newBuilder();
-    int replicasOffsered = 0;
-    for (MemstoreReplicationEntry entry : entries) {
-      MemstoreReplicationKey key = entry.getMemstoreReplicationKey();
-      MemstoreEdits edit = entry.getMemstoreEdits();
-      List<Cell> cells = edit.getCells();
-      // Collect up the cells
-      allCells.addAll(cells);
-      MemstoreReplicaProtos.MemstoreReplicationEntry.Builder entryBuilder =
-          MemstoreReplicaProtos.MemstoreReplicationEntry.newBuilder();
-      entryBuilder.setAssociatedCellCount(cells.size());
-      // TODO : Better to write max seqId here itself
-      entryBuilder.setSequenceId(key.getSequenceId());
-      reqBuilder.addEntry(entryBuilder.build());
-      replicasOffsered = key.getReplicasOffered();// Its ok to overwrite. Write comments.. Handle.
-                                                  // TODO
-    }
-    reqBuilder.setEncodedRegionName(UnsafeByteOperations.unsafeWrap(encodedRegionName));
-    reqBuilder.setReplicasOffered(replicasOffsered);
-    for (int replicaId : pipeline) {
-      reqBuilder.addReplicas(replicaId);
-    }
-    return new Pair<>(reqBuilder.build(), allCells);
-  }
-
   /**
    * @param cells
    * @return <code>cells</code> packaged as a CellScanner
@@ -238,28 +203,6 @@ public class ReplicationProtbufUtil {
       @Override
       public long heapSize() {
         return size;
-      }
-    };
-  }
-
-  public static CellScanner getCellScannerOnCells(final List<Cell> cells) {
-    return new CellScanner() {
-      private final Iterator<? extends Cell> entries = cells.iterator();
-      private Cell currentCell;
-
-      @Override
-      public Cell current() {
-        return this.currentCell;
-      }
-
-      @Override
-      public boolean advance() {
-        if (!this.entries.hasNext()) {
-          this.currentCell = null;
-          return false;
-        }
-        this.currentCell = this.entries.next();
-        return true;
       }
     };
   }

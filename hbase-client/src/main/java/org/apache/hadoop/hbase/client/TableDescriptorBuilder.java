@@ -138,6 +138,14 @@ public class TableDescriptorBuilder {
   private static final Bytes REGION_MEMSTORE_REPLICATION_KEY
           = new Bytes(Bytes.toBytes(REGION_MEMSTORE_REPLICATION));
 
+  /**
+   * The number of region replicas for the table.
+   */
+  @InterfaceAudience.Private
+  public static final String MIN_REGION_WRITE_REPLICATION = "MIN_REGION_WRITE_REPLICATION";
+  private static final Bytes MIN_REGION_WRITE_REPLICATION_KEY
+          = new Bytes(Bytes.toBytes(MIN_REGION_WRITE_REPLICATION));
+
   private static final Bytes REGION_REPLICA_WAIT_FOR_PRIMARY_FLUSH_CONF_KEY
           = new Bytes(Bytes.toBytes(RegionReplicaUtil.REGION_REPLICA_WAIT_FOR_PRIMARY_FLUSH_CONF_KEY));
   /**
@@ -188,6 +196,7 @@ public class TableDescriptorBuilder {
   public static final long DEFAULT_MEMSTORE_FLUSH_SIZE = 1024 * 1024 * 128L;
 
   public static final int DEFAULT_REGION_REPLICATION = 1;
+  public static final int DEFAULT_MIN_REGION_WRITE_REPLICATION = 1;
 
   public static final boolean DEFAULT_REGION_MEMSTORE_REPLICATION = true;
 
@@ -1400,6 +1409,16 @@ public class TableDescriptorBuilder {
     @Override
     public int getColumnFamilyCount() {
       return families.size();
+    }
+
+    @Override
+    public int getMinRegionReplication() {
+      return getOrDefault(MIN_REGION_WRITE_REPLICATION_KEY, Integer::valueOf,
+          DEFAULT_MIN_REGION_WRITE_REPLICATION);
+    }
+
+    public ModifyableTableDescriptor setMinRegionReplication(int minReplicas) {
+      return setValue(MIN_REGION_WRITE_REPLICATION_KEY, Integer.toString(minReplicas));
     }
   }
 

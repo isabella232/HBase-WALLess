@@ -281,7 +281,9 @@ public enum EventType {
    *
    * RS_REFRESH_PEER
    */
-  RS_REFRESH_PEER (84, ExecutorType.RS_REFRESH_PEER);
+  RS_REFRESH_PEER (84, ExecutorType.RS_REFRESH_PEER),
+
+  RS_REGION_REPLICA_MEMSTORE_ASYNC_ADD (85, ExecutorType.RS_REFRESH_PEER);
 
   private final int code;
   private final ExecutorType executor;
