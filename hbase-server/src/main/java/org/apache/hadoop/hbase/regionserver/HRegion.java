@@ -65,6 +65,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -400,6 +401,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private MemstoreReplicator memstoreReplicator;
   private volatile RegionReplicaReplicator regionReplicator;
   private org.apache.hadoop.hbase.executor.ExecutorService executor;
+  // Used in Replica regions where we add Cells to CSLM in an async way. Once the cells are copied
+  // to MSLAB, we consider it as success addition and reply back to caller. The actual addition to
+  // CSLM happen later. But we will track the max seqId. When client try to read from this replica
+  // and client do not pass any read point, we will assume the read point to be this value and will
+  // wait unless the MVCC readpoint reaches this 
+  private AtomicLong currentMaxSeqId = new AtomicLong(-1l);
 
   /**
    * @return The smallest mvcc readPoint across all the scanners in this
@@ -4161,13 +4168,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     NavigableMap<byte[], List<Cell>> familyMap = new TreeMap<byte[], List<Cell>>(
         Bytes.BYTES_COMPARATOR);
     long[] seqIds = splitCells(request, allCells, familyMap);
-    doBatchOpForMemstoreReplication(familyMap, seqIds, 0);
+    doBatchOpForMemstoreReplication(familyMap, seqIds);
     return response;
   }
 
-  // TODO what doing with replicasOffered
-  private void doBatchOpForMemstoreReplication(NavigableMap<byte[], List<Cell>> familyMap, long[] seqIds,
-      int replicasOffered) throws IOException {
+  private void doBatchOpForMemstoreReplication(NavigableMap<byte[], List<Cell>> familyMap,
+      long[] seqIds) throws IOException {
     startRegionOperation(Operation.REPLAY_BATCH_MUTATE);
     try {
       // TODO We will be in replay mode. This will never happen. Do we need to check this for
@@ -4196,6 +4202,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           // TODO handle upsert
           store.addAsync(e.getValue(), handler);
         }
+        // Update the currentMaxSeqId
+        long maxSeqId = seqIds[seqIds.length -1];
+        this.currentMaxSeqId.getAndAccumulate(maxSeqId, (x, y) -> Math.max(x, y));
       } finally {
         this.updatesLock.readLock().unlock();
       }
