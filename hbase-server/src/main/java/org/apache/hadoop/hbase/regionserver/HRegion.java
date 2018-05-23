@@ -408,6 +408,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   // wait unless the MVCC readpoint reaches this 
   private AtomicLong currentMaxSeqId = new AtomicLong(-1l);
 
+  @VisibleForTesting
+  private volatile boolean throwError;
+  
+  @VisibleForTesting
+  private volatile boolean throwErrorOnScan;
+
   /**
    * @return The smallest mvcc readPoint across all the scanners in this
    * region. Writes older than this readPoint, are included in every
@@ -3933,6 +3939,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return batchMutate(new ReplayBatchOperation(this, mutations, replaySeqId));
   }
 
+  @VisibleForTesting
+  public void throwErrorOnMemstoreReplay (boolean throwError) {
+    this.throwError = throwError;
+  }
+
+  @VisibleForTesting
+  public void throwErrorOnScan (boolean throwError) {
+    this.throwErrorOnScan = throwError;
+  }
+
   /**
    * Perform a batch of mutations.
    *
@@ -4160,6 +4176,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // updateLocationOnException is still needed. I think no. Also to add a Debug level log at
       // least? Or doing in upper layers?
       throw e;
+    }
+    if(throwError) {
+      throw new IOException("Purposefully throwing error");
     }
     // Separate the Cells in to a family specific Map so as to pass them to appropriate Memstores
     // when reached HRegion.

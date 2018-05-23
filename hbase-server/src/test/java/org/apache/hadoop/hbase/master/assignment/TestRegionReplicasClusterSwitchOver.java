@@ -58,12 +58,12 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 @Category({ RegionServerTests.class, LargeTests.class })
-public class TestRegionReplicasAreDistributed1 {
+public class TestRegionReplicasClusterSwitchOver {
 
   @ClassRule
   public static final HBaseClassTestRule CLASS_RULE =
-      HBaseClassTestRule.forClass(TestRegionReplicasAreDistributed1.class);
-  private static final Log LOG = LogFactory.getLog(TestRegionReplicasAreDistributed1.class);
+      HBaseClassTestRule.forClass(TestRegionReplicasClusterSwitchOver.class);
+  private static final Log LOG = LogFactory.getLog(TestRegionReplicasClusterSwitchOver.class);
 
   private static final int NB_SERVERS = 4;
   private static Table table;
@@ -78,7 +78,7 @@ public class TestRegionReplicasAreDistributed1 {
     HTU.startMiniCluster(NB_SERVERS);
     Thread.sleep(3000);
     final TableName tableName =
-        TableName.valueOf(TestRegionReplicasAreDistributed1.class.getSimpleName());
+        TableName.valueOf(TestRegionReplicasClusterSwitchOver.class.getSimpleName());
 
     // Create table then get the single region for our new table.
     createTableDirectlyFromHTD(tableName);

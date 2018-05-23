@@ -144,6 +144,12 @@ public class MultiVersionConcurrencyControl {
 
   public WriteEntry begin(long writeNumber) {
     synchronized (writeQueue) {
+      // TODO : This needs a revisit. LEts discuss and fix it.
+      // If there is a retry of the current RPC, say the replication from replica 1 to 2
+      // because when adding to replica 1's chunk there was failure, this IllelgalStateException
+      // is bound to happen because we have already set this write point. I think it is better
+      // to set the write point as part of memstore complet or advance (in other words after
+      // the operation is successful).
       if (writeNumber <= writePoint.get()) {
         throw new IllegalStateException();
       }

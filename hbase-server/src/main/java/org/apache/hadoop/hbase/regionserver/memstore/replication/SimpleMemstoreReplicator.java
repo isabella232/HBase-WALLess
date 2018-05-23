@@ -216,9 +216,18 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
             LOG.debug("Replicating from region " + replicator.getRegionLocation(curRegionReplicaId)
                 + "  to the next replica " + nextRegionLocation);
           }
+          // We were passing 'null' instead of the start key previously. In the latest code in
+          // ConnectionImpl this was throwing NPE and not only that when there is an error
+          // the location in the client cache is updated for which the start key is needed.
+          // If this is not there we were getting the following msg (this was happening in previous
+          // code also)
+          //'Coding error, see method javadoc. row=null, tableName=tableName)';
+          // Since we know the region and its start key it is ok to pass it here
+          // 
           RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
               rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
-              nextRegionLocation.getRegionInfo(), null, request, replicationEntries, pipeline);
+              nextRegionLocation.getRegionInfo(), nextRegionLocation.getRegion().getStartKey(),
+              request, replicationEntries, pipeline);
           try {
             ReplicateMemstoreResponse response =
                 rpcRetryingCallerFactory.<ReplicateMemstoreResponse> newCaller()
