@@ -147,8 +147,14 @@ public class RegionStateStore {
       // Should never get called for def deplica
       if (!RegionReplicaUtil.isDefaultReplica(region)) {
         if (put == null) put = new Put(MetaTableAccessor.getMetaKeyForRegion(region));
-        put.addImmutable(HConstants.CATALOG_FAMILY, getReplicaHealthColumn(replicaId),
-            Bytes.toBytes(good));
+        put.add(CellBuilderFactory.create(CellBuilderType.SHALLOW_COPY)
+          .setRow(put.getRow())
+          .setFamily(HConstants.CATALOG_FAMILY)
+          .setQualifier(getReplicaHealthColumn(replicaId))
+          .setTimestamp(put.getTimestamp())
+          .setType(Cell.Type.Put)
+          .setValue(Bytes.toBytes(good))
+          .build());
       }
     }
     if (put == null) throw new IOException("No replica regions been passed");

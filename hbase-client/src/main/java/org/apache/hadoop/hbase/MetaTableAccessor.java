@@ -1009,11 +1009,36 @@ public class MetaTableAccessor {
    * @return HRegionLocation parsed from the given meta row Result for the given replicaId
    */
   private static HRegionLocation getRegionLocation(final Result r, final RegionInfo regionInfo,
-                                                   final int replicaId) {
+      final int replicaId) {
     ServerName serverName = getServerName(r, replicaId);
     long seqNum = getSeqNumDuringOpen(r, replicaId);
-    RegionInfo replicaInfo = RegionReplicaUtil.getRegionInfoForReplica(regionInfo, replicaId);
-    return new HRegionLocation(replicaInfo, serverName, seqNum);
+    if (getHealthStatus(r, replicaId)) {
+      RegionInfo replicaInfo = RegionReplicaUtil.getRegionInfoForReplica(regionInfo, replicaId);
+      return new HRegionLocation(replicaInfo, serverName, seqNum);
+    }
+    return null;
+  }
+
+  /**
+   * The health of the replica.
+   * E.g. The health col is not found when the region is opened so we consider it as healthy. 
+   * If the replica is down then we mark it as bad.
+   * @param r Result to pull the seqNum from
+   * @return SeqNum, or HConstants.NO_SEQNUM if there's no value written.
+   */
+  private static boolean getHealthStatus(final Result r, final int replicaId) {
+    Cell cell = r.getColumnLatestCell(getCatalogFamily(), getReplicaHealthColumn(replicaId));
+    //In good health
+    if (cell == null || cell.getValueLength() == 0) return true;
+    byte[] val = Bytes.copy(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength());
+    return Bytes.toBoolean(val);
+  }
+
+  @VisibleForTesting
+  public static byte[] getReplicaHealthColumn(int replicaId) {
+    return replicaId == 0 ? HConstants.HEALTH_QUALIFIER
+        : Bytes.toBytes(HConstants.HEALTH_QUALIFIER_STR + META_REPLICA_ID_DELIMITER
+            + String.format(HRegionInfo.REPLICA_ID_FORMAT, replicaId));
   }
 
   /**
@@ -1924,6 +1949,15 @@ public class MetaTableAccessor {
               .setType(Type.Put)
               .setValue(Bytes.toBytes(openSeqNum))
               .build());
+            // always add the health column
+ /*           .add(builder.clear()
+              .setRow(p.getRow())
+              .setFamily(getCatalogFamily())
+              .setQualifier(getReplicaHealthColumn(replicaId))
+              .setTimestamp(p.getTimestamp())
+              .setType(Type.Put)
+              .setValue(Bytes.toBytes(true))
+              .build());*/
   }
 
   private static void writeRegionName(ByteArrayOutputStream out, byte[] regionName) {
