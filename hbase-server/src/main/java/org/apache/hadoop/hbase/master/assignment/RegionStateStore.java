@@ -139,7 +139,7 @@ public class RegionStateStore {
   }
 
   // TODO new API. Check for method and param names
-  public void updateReplicaRegionHealth(List<RegionInfo> regions, boolean good) throws IOException {
+  public void updateReplicaRegionHealth(boolean good, List<RegionInfo> regions) throws IOException {
     assert regions.size() > 0;
     Put put = null;
     for (RegionInfo region : regions) {

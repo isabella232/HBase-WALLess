@@ -17,6 +17,8 @@
  */
 package org.apache.hadoop.hbase.regionserver.handler;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.Server;
@@ -24,7 +26,9 @@ import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.client.TableDescriptor;
 import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.regionserver.HRegionServer;
+import org.apache.hadoop.hbase.regionserver.Region;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
+import org.apache.hadoop.hbase.regionserver.handler.OpenRegionHandler.PostOpenDeployTasksThread;
 import org.apache.yetus.audience.InterfaceAudience;
 
 @InterfaceAudience.Private
@@ -59,5 +63,13 @@ public class ConvertReplicaToPrimaryRegionHandler extends OpenPriorityRegionHand
     // HRS
     ((HRegionServer) this.rsServices).removeRegion(this.replicaRegion, null);
     this.rsServices.addRegion(region);
+  }
+
+  @Override
+  protected PostOpenDeployTasksThread createPostOpenDeployTasksThread(final Region r,
+      final RegionInfo replacedRegionInfo, final AtomicBoolean signaller, long masterSystemTime) {
+    // TODO Auto-generated method stub
+    return super.createPostOpenDeployTasksThread(r, this.replicaRegionInfo, signaller,
+      masterSystemTime);
   }
 }

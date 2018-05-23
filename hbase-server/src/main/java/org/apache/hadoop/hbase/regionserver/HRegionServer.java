@@ -131,6 +131,7 @@ import org.apache.hadoop.hbase.regionserver.handler.RSProcedureHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RegionReplicaFlushHandler;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.ReplicaGoodStateMarkerHandler;
 import org.apache.hadoop.hbase.regionserver.throttle.FlushThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.replication.ReplicationUtils;
@@ -217,6 +218,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRSFatalErrorRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.HMRegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaRegionHealthService;
 
 /**
  * HRegionServer makes a set of HRegions available to clients. It checks in with
@@ -343,6 +346,7 @@ public class HRegionServer extends HasThread implements
   // Stub to do region server status calls against the master.
   private volatile RegionServerStatusService.BlockingInterface rssStub;
   private volatile LockService.BlockingInterface lockStub;
+  private volatile ReplicaRegionHealthService.BlockingInterface rrssStub;
   // RPC client. Used to make the stub above that does region server status checking.
   RpcClient rpcClient;
 
@@ -2186,6 +2190,8 @@ public class HRegionServer extends HasThread implements
   public void postOpenDeployTasks(final PostOpenDeployContext context)
       throws KeeperException, IOException {
     HRegion r = context.getRegion();
+    RegionInfo replacedRegion = context.getReplacedRegion();
+    boolean primaryRegionReplace = replacedRegion != null;
     long masterSystemTime = context.getMasterSystemTime();
     rpcServices.checkOpen();
     LOG.info("Post open deploy tasks for " + r.getRegionInfo().getRegionNameAsString());
@@ -2210,7 +2216,10 @@ public class HRegionServer extends HasThread implements
         + r.getRegionInfo().getRegionNameAsString());
     }
 
-    triggerFlushInPrimaryRegion(r);
+    // TODO : differentiate between clean region opening and a region open on failure.
+    // Since the primary region is already opened by this time it starts accepting mutations and
+    // this call to flush the primary causes smaller fluhes
+    if (!primaryRegionReplace) triggerFlushInPrimaryRegion(r);
 
     LOG.debug("Finished post open deploy task for " + r.getRegionInfo().getRegionNameAsString());
   }
@@ -2319,13 +2328,13 @@ public class HRegionServer extends HasThread implements
     if (ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo())) {
       return;
     }
-    if (!ServerRegionReplicaUtil.isRegionReplicaReplicationEnabled(region.conf) ||
+/*    if (!ServerRegionReplicaUtil.isRegionReplicaReplicationEnabled(region.conf) ||
         !ServerRegionReplicaUtil.isRegionReplicaWaitForPrimaryFlushEnabled(
           region.conf)) {
       region.setReadsEnabled(true);
       return;
-    }
-
+    }*/
+    LOG.info("Trigger flush on primary by region "+region.getRegionInfo());
     region.setReadsEnabled(false); // disable reads before marking the region as opened.
     // RegionReplicaFlushHandler might reset this.
 
@@ -3798,5 +3807,36 @@ public class HRegionServer extends HasThread implements
   @Override
   public MemstoreReplicator getMemstoreReplicator() {
     return this.memstoreReplicator;
+  }
+
+  @Override
+  public boolean reportReplicaRegionHealthChange(List<RegionInfo> regions, boolean good) {
+    if (this.rrssStub == null) return false;
+    HMRegionReplicaHealthChangeRequest.Builder builder =
+        HMRegionReplicaHealthChangeRequest.newBuilder();
+    for (RegionInfo region : regions) {
+      builder.addRegionInfo(ProtobufUtil.toRegionInfo(region));
+    }
+    builder.setGoodState(good);
+    // TODO - Need to handle the failure cases here. To be given to a chore service which will
+    // retry?
+    // What is HM went down before processing this fully?
+    // What if META is not available to mark these Regions as BAD?
+    // We need a controlled #retries?
+    // Need fail the writes? - May be not. Then what if the retries also exceeded? This happens in
+    // same handler thread as that of write. So we can not make it to wait for long
+    // Second thought - We need fail the write too. Because there is no src of truth then abt
+    // BAD replicas if primary region also get failed
+    try {
+      this.rrssStub.healthChange(null, builder.build());
+    } catch (ServiceException e) {
+      return false;
+    }
+    return true;
+  }
+
+  public void reportReplicaRegionHealthGood(RegionInfo replicaRegion, HRegion primaryRegion) {
+    this.executorService
+        .submit(new ReplicaGoodStateMarkerHandler(this, replicaRegion, primaryRegion));
   }
 }

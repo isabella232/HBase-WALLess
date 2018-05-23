@@ -124,6 +124,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.LockServiceProtos.LockR
 import org.apache.hadoop.hbase.shaded.protobuf.generated.LockServiceProtos.LockResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.LockServiceProtos.LockService;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProtos;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaRegionHealthService;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProtos.AbortProcedureRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProtos.AbortProcedureResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProtos.AddColumnRequest;
@@ -278,6 +279,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRSFatalErrorResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.HMRegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicationProtos.AddReplicationPeerRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicationProtos.AddReplicationPeerResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicationProtos.DisableReplicationPeerRequest;
@@ -302,7 +305,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.SnapshotProtos.Snapshot
 @SuppressWarnings("deprecation")
 public class MasterRpcServices extends RSRpcServices
       implements MasterService.BlockingInterface, RegionServerStatusService.BlockingInterface,
-        LockService.BlockingInterface {
+        LockService.BlockingInterface, ReplicaRegionHealthService.BlockingInterface {
   private static final Logger LOG = LoggerFactory.getLogger(MasterRpcServices.class.getName());
 
   private final HMaster master;
@@ -2265,5 +2268,25 @@ public class MasterRpcServices extends RSRpcServices
     } catch (Exception e) {
       throw new ServiceException(e);
     }
+  }
+
+  @Override
+  public RegionReplicaHealthChangeResponse healthChange(RpcController controller,
+      HMRegionReplicaHealthChangeRequest request) throws ServiceException {
+    List<org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo> pbRegions =
+        request.getRegionInfoList();
+    List<RegionInfo> regions = new ArrayList<>(pbRegions.size());
+    pbRegions.forEach((pbRegion) -> regions.add(ProtobufUtil.toRegionInfo(pbRegion)));
+    try {
+      if (request.getGoodState()) {
+        this.master.getRegionReplicaHealthManager().markRegionsGood(regions);
+      } else {
+        this.master.getRegionReplicaHealthManager().handleBadRegions(regions,
+          EnvironmentEdgeManager.currentTime());
+      }
+    } catch (IOException e) {
+      throw new ServiceException(e);
+    }
+    return RegionReplicaHealthChangeResponse.newBuilder().build();
   }
 }

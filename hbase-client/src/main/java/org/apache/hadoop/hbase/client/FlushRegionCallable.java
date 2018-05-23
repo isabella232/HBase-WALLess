@@ -41,20 +41,24 @@ public class FlushRegionCallable extends RegionAdminServiceCallable<FlushRegionR
   private final byte[] regionName;
   private final boolean writeFlushWalMarker;
   private boolean reload;
+  private int requestingRegionReplica;
 
   public FlushRegionCallable(ClusterConnection connection,
       RpcControllerFactory rpcControllerFactory, TableName tableName, byte[] regionName,
-      byte[] regionStartKey, boolean writeFlushWalMarker) {
+      byte[] regionStartKey, boolean writeFlushWalMarker, RegionInfo requestingRegion) {
     super(connection, rpcControllerFactory, tableName, regionStartKey);
     this.regionName = regionName;
     this.writeFlushWalMarker = writeFlushWalMarker;
+    if (requestingRegion != null) {
+      this.requestingRegionReplica = requestingRegion.getReplicaId();
+    }
   }
 
   public FlushRegionCallable(ClusterConnection connection,
       RpcControllerFactory rpcControllerFactory, RegionInfo regionInfo,
       boolean writeFlushWalMarker) {
     this(connection, rpcControllerFactory, regionInfo.getTable(), regionInfo.getRegionName(),
-      regionInfo.getStartKey(), writeFlushWalMarker);
+      regionInfo.getStartKey(), writeFlushWalMarker, null);
   }
 
   @Override
@@ -81,8 +85,8 @@ public class FlushRegionCallable extends RegionAdminServiceCallable<FlushRegionR
           .build();
     }
 
-    FlushRegionRequest request =
-        RequestConverter.buildFlushRegionRequest(regionName, writeFlushWalMarker);
+    FlushRegionRequest request = RequestConverter.buildFlushRegionRequest(regionName,
+      writeFlushWalMarker, this.requestingRegionReplica);
     return stub.flushRegion(controller, request);
   }
 }

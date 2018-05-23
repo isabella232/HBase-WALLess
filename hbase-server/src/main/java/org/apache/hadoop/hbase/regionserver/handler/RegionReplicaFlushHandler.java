@@ -145,6 +145,7 @@ public class RegionReplicaFlushHandler extends EventHandler {
                 + " of region " + region.getRegionInfo().getEncodedName()
                 + " Now waiting and blocking reads until observing a full flush cycle");
         }
+        region.finishBadHealthProcessing();
         break;
       } else {
         if (response.hasWroteFlushWalMarker()) {

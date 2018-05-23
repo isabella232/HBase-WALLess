@@ -30,6 +30,7 @@ import "HBase.proto";
 import "WAL.proto";
 import "Quota.proto";
 import "MemstoreReplica.proto";
+import "ReplicaRegionHealth.proto";
 
 message GetRegionInfoRequest {
   required RegionSpecifier region = 1;
@@ -137,6 +138,7 @@ message FlushRegionRequest {
   required RegionSpecifier region = 1;
   optional uint64 if_older_than_ts = 2;
   optional bool write_flush_wal_marker = 3; // whether to write a marker to WAL even if not flushed
+  optional uint32 requesting_replica = 4;
 }
 
 message FlushRegionResponse {
@@ -337,4 +339,7 @@ service AdminService {
 
   rpc ReplicateMemstore (ReplicateMemstoreRequest)
     returns (ReplicateMemstoreResponse);
+
+  rpc HandleBadRegions (RSRegionReplicaHealthChangeRequest)
+    returns (RegionReplicaHealthChangeResponse);
 }

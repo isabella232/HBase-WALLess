@@ -491,6 +491,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     final String failureReason;
     final long flushSequenceId;
     final boolean wroteFlushWalMarker;
+    final List<Integer> failedReplicas;
 
     /**
      * Convenience constructor to use when the flush is successful, the failure message is set to
@@ -498,20 +499,27 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
      * @param result Expecting FLUSHED_NO_COMPACTION_NEEDED or FLUSHED_COMPACTION_NEEDED.
      * @param flushSequenceId Generated sequence id that comes right after the edits in the
      *                        memstores.
+     * @param failedReplicas
      */
-    FlushResultImpl(Result result, long flushSequenceId) {
-      this(result, flushSequenceId, null, false);
+    FlushResultImpl(Result result, long flushSequenceId, List<Integer> failedReplicas) {
+      this(result, flushSequenceId, null, false, failedReplicas);
       assert result == Result.FLUSHED_NO_COMPACTION_NEEDED || result == Result
           .FLUSHED_COMPACTION_NEEDED;
     }
-
+    
+    FlushResultImpl(Result result, long flushSequenceId, boolean wroteFlushMarker,
+        List<Integer> failedReplicas) {
+      this(result, flushSequenceId, null, wroteFlushMarker, failedReplicas);
+      assert result == Result.FLUSHED_NO_COMPACTION_NEEDED
+          || result == Result.FLUSHED_COMPACTION_NEEDED;
+    }
     /**
      * Convenience constructor to use when we cannot flush.
      * @param result Expecting CANNOT_FLUSH_MEMSTORE_EMPTY or CANNOT_FLUSH.
      * @param failureReason Reason why we couldn't flush.
      */
     FlushResultImpl(Result result, String failureReason, boolean wroteFlushMarker) {
-      this(result, -1, failureReason, wroteFlushMarker);
+      this(result, -1, failureReason, wroteFlushMarker, null);
       assert result == Result.CANNOT_FLUSH_MEMSTORE_EMPTY || result == Result.CANNOT_FLUSH;
     }
 
@@ -522,11 +530,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
      * @param failureReason Reason why we couldn't flush, or null.
      */
     FlushResultImpl(Result result, long flushSequenceId, String failureReason,
-      boolean wroteFlushMarker) {
+      boolean wroteFlushMarker, List<Integer> failedReplicas) {
       this.result = result;
       this.flushSequenceId = flushSequenceId;
       this.failureReason = failureReason;
       this.wroteFlushWalMarker = wroteFlushMarker;
+      this.failedReplicas = failedReplicas;
     }
 
     /**
@@ -2180,7 +2189,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    */
   // TODO HBASE-18905. We might have to expose a requestFlush API for CPs
   public FlushResult flush(boolean force) throws IOException {
-    return flushcache(force, false, FlushLifeCycleTracker.DUMMY);
+    return flushcache(force, false, -1, FlushLifeCycleTracker.DUMMY);
   }
 
   public interface FlushResult {
@@ -2204,30 +2213,27 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   /**
-   * Flush the cache.
-   *
-   * When this method is called the cache will be flushed unless:
+   * Flush the cache. When this method is called the cache will be flushed unless:
    * <ol>
-   *   <li>the cache is empty</li>
-   *   <li>the region is closed.</li>
-   *   <li>a flush is already in progress</li>
-   *   <li>writes are disabled</li>
+   * <li>the cache is empty</li>
+   * <li>the region is closed.</li>
+   * <li>a flush is already in progress</li>
+   * <li>writes are disabled</li>
    * </ol>
-   *
-   * <p>This method may block for some time, so it should not be called from a
-   * time-sensitive thread.
+   * <p>
+   * This method may block for some time, so it should not be called from a time-sensitive thread.
    * @param forceFlushAllStores whether we want to flush all stores
    * @param writeFlushRequestWalMarker whether to write the flush request marker to WAL
+   * @param the replica that is requesting the flush
    * @param tracker used to track the life cycle of this flush
    * @return whether the flush is success and whether the region needs compacting
-   *
    * @throws IOException general io exceptions
-   * @throws DroppedSnapshotException Thrown when replay of wal is required
-   * because a Snapshot was not properly persisted. The region is put in closing mode, and the
-   * caller MUST abort after this.
+   * @throws DroppedSnapshotException Thrown when replay of wal is required because a Snapshot was
+   *           not properly persisted. The region is put in closing mode, and the caller MUST abort
+   *           after this.
    */
   public FlushResultImpl flushcache(boolean forceFlushAllStores, boolean writeFlushRequestWalMarker,
-      FlushLifeCycleTracker tracker) throws IOException {
+      int requestingReplica, FlushLifeCycleTracker tracker) throws IOException {
     // fail-fast instead of waiting on the lock
     if (this.closing.get()) {
       String msg = "Skipping flush on " + this + " because closing";
@@ -2286,7 +2292,15 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         if(fs.isFlushSucceeded()) {
           flushesQueued.reset();
         }
-
+        // The pipeline is modified here by adding the requesting replica to the 'pipeline'.
+        // In a region opening sequence (on create table), there is a chance that replica 2
+        // is opened first and then the replica 1 is opened. So when replica 2 is opened
+        // by the time the region location is updated with primary replica server and replica 2's
+        // server. When the replica 1 is opened we don update the region location but since
+        // the below code adds 1 to the pipeline we have a mismatch between pipeline and region location.
+        if (requestingReplica > 0) {
+          this.regionReplicator.removeFromBadReplicas(requestingReplica);
+        }
         status.markComplete("Flush successful");
         return fs;
       } finally {
@@ -2450,7 +2464,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
             long flushOpSeqId = writeEntry.getWriteNumber();
             FlushResultImpl flushResult =
                 new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH_MEMSTORE_EMPTY, flushOpSeqId,
-                    "Nothing to flush", writeFlushRequestMarkerToWAL(wal, writeFlushWalMarker));
+                    "Nothing to flush", writeFlushRequestMarkerToWAL(wal, writeFlushWalMarker), null);
             mvcc.completeAndWait(writeEntry);
             // Set to null so we don't complete it again down in finally block.
             writeEntry = null;
@@ -2794,7 +2808,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
     return new FlushResultImpl(compactionRequested ?
         FlushResult.Result.FLUSHED_COMPACTION_NEEDED :
-          FlushResult.Result.FLUSHED_NO_COMPACTION_NEEDED, flushOpSeqId);
+          FlushResult.Result.FLUSHED_NO_COMPACTION_NEEDED, flushOpSeqId, null);
   }
 
   /**
@@ -4157,10 +4171,32 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           .add(RegionReplicaUtil.getRegionInfoForReplica(this.getRegionInfo(), replicaId));
     }
     LOG.info("Marking " + failedReplicaRegionInfos + " regions as BAD health in META");
-    // TODO call the RSS API
-    /*return this.getRegionServerServices().reportReplicaRegionHealthChange(failedReplicaRegionInfos,
-        false);*/
-    return true;
+    return this.getRegionServerServices().reportReplicaRegionHealthChange(failedReplicaRegionInfos,
+      false);
+  }
+
+  public void finishBadHealthProcessing() {
+    this.regionReplicator.finishBadHealthProcessing();
+  }
+
+  public void markReplicaBackToGoodInMeta(RegionInfo replicaRegion) {
+    LOG.info("Marking " + replicaRegion + " as GOOD health in META");
+    this.regionReplicator.removeFromBadReplicasInMeta(replicaRegion.getReplicaId());
+  }
+
+  /**
+   * Marks the health of this region replica
+   * @param health
+   * @param processingTs 
+   */
+  public boolean markBadHealthStatus(long processingTs) {
+    assert !RegionReplicaUtil.isDefaultReplica(this.getRegionInfo());
+    if (this.regionReplicator.shouldProcessBadStatus(processingTs)) {
+      LOG.info("Marking " + this.getRegionInfo() + " as BAD");
+      return true;
+    }
+    LOG.debug("Ignoring markBadHealthStatus RPC from master as we have already processed it.");
+    return false;
   }
 
   public ReplicateMemstoreResponse replicateMemstore(ReplicateMemstoreRequest request,
@@ -6287,7 +6323,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // guaranteed to be one beyond the file made when we flushed (or if nothing to flush, it is
       // a sequence id that we can be sure is beyond the last hfile written).
       if (assignSeqId) {
-        FlushResult fs = flushcache(true, false, FlushLifeCycleTracker.DUMMY);
+        FlushResult fs = flush(true);
         if (fs.isFlushSucceeded()) {
           seqId = ((FlushResultImpl)fs).flushSequenceId;
         } else if (fs.getResult() == FlushResult.Result.CANNOT_FLUSH_MEMSTORE_EMPTY) {

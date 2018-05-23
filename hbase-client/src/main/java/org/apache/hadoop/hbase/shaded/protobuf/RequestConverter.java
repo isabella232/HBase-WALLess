@@ -937,6 +937,25 @@ public final class RequestConverter {
   }
 
   /**
+   * Create a protocol buffer FlushRegionRequest for a given region name
+   * @param regionName the name of the region to get info
+   * @param writeFlushWALMarker to write the flush WAL marker or not
+   * @param requestingRegionReplica the replica region requesting the flush
+   * @return a protocol buffer FlushRegionRequest
+   */
+  public static FlushRegionRequest buildFlushRegionRequest(final byte[] regionName,
+      boolean writeFlushWALMarker, int requestingRegionReplica) {
+    FlushRegionRequest.Builder builder = FlushRegionRequest.newBuilder();
+    RegionSpecifier region = buildRegionSpecifier(RegionSpecifierType.REGION_NAME, regionName);
+    builder.setRegion(region);
+    builder.setWriteFlushWalMarker(writeFlushWALMarker);
+    if (requestingRegionReplica > 0) {
+      builder.setRequestingReplica(requestingRegionReplica);
+    }
+    return builder.build();
+  }
+
+  /**
    * Create a protocol buffer OpenRegionRequest to open a list of regions
    * @param server the serverName for the RPC
    * @param regionOpenInfos info of a list of regions to open

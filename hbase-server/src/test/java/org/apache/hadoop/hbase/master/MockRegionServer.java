@@ -132,6 +132,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.R
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RSRegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeResponse;
 
 /**
  * A mock RegionServer implementation.
@@ -711,5 +713,18 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
   public MemstoreReplicator getMemstoreReplicator() {
     // TODO Auto-generated method stub
     return null;
+  }
+
+  @Override
+  public RegionReplicaHealthChangeResponse handleBadRegions(RpcController controller,
+      RSRegionReplicaHealthChangeRequest request) throws ServiceException {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public boolean reportReplicaRegionHealthChange(List<RegionInfo> regions, boolean good) {
+    // TODO Auto-generated method stub
+    return false;
   }
 }

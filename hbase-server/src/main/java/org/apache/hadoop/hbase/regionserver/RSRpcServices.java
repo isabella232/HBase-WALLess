@@ -35,17 +35,14 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
+
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -61,7 +58,6 @@ import org.apache.hadoop.hbase.DoNotRetryIOException;
 import org.apache.hadoop.hbase.DroppedSnapshotException;
 import org.apache.hadoop.hbase.HBaseIOException;
 import org.apache.hadoop.hbase.HConstants;
-import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.MultiActionResultTooLarge;
 import org.apache.hadoop.hbase.NotServingRegionException;
 import org.apache.hadoop.hbase.PrivateCellUtil;
@@ -130,34 +126,6 @@ import org.apache.hadoop.hbase.security.Superusers;
 import org.apache.hadoop.hbase.security.User;
 import org.apache.hadoop.hbase.security.access.AccessChecker;
 import org.apache.hadoop.hbase.security.access.Permission;
-import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.hbase.util.DNS;
-import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
-import org.apache.hadoop.hbase.util.HasThread;
-import org.apache.hadoop.hbase.util.Pair;
-import org.apache.hadoop.hbase.util.ServerRegionReplicaUtil;
-import org.apache.hadoop.hbase.util.Strings;
-import org.apache.hadoop.hbase.wal.WAL;
-import org.apache.hadoop.hbase.wal.WALEdit;
-import org.apache.hadoop.hbase.wal.WALKey;
-import org.apache.hadoop.hbase.wal.WALSplitter;
-import org.apache.hadoop.hbase.zookeeper.ZKWatcher;
-import org.apache.yetus.audience.InterfaceAudience;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
-import org.apache.hbase.thirdparty.com.google.common.cache.Cache;
-import org.apache.hbase.thirdparty.com.google.common.cache.CacheBuilder;
-import org.apache.hbase.thirdparty.com.google.common.collect.Lists;
-import org.apache.hbase.thirdparty.com.google.protobuf.ByteString;
-import org.apache.hbase.thirdparty.com.google.protobuf.Message;
-import org.apache.hbase.thirdparty.com.google.protobuf.RpcController;
-import org.apache.hbase.thirdparty.com.google.protobuf.ServiceException;
-import org.apache.hbase.thirdparty.com.google.protobuf.TextFormat;
-import org.apache.hbase.thirdparty.com.google.protobuf.UnsafeByteOperations;
-import org.apache.hbase.thirdparty.org.apache.commons.collections4.CollectionUtils;
-
 import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.RequestConverter;
 import org.apache.hadoop.hbase.shaded.protobuf.ResponseConverter;
@@ -236,17 +204,44 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.NameInt64Pa
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier.RegionSpecifierType;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MapReduceProtos.ScanMetrics;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse.TableQuotaSnapshot;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.RequestHeader;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RSRegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionNameMasterProcessingTimePair;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.BulkLoadDescriptor;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.CompactionDescriptor;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.FlushDescriptor;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.RegionEventDescriptor;
+import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.hbase.util.DNS;
+import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hadoop.hbase.util.ServerRegionReplicaUtil;
+import org.apache.hadoop.hbase.util.Strings;
+import org.apache.hadoop.hbase.wal.WAL;
+import org.apache.hadoop.hbase.wal.WALEdit;
+import org.apache.hadoop.hbase.wal.WALKey;
+import org.apache.hadoop.hbase.wal.WALSplitter;
+import org.apache.hadoop.hbase.zookeeper.ZKWatcher;
+import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
+import org.apache.hbase.thirdparty.com.google.common.cache.Cache;
+import org.apache.hbase.thirdparty.com.google.common.cache.CacheBuilder;
+import org.apache.hbase.thirdparty.com.google.common.collect.Lists;
+import org.apache.hbase.thirdparty.com.google.protobuf.ByteString;
+import org.apache.hbase.thirdparty.com.google.protobuf.Message;
+import org.apache.hbase.thirdparty.com.google.protobuf.RpcController;
+import org.apache.hbase.thirdparty.com.google.protobuf.ServiceException;
+import org.apache.hbase.thirdparty.com.google.protobuf.TextFormat;
+import org.apache.hbase.thirdparty.com.google.protobuf.UnsafeByteOperations;
+import org.apache.hbase.thirdparty.org.apache.commons.collections4.CollectionUtils;
+import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implements the regionserver RPC services.
@@ -1690,11 +1685,19 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       }
       FlushRegionResponse.Builder builder = FlushRegionResponse.newBuilder();
       if (shouldFlush) {
+        // Go behind the curtain so we can manage writing of the flush WAL marker
         boolean writeFlushWalMarker =  request.hasWriteFlushWalMarker() ?
             request.getWriteFlushWalMarker() : false;
-        // Go behind the curtain so we can manage writing of the flush WAL marker
+        // TODO any replica region being opened, after that it calls the primary for a flush. We
+        // should check whether flush is really needed. May be this replica region is not really in
+        // bad state? Should HM pass the info whether u r in BAD state, while opening? Another way
+        // is we have the BAD status here in primary. We can make use of that to ignore this call.
+        int requestingReplica =
+            request.hasRequestingReplica() ? request.getRequestingReplica() : -1;        
         HRegion.FlushResultImpl flushResult =
-            region.flushcache(true, writeFlushWalMarker, FlushLifeCycleTracker.DUMMY);
+            region.flushcache(true, writeFlushWalMarker, requestingReplica,
+              FlushLifeCycleTracker.DUMMY);
+        reportReplicaGoodToMeta(region, requestingReplica, flushResult);
         boolean compactionNeeded = flushResult.isCompactionNeeded();
         if (compactionNeeded) {
           regionServer.compactSplitThread.requestSystemCompaction(region,
@@ -1714,6 +1717,17 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
       throw new ServiceException(ex);
     } catch (IOException ie) {
       throw new ServiceException(ie);
+    }
+  }
+
+  private void reportReplicaGoodToMeta(HRegion region, int requestingReplica,
+      HRegion.FlushResultImpl flushResult) {
+    if (flushResult != null && flushResult.failedReplicas != null) {
+      if (requestingReplica > 0 && !(flushResult.failedReplicas.contains(requestingReplica))) {
+        this.regionServer.reportReplicaRegionHealthGood(
+          RegionReplicaUtil.getRegionInfoForReplica(region.getRegionInfo(), requestingReplica),
+          region);
+      }
     }
   }
 
@@ -3662,5 +3676,26 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
     } catch (IOException ie) {
       throw new ServiceException(ie);
     }
+  }
+
+  @Override
+  public RegionReplicaHealthChangeResponse handleBadRegions(RpcController controller,
+      RSRegionReplicaHealthChangeRequest request) throws ServiceException {
+    List<RegionNameMasterProcessingTimePair> regionAndProcessingTimeList = request
+        .getRegionNameProcessingTimePairList();
+    regionAndProcessingTimeList.forEach(regionAndProcessingTime -> {
+      try {
+        HRegion region = (HRegion) regionServer.getRegionByEncodedName(
+            regionAndProcessingTime.getEncodedRegionName().toStringUtf8());
+        if (region.markBadHealthStatus(regionAndProcessingTime.getMasterTs())) {
+          this.regionServer.triggerFlushInPrimaryRegion(region);
+        }
+      } catch (NotServingRegionException e) {
+        LOG.error("Region not being served by this region server "
+            + regionAndProcessingTime.getEncodedRegionName().toStringUtf8());
+        // TODO pass back this failure info in response.
+      }
+    });
+    return RegionReplicaHealthChangeResponse.newBuilder().build();
   }
 }

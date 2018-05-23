@@ -89,6 +89,8 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.R
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.QuotaProtos.GetSpaceQuotaSnapshotsResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RSRegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeResponse;
 
 @Category(MediumTests.class)
 @Ignore("Flaky, needs to be rewritten, see HBASE-19125")
@@ -457,6 +459,13 @@ public class TestReplicator extends TestReplicationBase {
       @Override
       public ReplicateMemstoreResponse replicateMemstore(RpcController controller,
           ReplicateMemstoreRequest request) throws ServiceException {
+        // TODO Auto-generated method stub
+        return null;
+      }
+
+      @Override
+      public RegionReplicaHealthChangeResponse handleBadRegions(RpcController controller,
+          RSRegionReplicaHealthChangeRequest request) throws ServiceException {
         // TODO Auto-generated method stub
         return null;
       }

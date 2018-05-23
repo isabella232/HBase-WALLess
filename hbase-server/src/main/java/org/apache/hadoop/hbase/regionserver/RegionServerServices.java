@@ -101,10 +101,12 @@ public interface RegionServerServices extends Server, MutableOnlineRegions, Favo
   class PostOpenDeployContext {
     private final HRegion region;
     private final long masterSystemTime;
+    private final RegionInfo replacedRegionInfo;
 
     @InterfaceAudience.Private
-    public PostOpenDeployContext(HRegion region, long masterSystemTime) {
+    public PostOpenDeployContext(HRegion region, RegionInfo replacedRegionInfo, long masterSystemTime) {
       this.region = region;
+      this.replacedRegionInfo = replacedRegionInfo;
       this.masterSystemTime = masterSystemTime;
     }
     public HRegion getRegion() {
@@ -112,6 +114,9 @@ public interface RegionServerServices extends Server, MutableOnlineRegions, Favo
     }
     public long getMasterSystemTime() {
       return masterSystemTime;
+    }
+    public RegionInfo getReplacedRegion(){
+      return this.replacedRegionInfo;
     }
   }
 
@@ -265,4 +270,6 @@ public interface RegionServerServices extends Server, MutableOnlineRegions, Favo
   boolean isClusterUp();
 
   MemstoreReplicator getMemstoreReplicator();
+
+  boolean reportReplicaRegionHealthChange(List<RegionInfo> regions, boolean good);
 }

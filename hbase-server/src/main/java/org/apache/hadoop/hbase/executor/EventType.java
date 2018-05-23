@@ -248,6 +248,7 @@ public enum EventType {
    */
   M_LOG_REPLAY              (74, ExecutorType.M_LOG_REPLAY_OPS),
 
+  M_REGION_REPLICA_GOOD_HEALTH_MARKER   (75, ExecutorType.MASTER_REGION_REPLICA_OPS),
   /**
    * RS controlled events to be executed on the RS.<br>
    *

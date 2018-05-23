@@ -547,6 +547,14 @@ public class RegionStates {
     return regions;
   }
 
+  public void updateReplicaRegionHealth(List<RegionInfo> regions, boolean good) {
+    regions.forEach((region) -> {
+      RegionStateNode regionStateNode = this.regionsMap.get(region.getRegionName());
+      synchronized (regionStateNode) {
+        regionStateNode.goodHealth = good;
+      }
+    });
+  }
   // ==========================================================================
   //  RegionState helpers
   // ==========================================================================

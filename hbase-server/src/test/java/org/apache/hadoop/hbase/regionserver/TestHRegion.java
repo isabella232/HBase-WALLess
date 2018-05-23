@@ -5695,7 +5695,7 @@ public class TestHRegion {
       Put put = new Put(Bytes.toBytes("19998"));
       put.addColumn(cf1, col, Bytes.toBytes("val"));
       region.put(put);
-      region.flushcache(true, true, FlushLifeCycleTracker.DUMMY);
+      region.flushcache(true, true, -1, FlushLifeCycleTracker.DUMMY);
       Put put2 = new Put(Bytes.toBytes("19997"));
       put2.addColumn(cf1, col, Bytes.toBytes("val"));
       region.put(put2);
@@ -5711,7 +5711,7 @@ public class TestHRegion {
         p.addColumn(cf1, col, Bytes.toBytes("" + i));
         region.put(p);
       }
-      region.flushcache(true, true, FlushLifeCycleTracker.DUMMY);
+      region.flushcache(true, true, -1, FlushLifeCycleTracker.DUMMY);
 
       // create one memstore contains many rows will be skipped
       // to check MemStoreScanner.seekToPreviousRow
@@ -5758,7 +5758,7 @@ public class TestHRegion {
       RegionScannerImpl scanner = region.getScanner(scan);
 
       // flush the cache. This will reset the store scanner
-      region.flushcache(true, true, FlushLifeCycleTracker.DUMMY);
+      region.flushcache(true, true, -1, FlushLifeCycleTracker.DUMMY);
 
       // create one memstore contains many rows will be skipped
       // to check MemStoreScanner.seekToPreviousRow

@@ -1961,11 +1961,11 @@ public class AssignmentManager implements ServerListener {
     master.getServerManager().expireServer(serverNode.getServerName());
   }
 
-/*  public void updateReplicaRegionHealth(List<RegionInfo> regions, boolean goodState)
+  public void updateReplicaRegionHealth(List<RegionInfo> regions, boolean goodState)
       throws IOException {
     regionStates.updateReplicaRegionHealth(regions, goodState);
-    regionStateStore.updateReplicaRegionHealth(regions, goodState);
-  }*/
+    regionStateStore.updateReplicaRegionHealth(goodState, regions);
+  }
 
   public void markRegionAsOffline(RegionInfo region) throws IOException {
     RegionStateNode regionNode = this.regionStates.getRegionNode(region);
@@ -1973,7 +1973,7 @@ public class AssignmentManager implements ServerListener {
       regionNode.offline();
     }
     // also mark this replica region, which is going to be opened now, as BAD health.
-    this.regionStateStore.updateReplicaRegionHealth(Arrays.asList(region), false);
+    this.regionStateStore.updateReplicaRegionHealth(false, Arrays.asList(region));
   }
 
   /**
