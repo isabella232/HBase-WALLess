@@ -826,7 +826,10 @@ public class HMaster extends HRegionServer implements MasterServices {
     this.masterActiveTime = System.currentTimeMillis();
     // TODO: Do this using Dependency Injection, using PicoContainer, Guice or Spring.
     // Initialize the chunkCreator
-    initializeMemStoreChunkCreator();
+    if (!(this instanceof MasterServices)) {
+      // TODO : For tests i need this. Find a better way to fix this.
+      initializeMemStoreChunkCreator();
+    }
     this.fileSystemManager = new MasterFileSystem(conf);
     this.walManager = new MasterWalManager(this);
 

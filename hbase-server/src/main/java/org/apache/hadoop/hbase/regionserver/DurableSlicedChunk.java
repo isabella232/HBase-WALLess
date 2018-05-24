@@ -27,17 +27,19 @@ import org.apache.yetus.audience.InterfaceAudience;
 
 /**
  * Notes on what this chunk should have
- * 1) this chunk should have the region name to which the current chunk is associated. Every MSLabImpl
- * gets a chunk and that chunk is used till it is full. Every MSLAbImpl is created per region and on flush
- * a new one is created.
+ * 1) this chunk should have the region name to which the current chunk is associated.
+ * Every MSLabImpl gets a chunk and that chunk is used till it is full. Every MSLAbImpl is created
+ * per region and on flush a new one is created.
  * 2) For easy deserialization of a cell we need cell length before every cell.
  * 3) We need to know where the chunk has ended. Either write the end byte after every cell and keep
  * overwriting as and when the next cell comes or write it as the end (as fixed set of bytes).
  * I think going with end bytes is better
- * 4) Another thing to be done is that  while returning this chunk to the pool after a flush we have to mark that this chunk
- * is no longer in use. So that if a server crashes just after this we should not try reading the cells from this chunk
- * as already it has been flushed.
- * 5) We may have to write the seqId also in the Chunks. Otherwise when we need to get back the cell we may not know
+ * 4) Another thing to be done is that  while returning this chunk to the pool after a
+ * flush we have to mark that this chunk is no longer in use. So that if a server crashes
+ * just after this we should not try reading the cells from this chunk as already
+ * it has been flushed.
+ * 5) We may have to write the seqId also in the Chunks. Otherwise when we need to get back
+ * the cell we may not know
  * what is the actual seqId of the cell - TODO - discuss
  */
 @InterfaceAudience.Private
@@ -51,14 +53,7 @@ public class DurableSlicedChunk extends Chunk {
 
   private DurableChunk<NonVolatileMemAllocator> durableChunk;
   private ChunkBuffer chunkBuffer;
- // private SyncInfo syncInfo;
   private long offset;
-  private volatile int length;
-  private volatile long persistedOffset;
-  private volatile boolean returned;
-  // TODO : Use this
-  private volatile long currentOffset;
-  private volatile boolean dataAdded = false;
 
   public DurableSlicedChunk(int id, DurableChunk<NonVolatileMemAllocator> durableBigChunk,
       long offset, int size) {
@@ -103,6 +98,46 @@ public class DurableSlicedChunk extends Chunk {
       // Next 4 bytes will be used for storing the end offset until which the cells are added.
     }
     return offset;
+  }
+
+  @Override
+  public void prePutbackToPool() {
+    // mark the 4 bytes where we mark the end offset as -1. So that we can use this value to decide
+    // if the chunk was flushed
+    data.putInt(OFFSET_TO_SEQID + SIZE_OF_SEQID + Bytes.SIZEOF_INT, 0);
+    // sync this value
+    chunkBuffer.syncToLocal(OFFSET_TO_SEQID + SIZE_OF_SEQID + Bytes.SIZEOF_INT, Bytes.SIZEOF_INT);
+  }
+
+  @Override
+  public int alloc(int size) {
+    while (true) {
+      int oldOffset = nextFreeOffset.get();
+      if (oldOffset == UNINITIALIZED) {
+        // The chunk doesn't have its data allocated yet.
+        // Since we found this in curChunk, we know that whoever
+        // CAS-ed it there is allocating it right now. So spin-loop
+        // shouldn't spin long!
+        Thread.yield();
+        continue;
+      }
+      if (oldOffset == OOM) {
+        // doh we ran out of ram. return -1 to chuck this away.
+        return -1;
+      }
+
+      if (oldOffset + size > data.capacity()) {
+        return -1; // alloc doesn't fit
+      }
+      // TODO : If seqID is to be written add 8 bytes here for nextFreeOFfset
+      // Try to atomically claim this chunk
+      if (nextFreeOffset.compareAndSet(oldOffset, oldOffset + size)) {
+        // we got the alloc
+        allocCount.incrementAndGet();
+        return oldOffset;
+      }
+      // we raced and lost alloc, try again
+    }
   }
 
   public void persist(long offset, int len) {

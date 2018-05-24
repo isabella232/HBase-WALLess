@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.hadoop.conf.Configuration;
@@ -38,6 +39,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
   private static final int SIZE_OF_SEQ_ID = Bytes.SIZEOF_LONG;
 
   private AtomicReference<DurableSlicedChunk> firstChunk = new AtomicReference<>();
+  private CountDownLatch firstChunkLatch = new CountDownLatch(1);
   private volatile short chunkSeqId = 1;
 
   private volatile int writeSeqId = 1;
@@ -63,6 +65,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     int totalSize = 0;
     for (Cell cell : cells) {
       totalSize += serializedSizeOf(cell);
+      // Currently seqId being written after every cell. May be waste of space (from tests).
       totalSize += SIZE_OF_SEQ_ID;// We need to serialize seqId also for durable MSLABs
     }
     DurableSlicedChunk c = null;
@@ -166,7 +169,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     for (int i = 0; i < cells.size(); i++) {
       Cell cell = cells.get(i);
       toReturn.add(copyToChunkCell(cell, offsets[i].getFirst().getData(), offsets[i].getSecond(),
-          serializedSizeOf(cell)));
+        serializedSizeOf(cell)));
     }
     persistWrite(writeEntry);
     return toReturn;
@@ -217,25 +220,51 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
       len += completedWrite.len;
     }
     lastChunk.persist(offset, len);
+    if (this.firstChunk.get() == null) {
+      try {
+        // This is needed because when the first few threads arrive for writes, the first thread that
+        // creates the chunk may not have yet assigned the firstChunk reference, but since 'currChunk'
+        // is already formed, the subsequent threads may go ahead with the writes. When the other thread
+        // tries to use the firstChunk's reference it may be null. So we need to wait for the firstChunk reference
+        // to be actually created.
+        firstChunkLatch.await();
+      } catch (InterruptedException e) {
+        // TODO : handle interupped exception
+      }
+    }
     // Update the meta data in the first chunk
     // TODO Confirm below logic is correct and then removed the commented lines
     long meta = lastChunk.getId();
     meta = (meta << 32) + (int) (offset + len);
-    ByteBufferUtils.putLong(this.firstChunk.get().data, DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
-        meta);
-    /*ByteBufferUtils.putInt(this.firstChunk.get().data, DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
-        lastChunk.getId());
-    ByteBufferUtils.putInt(this.firstChunk.get().data,
-        DurableSlicedChunk.OFFSET_TO_OFFSETMETA + Bytes.SIZEOF_INT, (int) (offset + len));*/
+    this.firstChunk.get().data.putLong(DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
+      meta);
     this.firstChunk.get().persist(DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
-        DurableSlicedChunk.SIZE_OF_OFFSETMETA);
+      DurableSlicedChunk.SIZE_OF_OFFSETMETA);
+
   }
 
   private void waitForPriorWritesCompletion(WriteEntry writeEntry) {
     while (true) {
       synchronized (this.persistOrderingLockObj) {
         try {
-          this.persistOrderingLockObj.wait();
+          if (!writeQueue.isEmpty()) {
+            // before waiting here check for the writeQueue is empty or not. Only
+            // if not empty go for the wait state. If the writeQueue is empty
+            // never even wait.
+            // The case is this
+            //  -> Thread 1 writes with seqNo 1 and thread 2 writes with SeqNo 2. Now writeQueue
+            // has 2 entries 1 & 2.
+            // -> Thread 2 enters persistWrite first and inside the 'synchronized
+            // (this.persistOrderingLockObj)'. It sees the write with SeqNo 1 is not yet completed
+            // so it starts waiting here.
+            // -> thread 1 enters persistWrite() and completes the persist of all the entries but
+            // before doing so it removes the entries from writeQueue.
+            // -> Thread 2 that was waiting comes out of the wait state and never knows that the
+            // writeQueue has become empty.
+            this.persistOrderingLockObj.wait(10);
+          } else {
+            break;
+          }
         } catch (InterruptedException e) {
           // TODO need to handle any?
         }
@@ -277,11 +306,15 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
   protected void processNewChunk(Chunk c) {
     // Add seqId into this chunk
     // We call this under lock. So the seqId need not be a thread safe state.
-    ByteBufferUtils.putShort(c.data, DurableSlicedChunk.OFFSET_TO_SEQID, chunkSeqId++);
+    c.data.putShort(DurableSlicedChunk.OFFSET_TO_SEQID, chunkSeqId++);
     assert c instanceof DurableSlicedChunk;
     ((DurableSlicedChunk) c).persist(DurableSlicedChunk.OFFSET_TO_SEQID,
         DurableSlicedChunk.SIZE_OF_SEQID);
     this.firstChunk.compareAndSet(null, (DurableSlicedChunk) c);
+    // countdown only for the first time
+    if (firstChunkLatch.getCount() > 0) {
+      firstChunkLatch.countDown();
+    }
   }
 
   private class WriteEntry {

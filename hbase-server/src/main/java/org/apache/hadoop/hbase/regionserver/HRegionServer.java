@@ -111,6 +111,7 @@ import org.apache.hadoop.hbase.ipc.ServerRpcController;
 import org.apache.hadoop.hbase.log.HBaseMarkers;
 import org.apache.hadoop.hbase.master.HMaster;
 import org.apache.hadoop.hbase.master.LoadBalancer;
+import org.apache.hadoop.hbase.master.MasterServices;
 import org.apache.hadoop.hbase.master.RegionState.State;
 import org.apache.hadoop.hbase.mob.MobCacheConfig;
 import org.apache.hadoop.hbase.procedure.RegionServerProcedureManagerHost;
@@ -1142,6 +1143,8 @@ public class HRegionServer extends HasThread implements
       stopServiceThreads();
     }
 
+    // close the DurableChunk-if there is any
+    ChunkCreator.shutdown();
     if (this.rpcServices != null) {
       this.rpcServices.stop();
     }
@@ -1593,6 +1596,27 @@ public class HRegionServer extends HasThread implements
     }
   }
 
+  protected void initializeMemstoreChunkRetriever() {
+    if (MemStoreLAB.isEnabled(conf)) {
+      Pair<Long, MemoryType> pair = MemorySizeUtil.getGlobalMemStoreSize(conf);
+      long globalMemStoreSize = pair.getFirst();
+      boolean offheap = this.regionServerAccounting.isOffheap();
+      // When off heap memstore in use, take full area for chunk pool.
+      float poolSizePercentage = offheap ? 1.0F
+          : conf.getFloat(MemStoreLAB.CHUNK_POOL_MAXSIZE_KEY, MemStoreLAB.POOL_MAX_SIZE_DEFAULT);
+      float initialCountPercentage = conf.getFloat(MemStoreLAB.CHUNK_POOL_INITIALSIZE_KEY,
+        MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT);
+      int chunkSize = conf.getInt(MemStoreLAB.CHUNK_SIZE_KEY, MemStoreLAB.CHUNK_SIZE_DEFAULT);
+      // init the chunkCreator
+      String durablePath = conf.get("hbase.memstore.mslab.durable.path");
+      if (durablePath != null) {
+        // In the actual case when a RS comes up in the same node the INSTANCE will also be null
+        DurableChunkRetriever.initialize(durablePath, chunkSize,
+          (int) (globalMemStoreSize * poolSizePercentage / chunkSize));
+      }
+    }
+  }
+
   private void startHeapMemoryManager() {
     this.hMemManager = HeapMemoryManager.create(this.conf, this.cacheFlusher, this,
         this.regionServerAccounting);
@@ -1974,7 +1998,13 @@ public class HRegionServer extends HasThread implements
     // Memstore services.
     startHeapMemoryManager();
     // Call it after starting HeapMemoryManager.
-    initializeMemStoreChunkCreator();
+    if (!(this instanceof MasterServices)) {
+      // TODO : for tests. In real case this is not needed. Find a better way to do this
+      ChunkCreator.resetInstance();
+      DurableChunkRetriever.resetInstance();
+      initializeMemstoreChunkRetriever();
+      initializeMemStoreChunkCreator();
+    }
   }
 
   private void initializeThreads() throws IOException {
@@ -3370,6 +3400,10 @@ public class HRegionServer extends HasThread implements
       }
     }
     return this.fsOk;
+  }
+
+  public DurableChunkRetriever getChunkRetriever() {
+    return DurableChunkRetriever.getInstance();
   }
 
   @Override

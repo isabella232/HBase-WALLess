@@ -952,8 +952,45 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     status.setStatus("Initializing all the Stores");
     long maxSeqId = initializeStores(reporter, status);
     this.mvcc.advanceTo(maxSeqId);
+    // Replay cells from durable chunk
+    if (this.getRegionServerServices() != null) {
+      // TODO :In real cluster how to avoid the parsing of the existing chunks when a new RS comes up but is 
+      // a normal fail over case??
+      LOG.trace("Retrieving the data for region " + this.getRegionInfo() + " from chunk retriever");
+      DurableChunkRetriever chunkRetriever =
+          ((HRegionServer) this.getRegionServerServices()).getChunkRetriever();
+      if (chunkRetriever != null) {
+        for (HStore store : this.stores.values()) {
+          List<Cell> regionChunk =
+              chunkRetriever.getCellsPerFamily(Bytes.toString(this.getRegionInfo().getRegionName()),
+                store.getColumnFamilyDescriptor().getNameAsString());
+          // }
+          Exception e = null;
+          try {
+            if (regionChunk != null) {
+              LOG.debug("Fetching cells for the region "
+                  + this.getRegionInfo().getRegionNameAsString() + " " + regionChunk.size());
+            }
+            if (regionChunk != null) {
+              // this will get excption
+              maxSeqId = Math.max(maxSeqId, replayCellsFromDurableChunk(maxSeqId, regionChunk, store));
+            }
+            // advance to the new maxSeqId
+            this.mvcc.advanceTo(maxSeqId);
+          } catch (Exception ex) {
+            e = ex;
+          } finally {
+            if (e == null) {
+              // TODO : If there is an error here. Better throw error outside.
+              chunkRetriever.clearRegionChunk(this.getRegionInfo().getRegionNameAsString(),
+                store.getColumnFamilyName());
+            }
+          }
+        }
+      }
+    }
     if (ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
-      Collection<HStore> stores = this.stores.values();
+/*      Collection<HStore> stores = this.stores.values();
       try {
         // update the stores that we are replaying
         stores.forEach(HStore::startReplayingFromWAL);
@@ -965,7 +1002,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       } finally {
         // update the stores that we are done replaying
         stores.forEach(HStore::stopReplayingFromWAL);
-      }
+      }*/
     }
     this.lastReplayedOpenRegionSeqId = maxSeqId;
 
@@ -1021,6 +1058,47 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
     status.markComplete("Region opened successfully");
     return nextSeqId;
+  }
+
+  private long replayCellsFromDurableChunk(long maxSeqIdInStoreFiles, List<Cell> cells,
+      HStore store) throws IOException {
+    MemStoreSizing memstoreSize = new MemStoreSizing();
+    LOG.debug("Applying " + cells.size() + " cells from durable chunk to the region "
+        + this.getRegionInfo());
+    MonitoredTask status = TaskMonitor.get().createStatus("Replaying from durable chunk");
+    long maxSeqId = -1;
+    boolean flush = false;
+    long curSeqId = -1;
+    for (Cell cell : cells) {
+      if (cell.getSequenceId() >= maxSeqIdInStoreFiles) {
+        if (cell.getSequenceId() > maxSeqId) {
+          maxSeqId = cell.getSequenceId();
+        }
+      } else {
+        LOG.debug("Skipping cell " + cell + " as already available in file");
+        // TODO : this has to be there. check what is happening if I uncomment this
+        //continue;
+      }
+      if (cell.getSequenceId() != curSeqId) {
+        store.add(cells, memstoreSize);
+        curSeqId = cell.getSequenceId();
+      }
+    }
+
+    // add it to the RSAccounting so that we do the accounting of these edits from durable chunk
+    if (this.rsAccounting != null) {
+      rsAccounting.addRegionReplayEditsSize(getRegionInfo().getRegionName(), memstoreSize);
+    }
+    // check if flush size has been breached
+    flush = isFlushSize(memstoreSize);
+    if (flush) {
+      // flush if the flush size is breached
+      status.setStatus("Flushing data that was got from durable chunk");
+      // TODO : What if the secondary is not up at this time? Pls check this case
+      internalFlushcache(null, maxSeqId, stores.values(), status, false,
+        FlushLifeCycleTracker.DUMMY);
+    }
+    return maxSeqId;
   }
 
   /**

@@ -72,10 +72,13 @@ public class DurableChunkCreator extends ChunkCreator {
     int id = chunkID.getAndIncrement();
     assert id > 0;
     long offsetToUse = this.offset.getAndAdd(size);
-    return new DurableSlicedChunk(id, this.durableBigChunk, offsetToUse, size);
+    DurableSlicedChunk chunk = new DurableSlicedChunk(id, this.durableBigChunk, offsetToUse, size);
+    addToChunkMap(chunk);
+    return chunk;
   }
 
   // called during regionserver clean shutdown
+  @Override
   protected void close() {
     // when there is abrupt shutdown and another process tries to read it we are able to
     // read the data. Even if the close has not happened

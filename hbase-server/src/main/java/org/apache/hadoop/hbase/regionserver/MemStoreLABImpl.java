@@ -183,6 +183,8 @@ public class MemStoreLABImpl implements MemStoreLAB {
    */
   protected Cell copyToChunkCell(Cell cell, ByteBuffer buf, int offset, int len) {
     int tagsLen = cell.getTagsLength();
+    // TODO : Write seqid per batch or per cell??Writing per batch saves space but doing
+    // so we need more meta data per cell.
     if (cell instanceof ExtendedCell) {
       ((ExtendedCell) cell).write(buf, offset);
     } else {
@@ -298,7 +300,6 @@ public class MemStoreLABImpl implements MemStoreLAB {
   }
 
   protected void processNewChunk(Chunk c) {
-
   }
 
   /* Returning a new pool chunk, without replacing current chunk,

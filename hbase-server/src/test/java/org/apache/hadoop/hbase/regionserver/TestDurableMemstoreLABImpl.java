@@ -67,7 +67,7 @@ public class TestDurableMemstoreLABImpl {
 
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
-    ChunkCreatorFactory.createChunkCreator(1 * 300, true, 70 * 1024000L, 1.0f,
+    ChunkCreatorFactory.createChunkCreator(1 * 400, true, 72 * 1024000L, 1.0f,
         1.0f, null, "./chunkfile");
   }
 
@@ -97,7 +97,7 @@ public class TestDurableMemstoreLABImpl {
     for (int i = 0; i < 100000; i++) {
       int valSize = rand.nextInt(3);
       KeyValue kv = new KeyValue(rk, cf, q, new byte[valSize]);
-      int size = KeyValueUtil.length(kv);
+      int size = KeyValueUtil.length(kv) + Bytes.SIZEOF_LONG;
       list.add(kv);
       ByteBufferKeyValue newKv = (ByteBufferKeyValue) ((DurableMemStoreLABImpl)mslab).copyCellsInto(list).get(0);
       list.clear();
@@ -146,7 +146,7 @@ public class TestDurableMemstoreLABImpl {
     for(CopyThread thread : threads) {
       thread.join();
     }
-    System.out.println();
+    System.out.println("done");
   }
 
   private static class CopyThread extends Thread {
@@ -192,7 +192,8 @@ public class TestDurableMemstoreLABImpl {
           KeyValue kv = new KeyValue(rk, cf, q, new byte[valSize]);
           int size = KeyValueUtil.length(kv);
           list.add(kv);
-          ByteBufferKeyValue newCell = (ByteBufferKeyValue) ((DurableMemStoreLABImpl)mslab).copyCellsInto(list).get(0);
+          ByteBufferKeyValue newCell =
+              (ByteBufferKeyValue) ((DurableMemStoreLABImpl) mslab).copyCellsInto(list).get(0);
           list.clear();
           totalAllocated.addAndGet(size);
           allocsByThisThread.add(new AllocRecord(newCell.getBuffer(), newCell.getOffset(), size));

@@ -265,9 +265,13 @@ public class ChunkCreator {
     }
     if (pool || (chunkIndexType == CompactingMemStore.IndexType.CHUNK_MAP)) {
       // put the pool chunk into the chunkIdMap so it is not GC-ed
-      this.chunkIdMap.put(chunk.getId(), chunk);
+      addToChunkMap(chunk);
     }
     return chunk;
+  }
+
+  protected void addToChunkMap(Chunk chunk) {
+    this.chunkIdMap.put(chunk.getId(), chunk);
   }
 
   // Chunks from pool are created covered with strong references anyway
@@ -401,6 +405,7 @@ public class ChunkCreator {
     private void putbackChunks(Chunk c) {
       int toAdd = this.maxCount - reclaimedChunks.size();
       if (c.isFromPool() && c.size == chunkSize && toAdd > 0) {
+        c.prePutbackToPool();
         reclaimedChunks.add(c);
       } else {
         // remove the chunk (that is not going to pool)
@@ -639,5 +644,21 @@ public class ChunkCreator {
     return;
   }
 
+  @VisibleForTesting
+  static ChunkCreator resetInstance() {
+    ChunkCreator cur = instance;
+    instance = null;
+    return cur;
+  }
+
+  protected static void shutdown() {
+    if (instance != null) {
+      instance.close();
+    }
+  }
+
+  protected void close() {
+    // noop
+  }
 }
 
