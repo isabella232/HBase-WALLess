@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
+import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.mnemonic.ChunkBuffer;
@@ -46,6 +47,7 @@ public class DurableSlicedChunk extends Chunk {
   public static final int SIZE_OF_SEQID = Bytes.SIZEOF_SHORT;
   public static final int OFFSET_TO_OFFSETMETA = OFFSET_TO_SEQID + SIZE_OF_SEQID;
   public static final int SIZE_OF_OFFSETMETA = Bytes.SIZEOF_LONG;
+  private static final int EO_CELLS = -1;
 
   private DurableChunk<NonVolatileMemAllocator> durableChunk;
   private ChunkBuffer chunkBuffer;
@@ -109,5 +111,17 @@ public class DurableSlicedChunk extends Chunk {
 
   public void persist() {
     this.chunkBuffer.syncToLocal();
+  }
+
+  /*
+   * Not thread safe. Should be called accordingly.
+   */
+  public void markEndOfCells() {
+    // We move from one chunk to another. Mark in the prev chunk at the end of last cell.
+    // Write a Key length as -1 to denote this is the end of cells here. In replay we
+    // consider this.
+    if (this.data.capacity() - this.nextFreeOffset.get() >= KeyValue.KEY_LENGTH_SIZE) {
+      ByteBufferUtils.putInt(this.data, this.nextFreeOffset.get(), EO_CELLS);
+    }
   }
 }

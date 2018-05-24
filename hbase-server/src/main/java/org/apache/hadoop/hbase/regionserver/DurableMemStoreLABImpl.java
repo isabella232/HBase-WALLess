@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -24,6 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -32,6 +34,8 @@ import org.apache.yetus.audience.InterfaceAudience;
 
 @InterfaceAudience.Private
 public class DurableMemStoreLABImpl extends MemStoreLABImpl {
+
+  private static final int SIZE_OF_SEQ_ID = Bytes.SIZEOF_LONG;
 
   private AtomicReference<DurableSlicedChunk> firstChunk = new AtomicReference<>();
   private volatile short chunkSeqId = 1;
@@ -58,7 +62,8 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
   public List<Cell> copyCellsInto(List<Cell> cells) {
     int totalSize = 0;
     for (Cell cell : cells) {
-      totalSize += KeyValueUtil.length(cell);
+      totalSize += serializedSizeOf(cell);
+      totalSize += SIZE_OF_SEQ_ID;// We need to serialize seqId also for durable MSLABs
     }
     DurableSlicedChunk c = null;
     int allocOffset = 0;
@@ -73,7 +78,10 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
       if (c != null) {
         synchronized (this.persistOrderingLockObj) {
           allocOffset = c.alloc(totalSize);
-          if (allocOffset != -1) {
+          if (allocOffset == -1) {
+            // We are moving from this chunk. Just mark EO cells in this
+            c.markEndOfCells();
+          } else {
             // We succeeded - this is the common case - small alloc
             // from a big buffer
             writeEntry = addWriteEntry(c, allocOffset, totalSize, null);
@@ -83,7 +91,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
         return copyCellsIntoMultiChunks(cells);
       }
     }
-    return copyCellsToChunk(cells, c, allocOffset, totalSize, writeEntry);
+    return copyCellsToChunk(cells, c, allocOffset, writeEntry);
   }
 
   private WriteEntry addWriteEntry(DurableSlicedChunk c, int offset, int len,
@@ -93,17 +101,31 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     return writeEntry;
   }
 
+  private int serializedSizeOf(Cell cell) {
+    return (cell instanceof ExtendedCell) ? ((ExtendedCell) cell).getSerializedSize(true)
+        : KeyValueUtil.length(cell);
+  }
+
   private List<Cell> copyCellsToChunk(List<Cell> cells, DurableSlicedChunk c, int allocOffset,
-      int totalSize, WriteEntry writeEntry) {
+      WriteEntry writeEntry) {
     List<Cell> toReturn = new ArrayList<>(cells.size());
-    int size;
+    int cellSize;
     for (Cell cell : cells) {
-      size = KeyValueUtil.length(cell);
-      toReturn.add(copyToChunkCell(cell, c.getData(), allocOffset, size));
-      allocOffset += size;
+      cellSize = serializedSizeOf(cell);
+      toReturn.add(copyToChunkCell(cell, c.getData(), allocOffset, cellSize));
+      allocOffset += cellSize;
+      allocOffset += SIZE_OF_SEQ_ID;// We wrote seqId also.
     }
     persistWrite(writeEntry);
     return toReturn;
+  }
+
+  @Override
+  protected Cell copyToChunkCell(Cell cell, ByteBuffer buf, int offset, int len) {
+    Cell newCell = super.copyToChunkCell(cell, buf, offset, len);
+    // Write the seqId of Cell
+    ByteBufferUtils.putLong(buf, offset + len, newCell.getSequenceId());
+    return newCell;
   }
 
   private List<Cell> copyCellsIntoMultiChunks(List<Cell> cells) {
@@ -118,18 +140,20 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     this.lock.lock();
     try {
       for (int i = 0; i < cells.size(); i++) {
-        int size = KeyValueUtil.length(cells.get(i));
-        ObjectIntPair<DurableSlicedChunk> chunkAndOffset = allocChunk(size);
+        int cellSize = serializedSizeOf(cells.get(i)) + SIZE_OF_SEQ_ID;
+        ObjectIntPair<DurableSlicedChunk> chunkAndOffset = allocChunk(cellSize);
         offsets[i] = chunkAndOffset;
         if (lastChunk == null || lastChunk != chunkAndOffset.getFirst()) {
+          if (lastChunk != null) {
+            lastChunk.markEndOfCells();
+          }
           uniqueChunks.add(chunkAndOffset.getFirst());
           offset = Integer.MAX_VALUE;
           len = 0;
         }
         lastChunk = chunkAndOffset.getFirst();
         offset = Integer.min(offset, chunkAndOffset.getSecond());
-        len += size;
-        
+        len += cellSize;
       }
       lastChunk = uniqueChunks.remove(uniqueChunks.size() - 1);
       synchronized (this.persistOrderingLockObj) {
@@ -141,10 +165,8 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     List<Cell> toReturn = new ArrayList<>(cells.size());
     for (int i = 0; i < cells.size(); i++) {
       Cell cell = cells.get(i);
-      // TODO Here when we move from one chunk to another, write -1 as the cell key length at the
-      // end (if more than 3 bytes remaining) to mark as end of data in the present chunk.
       toReturn.add(copyToChunkCell(cell, offsets[i].getFirst().getData(), offsets[i].getSecond(),
-          KeyValueUtil.length(cell)));
+          serializedSizeOf(cell)));
     }
     persistWrite(writeEntry);
     return toReturn;
@@ -196,10 +218,15 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     }
     lastChunk.persist(offset, len);
     // Update the meta data in the first chunk
-    ByteBufferUtils.putInt(this.firstChunk.get().data, DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
+    // TODO Confirm below logic is correct and then removed the commented lines
+    long meta = lastChunk.getId();
+    meta = (meta << 32) + (int) (offset + len);
+    ByteBufferUtils.putLong(this.firstChunk.get().data, DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
+        meta);
+    /*ByteBufferUtils.putInt(this.firstChunk.get().data, DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
         lastChunk.getId());
     ByteBufferUtils.putInt(this.firstChunk.get().data,
-        DurableSlicedChunk.OFFSET_TO_OFFSETMETA + Bytes.SIZEOF_INT, (int) (offset + len));
+        DurableSlicedChunk.OFFSET_TO_OFFSETMETA + Bytes.SIZEOF_INT, (int) (offset + len));*/
     this.firstChunk.get().persist(DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
         DurableSlicedChunk.SIZE_OF_OFFSETMETA);
   }
