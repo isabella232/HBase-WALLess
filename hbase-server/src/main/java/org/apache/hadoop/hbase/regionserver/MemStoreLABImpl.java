@@ -286,10 +286,10 @@ public class MemStoreLABImpl implements MemStoreLAB {
         }
         c = this.chunkCreator.getChunk(this.regionName, this.cfName, idxType);
         if (c != null) {
+          processNewChunk(c);
           // set the curChunk. No need of CAS as only one thread will be here
           currChunk.set(c);
           chunks.add(c.getId());
-          processNewChunk(c);
           return c;
         }
       } finally {

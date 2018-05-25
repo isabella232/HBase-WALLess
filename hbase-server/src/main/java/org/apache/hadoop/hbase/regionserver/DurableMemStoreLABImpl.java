@@ -21,7 +21,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.hadoop.conf.Configuration;
@@ -39,7 +38,6 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
   private static final int SIZE_OF_SEQ_ID = Bytes.SIZEOF_LONG;
 
   private AtomicReference<DurableSlicedChunk> firstChunk = new AtomicReference<>();
-  private CountDownLatch firstChunkLatch = new CountDownLatch(1);
   private volatile short chunkSeqId = 1;
 
   private volatile int writeSeqId = 1;
@@ -220,22 +218,11 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
       len += completedWrite.len;
     }
     lastChunk.persist(offset, len);
-    if (this.firstChunk.get() == null) {
-      try {
-        // This is needed because when the first few threads arrive for writes, the first thread that
-        // creates the chunk may not have yet assigned the firstChunk reference, but since 'currChunk'
-        // is already formed, the subsequent threads may go ahead with the writes. When the other thread
-        // tries to use the firstChunk's reference it may be null. So we need to wait for the firstChunk reference
-        // to be actually created.
-        firstChunkLatch.await();
-      } catch (InterruptedException e) {
-        // TODO : handle interupped exception
-      }
-    }
     // Update the meta data in the first chunk
     // TODO Confirm below logic is correct and then removed the commented lines
     long meta = lastChunk.getId();
     meta = (meta << 32) + (int) (offset + len);
+    // TODO check why write using BBUtils not working in some cases. May be some Endian issues?
     this.firstChunk.get().data.putLong(DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
       meta);
     this.firstChunk.get().persist(DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
@@ -306,15 +293,12 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
   protected void processNewChunk(Chunk c) {
     // Add seqId into this chunk
     // We call this under lock. So the seqId need not be a thread safe state.
+    // TODO check why write using BBUtils not working in some cases. May be some Endian issues?
     c.data.putShort(DurableSlicedChunk.OFFSET_TO_SEQID, chunkSeqId++);
     assert c instanceof DurableSlicedChunk;
     ((DurableSlicedChunk) c).persist(DurableSlicedChunk.OFFSET_TO_SEQID,
         DurableSlicedChunk.SIZE_OF_SEQID);
     this.firstChunk.compareAndSet(null, (DurableSlicedChunk) c);
-    // countdown only for the first time
-    if (firstChunkLatch.getCount() > 0) {
-      firstChunkLatch.countDown();
-    }
   }
 
   private class WriteEntry {

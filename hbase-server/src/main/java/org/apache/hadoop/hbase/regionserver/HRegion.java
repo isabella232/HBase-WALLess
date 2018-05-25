@@ -990,7 +990,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
     }
     if (ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
-/*      Collection<HStore> stores = this.stores.values();
+      // TODO this should not be commented out ideally. We should make the memstore replication as a
+      // special WAL impl. Then we will not even have the WAL file. So we can still have this code.
+      // Till we do this correctly, lets comment it out.
+      /*Collection<HStore> stores = this.stores.values();
       try {
         // update the stores that we are replaying
         stores.forEach(HStore::startReplayingFromWAL);

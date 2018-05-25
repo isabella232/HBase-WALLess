@@ -104,40 +104,10 @@ public class DurableSlicedChunk extends Chunk {
   public void prePutbackToPool() {
     // mark the 4 bytes where we mark the end offset as -1. So that we can use this value to decide
     // if the chunk was flushed
+    //  TODO check once.
     data.putInt(OFFSET_TO_SEQID + SIZE_OF_SEQID + Bytes.SIZEOF_INT, 0);
     // sync this value
     chunkBuffer.syncToLocal(OFFSET_TO_SEQID + SIZE_OF_SEQID + Bytes.SIZEOF_INT, Bytes.SIZEOF_INT);
-  }
-
-  @Override
-  public int alloc(int size) {
-    while (true) {
-      int oldOffset = nextFreeOffset.get();
-      if (oldOffset == UNINITIALIZED) {
-        // The chunk doesn't have its data allocated yet.
-        // Since we found this in curChunk, we know that whoever
-        // CAS-ed it there is allocating it right now. So spin-loop
-        // shouldn't spin long!
-        Thread.yield();
-        continue;
-      }
-      if (oldOffset == OOM) {
-        // doh we ran out of ram. return -1 to chuck this away.
-        return -1;
-      }
-
-      if (oldOffset + size > data.capacity()) {
-        return -1; // alloc doesn't fit
-      }
-      // TODO : If seqID is to be written add 8 bytes here for nextFreeOFfset
-      // Try to atomically claim this chunk
-      if (nextFreeOffset.compareAndSet(oldOffset, oldOffset + size)) {
-        // we got the alloc
-        allocCount.incrementAndGet();
-        return oldOffset;
-      }
-      // we raced and lost alloc, try again
-    }
   }
 
   public void persist(long offset, int len) {
