@@ -51,8 +51,11 @@ public class ChunkCreatorFactory {
           MemStoreLABImpl.INDEX_CHUNK_PERCENTAGE_DEFAULT);
     }
     // create the pool here
-    chunkCreator.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage,
-      MemStoreLABImpl.INDEX_CHUNK_PERCENTAGE_DEFAULT, initialCountPercentage, heapMemoryManager);
+    /*chunkCreator.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage,
+      MemStoreLABImpl.INDEX_CHUNK_PERCENTAGE_DEFAULT, initialCountPercentage, heapMemoryManager);*/
+    // TODO the index chunk size % is passed as 0. We should allow configuring this.
+    chunkCreator.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage, 0,
+        initialCountPercentage, heapMemoryManager);
     ChunkCreator.instance = chunkCreator;
   }
 

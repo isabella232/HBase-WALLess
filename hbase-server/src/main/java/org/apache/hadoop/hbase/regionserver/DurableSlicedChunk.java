@@ -17,9 +17,17 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
+import java.io.IOException;
+import java.util.Optional;
+
+import org.apache.hadoop.hbase.ByteBufferKeyValue;
+import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.KeyValue;
+import org.apache.hadoop.hbase.Tag;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.hbase.util.Pair;
 import org.apache.mnemonic.ChunkBuffer;
 import org.apache.mnemonic.DurableChunk;
 import org.apache.mnemonic.NonVolatileMemAllocator;
@@ -45,10 +53,13 @@ import org.apache.yetus.audience.InterfaceAudience;
 @InterfaceAudience.Private
 public class DurableSlicedChunk extends Chunk {
 
+  public static final int SIZE_OF_CELL_SEQ_ID = Bytes.SIZEOF_LONG;
+  public static final int UNUSED_SEQID = 0;
   public static final int OFFSET_TO_SEQID = Bytes.SIZEOF_INT;
-  public static final int SIZE_OF_SEQID = Bytes.SIZEOF_SHORT;
+  public static final int SIZE_OF_SEQID = Bytes.SIZEOF_INT;
   public static final int OFFSET_TO_OFFSETMETA = OFFSET_TO_SEQID + SIZE_OF_SEQID;
   public static final int SIZE_OF_OFFSETMETA = Bytes.SIZEOF_LONG;
+  public static final int OFFSET_TO_REGION_IDENTIFIER = OFFSET_TO_OFFSETMETA + SIZE_OF_OFFSETMETA; 
   private static final int EO_CELLS = -1;
 
   private DurableChunk<NonVolatileMemAllocator> durableChunk;
@@ -73,17 +84,13 @@ public class DurableSlicedChunk extends Chunk {
     // fill the data here
     // Every chunk will have
     // 1) The chunk id (integer)
-    // 2) SeqId Short value representing seqId of this chunk within this region:cf
+    // 2) SeqId Int value representing seqId of this chunk within this region:cf
     // 3) The end offset - A long value representing upto which the data was actually synced.
     //    4 bytes of last chunk's seqId followed by 4 bytes of offset within it. 
     // 4) The region name (Region Name length as int and then name bytes)
     // 5) The CF name (CF Name length as int and then name bytes)
 
-    // 4 bytes taken by chunkId and 2 bytes by seqId for this chunk. ChunkId at the global
-    // ChunkCreator level where as the seqId is at MSLAB impl level sequencing.
-    int offset = OFFSET_TO_SEQID + SIZE_OF_SEQID + SIZE_OF_OFFSETMETA;
-    // next 4 bytes will inidcate the endPreamble. will be filled in after every cell is written
-    // this should be int or short?
+    int offset = OFFSET_TO_REGION_IDENTIFIER;
     if (regionName != null) {
       assert cfName != null;
       data.putInt(offset, regionName.length);// Write regionName
@@ -94,20 +101,42 @@ public class DurableSlicedChunk extends Chunk {
       offset += Bytes.SIZEOF_INT;
       ByteBufferUtils.copyFromArrayToBuffer(this.data, offset, cfName, 0, cfName.length);
       offset += cfName.length;
-      chunkBuffer.syncToLocal(0, offset);
-      // Next 4 bytes will be used for storing the end offset until which the cells are added.
+      chunkBuffer.syncToLocal(OFFSET_TO_REGION_IDENTIFIER, (offset - OFFSET_TO_REGION_IDENTIFIER));
     }
     return offset;
   }
 
+  /**
+   * @return The name of the region:cf which this chunk is been assigned to. Null if it is not
+   *         having data from any of the region:cf.
+   */
+  // TODO use BBUtils
+  Pair<byte[], byte[]> getOwnerRegionStore() {
+    int seqId = this.data.getInt(OFFSET_TO_SEQID);
+    // TODO On a fresh file based chunk area, chances of we getting a >0 integer is likely. We need
+    // a better way to know whether this is a fresh file open or second time. A file level meta data
+    // will work? 
+    if (seqId > UNUSED_SEQID) {
+      int offset = OFFSET_TO_REGION_IDENTIFIER;
+      int regionNameLen = this.data.getInt(offset);
+      byte[] regionName =  new byte[regionNameLen];
+      offset += Bytes.SIZEOF_INT;
+      ByteBufferUtils.copyFromBufferToArray(regionName, this.data, offset, 0, regionNameLen);
+      offset += regionNameLen;
+      int cfNameLen = this.data.getInt(offset);
+      byte[] cfName =  new byte[cfNameLen];
+      offset += Bytes.SIZEOF_INT;
+      ByteBufferUtils.copyFromBufferToArray(cfName, this.data, offset, 0, cfNameLen);
+      return new Pair<byte[], byte[]>(regionName, cfName);
+    }
+    return null;
+  }
+
   @Override
   public void prePutbackToPool() {
-    // mark the 4 bytes where we mark the end offset as -1. So that we can use this value to decide
-    // if the chunk was flushed
-    //  TODO check once.
-    data.putInt(OFFSET_TO_SEQID + SIZE_OF_SEQID + Bytes.SIZEOF_INT, 0);
-    // sync this value
-    chunkBuffer.syncToLocal(OFFSET_TO_SEQID + SIZE_OF_SEQID + Bytes.SIZEOF_INT, Bytes.SIZEOF_INT);
+    // TODO check why write using BBUtils not working in some cases.
+    data.putInt(OFFSET_TO_SEQID, UNUSED_SEQID);
+    chunkBuffer.syncToLocal(OFFSET_TO_SEQID, SIZE_OF_SEQID);
   }
 
   public void persist(long offset, int len) {
@@ -121,12 +150,78 @@ public class DurableSlicedChunk extends Chunk {
   /*
    * Not thread safe. Should be called accordingly.
    */
-  public void markEndOfCells() {
+  void markEndOfCells() {
     // We move from one chunk to another. Mark in the prev chunk at the end of last cell.
     // Write a Key length as -1 to denote this is the end of cells here. In replay we
     // consider this.
     if (this.data.capacity() - this.nextFreeOffset.get() >= KeyValue.KEY_LENGTH_SIZE) {
       ByteBufferUtils.putInt(this.data, this.nextFreeOffset.get(), EO_CELLS);
     }
+  }
+
+  int getSeqId() {
+    // TODO work with BBUtils?
+    return this.data.getInt(OFFSET_TO_SEQID);
+  }
+
+  Pair<Integer, Integer> getCellsOffsetMeta() {
+    if (this.getSeqId() != 1) {
+      throw new IllegalStateException();
+    }
+    // TODO work with BBUtils?
+    long meta = this.data.getLong(OFFSET_TO_OFFSETMETA);
+    int endOffset = (int) (Bytes.MASK_FOR_LOWER_INT_IN_LONG ^ meta);
+    int lastChunkSeqId = (int) (meta >> Integer.SIZE);
+    return new Pair<Integer, Integer>(lastChunkSeqId, endOffset);
+  }
+
+  void writeEndOfCellsOffset(int lastChunkSeqId, int lastOffset) {
+    // TODO Confirm below logic is correct and then removed the commented lines
+    long meta = lastChunkSeqId;
+    meta = (meta << Integer.SIZE) + lastOffset;
+    // TODO check why write using BBUtils not working in some cases. May be some Endian issues?
+    this.data.putLong(OFFSET_TO_OFFSETMETA, meta);
+    this.persist(OFFSET_TO_OFFSETMETA, SIZE_OF_OFFSETMETA);
+  }
+
+  CellScanner getCellScanner(Optional<Integer> endOffset) {
+    CellScanner scanner = new CellScanner() {
+      private Cell curCell = null;
+      private int offset = getCellOffset();
+
+      @Override
+      public Cell current() {
+        return this.curCell;
+      }
+
+      // TODO use BBUtils APIs
+      @Override
+      public boolean advance() throws IOException {
+        int keyLen, valLen, tagsLen;
+        if (endOffset.isPresent() && this.offset >= endOffset.get()) return false;
+        int offsetTmp = this.offset;
+        keyLen = data.getInt(offsetTmp);
+        if (keyLen == EO_CELLS) return false;
+        offsetTmp += KeyValue.KEY_LENGTH_SIZE;
+        valLen = data.getInt(offsetTmp);
+        offsetTmp += (KeyValue.KEY_LENGTH_SIZE + keyLen + valLen);
+        // Read tags
+        tagsLen = ByteBufferUtils.readAsInt(data, offsetTmp, Tag.TAG_LENGTH_SIZE);
+        offsetTmp += (Tag.TAG_LENGTH_SIZE + tagsLen);
+        long seqId = data.getLong(offsetTmp);
+        this.curCell = new ByteBufferKeyValue(data, this.offset, offsetTmp - this.offset, seqId);
+        this.offset = offsetTmp + SIZE_OF_CELL_SEQ_ID;
+        return true;
+      }
+    };
+    return scanner;
+  }
+
+  private int getCellOffset() {
+    int offset = OFFSET_TO_REGION_IDENTIFIER;
+    int regionNameLen = this.data.getInt(offset);
+    offset += regionNameLen;
+    int cfNameLen = this.data.getInt(offset);
+    return offset + cfNameLen;
   }
 }

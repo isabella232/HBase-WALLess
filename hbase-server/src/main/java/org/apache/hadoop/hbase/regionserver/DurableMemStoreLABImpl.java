@@ -17,6 +17,8 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
+import static org.apache.hadoop.hbase.regionserver.DurableSlicedChunk.SIZE_OF_CELL_SEQ_ID;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -28,17 +30,14 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ObjectIntPair;
 import org.apache.yetus.audience.InterfaceAudience;
 
 @InterfaceAudience.Private
 public class DurableMemStoreLABImpl extends MemStoreLABImpl {
 
-  private static final int SIZE_OF_SEQ_ID = Bytes.SIZEOF_LONG;
-
   private AtomicReference<DurableSlicedChunk> firstChunk = new AtomicReference<>();
-  private volatile short chunkSeqId = 1;
+  private volatile int chunkSeqId = 1;
 
   private volatile int writeSeqId = 1;
   private final LinkedList<WriteEntry> writeQueue = new LinkedList<>();
@@ -64,7 +63,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     for (Cell cell : cells) {
       totalSize += serializedSizeOf(cell);
       // Currently seqId being written after every cell. May be waste of space (from tests).
-      totalSize += SIZE_OF_SEQ_ID;// We need to serialize seqId also for durable MSLABs
+      totalSize += SIZE_OF_CELL_SEQ_ID;// We need to serialize seqId also for durable MSLABs
     }
     DurableSlicedChunk c = null;
     int allocOffset = 0;
@@ -115,7 +114,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
       cellSize = serializedSizeOf(cell);
       toReturn.add(copyToChunkCell(cell, c.getData(), allocOffset, cellSize));
       allocOffset += cellSize;
-      allocOffset += SIZE_OF_SEQ_ID;// We wrote seqId also.
+      allocOffset += SIZE_OF_CELL_SEQ_ID;// We wrote seqId also.
     }
     persistWrite(writeEntry);
     return toReturn;
@@ -141,7 +140,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     this.lock.lock();
     try {
       for (int i = 0; i < cells.size(); i++) {
-        int cellSize = serializedSizeOf(cells.get(i)) + SIZE_OF_SEQ_ID;
+        int cellSize = serializedSizeOf(cells.get(i)) + SIZE_OF_CELL_SEQ_ID;
         ObjectIntPair<DurableSlicedChunk> chunkAndOffset = allocChunk(cellSize);
         offsets[i] = chunkAndOffset;
         if (lastChunk == null || lastChunk != chunkAndOffset.getFirst()) {
@@ -219,15 +218,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     }
     lastChunk.persist(offset, len);
     // Update the meta data in the first chunk
-    // TODO Confirm below logic is correct and then removed the commented lines
-    long meta = lastChunk.getId();
-    meta = (meta << 32) + (int) (offset + len);
-    // TODO check why write using BBUtils not working in some cases. May be some Endian issues?
-    this.firstChunk.get().data.putLong(DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
-      meta);
-    this.firstChunk.get().persist(DurableSlicedChunk.OFFSET_TO_OFFSETMETA,
-      DurableSlicedChunk.SIZE_OF_OFFSETMETA);
-
+    this.firstChunk.get().writeEndOfCellsOffset(lastChunk.getSeqId(), (int) (offset + len));
   }
 
   private void waitForPriorWritesCompletion(WriteEntry writeEntry) {
@@ -294,7 +285,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     // Add seqId into this chunk
     // We call this under lock. So the seqId need not be a thread safe state.
     // TODO check why write using BBUtils not working in some cases. May be some Endian issues?
-    c.data.putShort(DurableSlicedChunk.OFFSET_TO_SEQID, chunkSeqId++);
+    c.data.putInt(DurableSlicedChunk.OFFSET_TO_SEQID, chunkSeqId++);
     assert c instanceof DurableSlicedChunk;
     ((DurableSlicedChunk) c).persist(DurableSlicedChunk.OFFSET_TO_SEQID,
         DurableSlicedChunk.SIZE_OF_SEQID);

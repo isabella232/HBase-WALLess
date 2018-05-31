@@ -19,6 +19,7 @@ package org.apache.hadoop.hbase.regionserver;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.hadoop.hbase.util.Pair;
 import org.apache.mnemonic.DurableChunk;
 import org.apache.mnemonic.NonVolatileMemAllocator;
 import org.apache.mnemonic.Reclaim;
@@ -35,6 +36,7 @@ public class DurableChunkCreator extends ChunkCreator {
   // as in mnemonic's ChunkBufferNGTest
   private long uniqueId = 23l;
   private NonVolatileMemAllocator allocator;
+  private DurableChunkRetrieverV2 retriever = null;
 
   DurableChunkCreator(int chunkSize, long globalMemStoreSize, String durablePath) {
     super(chunkSize, true, globalMemStoreSize, 1.0F, 1.0F, null, 0);// TODO what should be last arg?
@@ -43,7 +45,7 @@ public class DurableChunkCreator extends ChunkCreator {
     allocator = new NonVolatileMemAllocator(
       // creating twice the size of the configured memory. This works for now
         Utils.getNonVolatileMemoryAllocatorService("pmem"),
-        (long) ((2 * globalMemStoreSize)),
+        (long) ((2 * globalMemStoreSize)), // TODO this 2x is not needed. Give correct value.
         durablePath, true);
     // TODO : Understand what is this
     allocator.setChunkReclaimer(new Reclaim<Long>() {
@@ -59,10 +61,23 @@ public class DurableChunkCreator extends ChunkCreator {
     }
     // this.uniqueId = durablePath.hashCode();
     // set the handler with the unique id
+    // TODO what is this used for?
     allocator.setHandler(uniqueId, durableBigChunk.getHandler());
   }
 
-  protected Chunk createChunk(boolean pool, CompactingMemStore.IndexType chunkIndexType, int size) {
+  @Override
+  protected void initializePools(int chunkSize, long globalMemStoreSize, float poolSizePercentage,
+      float indexChunkSizePercentage, float initialCountPercentage,
+      HeapMemoryManager heapMemoryManager) {
+    super.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage,
+        indexChunkSizePercentage, initialCountPercentage, heapMemoryManager);
+    // TODO we need to deal with index chunks and pool also.
+    retriever = DurableChunkRetrieverV2.init((DurableMemStoreChunkPool) this.dataChunksPool);
+  }
+
+  @Override
+  protected DurableSlicedChunk createChunk(boolean pool,
+      CompactingMemStore.IndexType chunkIndexType, int size) {
     if (!pool) {
       // For Durable chunks it must be pooled. Trying a random chunk here wont be work as that will
       // be on heap one and that will be volatile
@@ -84,6 +99,34 @@ public class DurableChunkCreator extends ChunkCreator {
     // read the data. Even if the close has not happened
     if (this.allocator != null) {
       this.allocator.close();
+    }
+  }
+
+  @Override
+  protected MemStoreChunkPool createMemStoreChunkPool(String label, float poolSizePercentage,
+      int chunkSize, int maxCount, int initialCount) {
+    return new DurableMemStoreChunkPool(label, chunkSize, maxCount, initialCount,
+        poolSizePercentage);
+  }
+
+  class DurableMemStoreChunkPool extends MemStoreChunkPool {
+
+    DurableMemStoreChunkPool(String label, int chunkSize, int maxCount, int initialCount,
+        float poolSizePercentage) {
+      super(label, chunkSize, maxCount, initialCount, poolSizePercentage);
+    }
+
+    @Override
+    protected void createInitialChunks(int chunkSize, int initialCount) {
+      for (int i = 0; i < initialCount; i++) {
+        DurableSlicedChunk chunk = createChunk(true, CompactingMemStore.IndexType.ARRAY_MAP,
+            chunkSize);
+        chunk.init();
+        Pair<byte[], byte[]> ownerRegionStore = chunk.getOwnerRegionStore();
+        if (ownerRegionStore == null || !(retriever.appendChunk(ownerRegionStore, chunk))) {
+          reclaimedChunks.add(chunk);
+        }
+      }
     }
   }
 }

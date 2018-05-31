@@ -79,7 +79,7 @@ public class ChunkCreator {
   static ChunkCreator instance;
   @VisibleForTesting
   static boolean chunkPoolDisabled = false;
-  private MemStoreChunkPool dataChunksPool;
+  protected MemStoreChunkPool dataChunksPool;
   private int chunkSize;
   private MemStoreChunkPool indexChunksPool;
 
@@ -92,7 +92,7 @@ public class ChunkCreator {
   }
 
   @VisibleForTesting
-  void initializePools(int chunkSize, long globalMemStoreSize,
+  protected void initializePools(int chunkSize, long globalMemStoreSize,
                                float poolSizePercentage, float indexChunkSizePercentage,
                                float initialCountPercentage,
                                HeapMemoryManager heapMemoryManager) {
@@ -322,12 +322,12 @@ public class ChunkCreator {
    * decrease allocating bytes when writing, thereby optimizing the garbage
    * collection on JVM.
    */
-  private  class MemStoreChunkPool implements HeapMemoryTuneObserver {
+  protected class MemStoreChunkPool implements HeapMemoryTuneObserver {
     private final int chunkSize;
     private int maxCount;
 
     // A queue of reclaimed chunks
-    private final BlockingQueue<Chunk> reclaimedChunks;
+    protected final BlockingQueue<Chunk> reclaimedChunks;
     private final float poolSizePercentage;
 
     /** Statistics thread schedule pool */
@@ -345,17 +345,21 @@ public class ChunkCreator {
       this.maxCount = maxCount;
       this.poolSizePercentage = poolSizePercentage;
       this.reclaimedChunks = new LinkedBlockingQueue<>();
-      for (int i = 0; i < initialCount; i++) {
-        Chunk chunk = createChunk(true, CompactingMemStore.IndexType.ARRAY_MAP, chunkSize);
-        chunk.init();
-        reclaimedChunks.add(chunk);
-      }
+      createInitialChunks(chunkSize, initialCount);
       chunkCount.set(initialCount);
       final String n = Thread.currentThread().getName();
       scheduleThreadPool = Executors.newScheduledThreadPool(1, new ThreadFactoryBuilder()
               .setNameFormat(n + "-MemStoreChunkPool Statistics").setDaemon(true).build());
       this.scheduleThreadPool.scheduleAtFixedRate(new StatisticsThread(), statThreadPeriod,
               statThreadPeriod, TimeUnit.SECONDS);
+    }
+
+    protected void createInitialChunks(int chunkSize, int initialCount) {
+      for (int i = 0; i < initialCount; i++) {
+        Chunk chunk = createChunk(true, CompactingMemStore.IndexType.ARRAY_MAP, chunkSize);
+        chunk.init();
+        reclaimedChunks.add(chunk);
+      }
     }
 
     /**
@@ -402,7 +406,7 @@ public class ChunkCreator {
      * chunks
      * @param c
      */
-    private void putbackChunks(Chunk c) {
+    void putbackChunks(Chunk c) {
       int toAdd = this.maxCount - reclaimedChunks.size();
       if (c.isFromPool() && c.size == chunkSize && toAdd > 0) {
         c.prePutbackToPool();
@@ -503,12 +507,19 @@ public class ChunkCreator {
     int initialCount = (int) (initialCountPercentage * maxCount);
     LOG.info("Allocating {} MemStoreChunkPool with chunk size {}, max count {}, initial count {}",
         label, StringUtils.byteDesc(chunkSize), maxCount, initialCount);
-    MemStoreChunkPool memStoreChunkPool = new MemStoreChunkPool(label, chunkSize, maxCount,
-            initialCount, poolSizePercentage);
+    MemStoreChunkPool memStoreChunkPool = createMemStoreChunkPool(label, poolSizePercentage,
+        chunkSize, maxCount, initialCount);
     if (!(this.offheap) && heapMemoryManager != null && memStoreChunkPool != null) {
       // Register with Heap Memory manager
       heapMemoryManager.registerTuneObserver(memStoreChunkPool);
     }
+    return memStoreChunkPool;
+  }
+
+  protected MemStoreChunkPool createMemStoreChunkPool(String label, float poolSizePercentage,
+      int chunkSize, int maxCount, int initialCount) {
+    MemStoreChunkPool memStoreChunkPool = new MemStoreChunkPool(label, chunkSize, maxCount,
+        initialCount, poolSizePercentage);
     return memStoreChunkPool;
   }
 
