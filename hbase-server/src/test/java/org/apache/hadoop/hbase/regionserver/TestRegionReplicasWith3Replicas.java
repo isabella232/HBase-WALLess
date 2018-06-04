@@ -83,6 +83,7 @@ public class TestRegionReplicasWith3Replicas {
   public static void before() throws Exception {
     // Reduce the hdfs block size and prefetch to trigger the file-link reopen
     // when the file is moved to archive (e.g. compaction)
+    DurableMemStoreLABImpl.useDurableMemstore = false;
     HTU.getConfiguration().setInt(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, 8192);
     HTU.getConfiguration().setInt(DFSConfigKeys.DFS_CLIENT_READ_PREFETCH_SIZE_KEY, 1);
     HTU.getConfiguration().setInt(HConstants.HREGION_MEMSTORE_FLUSH_SIZE, 128 * 1024 * 1024);
@@ -112,6 +113,7 @@ public class TestRegionReplicasWith3Replicas {
   public static void afterClass() throws Exception {
     HRegionServer.TEST_SKIP_REPORTING_TRANSITION = false;
     table.close();
+    DurableMemStoreLABImpl.useDurableMemstore = false;
     HTU.shutdownMiniCluster();
   }
 
@@ -180,7 +182,8 @@ public class TestRegionReplicasWith3Replicas {
       pair = openSecondary();
       tertiaryOpenedIn = openTertiary(pair);
       // load some data to primary
-      HTU.loadNumericRows(table, f, 0, 100);
+      loadInDifferentThreads();
+      //HTU.loadNumericRows(table, f, 0, 100);
       // assert that we can read back from primary
       Assert.assertEquals(100, HTU.countRows(table));
       // flush so that region replica can read
@@ -207,6 +210,37 @@ public class TestRegionReplicasWith3Replicas {
     }
   }
 
+  private void loadInDifferentThreads() throws InterruptedException {
+    // TODO Auto-generated method stub
+    int threads = 100;
+    LoadThread[] loadThreads = new LoadThread[threads];
+    for(int i = 0; i < threads; i++) {
+      loadThreads[i] = new LoadThread();
+    }
+    for(int i = 0; i < threads; i++) {
+      loadThreads[i].start();
+    }
+    for(int i = 0; i < threads; i++) {
+      loadThreads[i].join();
+    }
+  }
+
+  private static class LoadThread extends Thread {
+/*    Table table;
+    public LoadThread(Table table) {
+      this.table = table;
+    }*/
+    @Override
+    public void run() {
+      try {
+        HTU.loadNumericRows(table, f, 0, 100);
+      } catch (IOException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
+    }
+  }
+  
   private void restartRegionServer() throws Exception {
     afterClass();
     before();

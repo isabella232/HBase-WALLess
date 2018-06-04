@@ -71,7 +71,7 @@ public class RegionReplicaHealthManager extends ScheduledChore {
       });
     }
   }
-  
+
   private Map<ServerName, List<Pair<RegionInfo, Long>>> groupRegionsPerRS(
       Map<RegionInfo, Long> badRegionsLocal) {
     Map<ServerName, List<Pair<RegionInfo, Long>>> serverVsRegions = new HashMap<>();

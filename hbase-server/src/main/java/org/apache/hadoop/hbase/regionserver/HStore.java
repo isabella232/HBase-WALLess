@@ -1425,7 +1425,7 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
       List<Path> newFiles) throws IOException {
     // Do the steps necessary to complete the compaction.
     List<HStoreFile> sfs = moveCompactedFilesIntoPlace(cr, newFiles, user);
-    writeCompactionWalRecord(filesToCompact, sfs);
+    sendCompactionRecordRpc(filesToCompact, sfs);
     replaceStoreFiles(filesToCompact, sfs);
     if (cr.isMajor()) {
       majorCompactedCellsCount.addAndGet(getCompactionProgress().getTotalCompactingKVs());
@@ -1479,7 +1479,7 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
    * @param filesCompacted Files compacted (input).
    * @param newFiles Files from compaction.
    */
-  private void writeCompactionWalRecord(Collection<HStoreFile> filesCompacted,
+  private void sendCompactionRecordRpc(Collection<HStoreFile> filesCompacted,
       Collection<HStoreFile> newFiles) throws IOException {
     if (region.getWAL() == null) {
       return;
@@ -1494,8 +1494,8 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
     // Fix reaching into Region to get the maxWaitForSeqId.
     // Does this method belong in Region altogether given it is making so many references up there?
     // Could be Region#writeCompactionMarker(compactionDescriptor);
-    WALUtil.writeCompactionMarker(this.region.getWAL(), this.region.getReplicationScope(),
-        this.region.getRegionInfo(), compactionDescriptor, this.region.getMVCC());
+    // here it is replicas offered is 1 as it is primary
+    this.region.sendCompactionRPC(compactionDescriptor, 1);
   }
 
   @VisibleForTesting
@@ -1863,7 +1863,7 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
     }
 
     Collection<HStoreFile> newFiles = Collections.emptyList(); // No new files.
-    writeCompactionWalRecord(delSfs, newFiles);
+    sendCompactionRecordRpc(delSfs, newFiles);
     replaceStoreFiles(delSfs, newFiles);
     completeCompaction(delSfs);
     LOG.info("Completed removal of " + delSfs.size() + " unnecessary (expired) file(s) in "

@@ -21,7 +21,6 @@ import static org.apache.hadoop.hbase.HConstants.REPLICATION_SCOPE_LOCAL;
 import static org.apache.hadoop.hbase.regionserver.HStoreFile.MAJOR_COMPACTION_KEY;
 import static org.apache.hadoop.hbase.util.CollectionUtils.computeIfAbsent;
 
-import edu.umd.cs.findbugs.annotations.Nullable;
 import java.io.EOFException;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -49,6 +48,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -71,6 +71,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -156,6 +157,24 @@ import org.apache.hadoop.hbase.regionserver.throttle.StoreHotnessProtector;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.regionserver.wal.WALUtil;
 import org.apache.hadoop.hbase.security.User;
+import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.CoprocessorServiceCall;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.RegionLoad;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.StoreSequenceId;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.SnapshotProtos.SnapshotDescription;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.BulkLoadDescriptor;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.CompactionDescriptor;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.FlushDescriptor;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.FlushDescriptor.FlushAction;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.FlushDescriptor.StoreFlushDescriptor;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.RegionEventDescriptor;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.RegionEventDescriptor.EventType;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.StoreDescriptor;
 import org.apache.hadoop.hbase.snapshot.SnapshotDescriptionUtils;
 import org.apache.hadoop.hbase.snapshot.SnapshotManifest;
 import org.apache.hadoop.hbase.trace.TraceUtil;
@@ -180,11 +199,6 @@ import org.apache.hadoop.hbase.wal.WALSplitter;
 import org.apache.hadoop.hbase.wal.WALSplitter.MutationReplay;
 import org.apache.hadoop.io.MultipleIOException;
 import org.apache.hadoop.util.StringUtils;
-import org.apache.htrace.core.TraceScope;
-import org.apache.yetus.audience.InterfaceAudience;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hbase.thirdparty.com.google.common.base.Preconditions;
 import org.apache.hbase.thirdparty.com.google.common.collect.Lists;
@@ -194,24 +208,12 @@ import org.apache.hbase.thirdparty.com.google.protobuf.Service;
 import org.apache.hbase.thirdparty.com.google.protobuf.TextFormat;
 import org.apache.hbase.thirdparty.com.google.protobuf.UnsafeByteOperations;
 import org.apache.hbase.thirdparty.org.apache.commons.collections4.CollectionUtils;
+import org.apache.htrace.core.TraceScope;
+import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.CoprocessorServiceCall;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.RegionLoad;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.StoreSequenceId;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.SnapshotProtos.SnapshotDescription;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.CompactionDescriptor;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.FlushDescriptor;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.FlushDescriptor.FlushAction;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.FlushDescriptor.StoreFlushDescriptor;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.RegionEventDescriptor;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.RegionEventDescriptor.EventType;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.StoreDescriptor;
+import edu.umd.cs.findbugs.annotations.Nullable;
 
 /**
  * Regions store data for a certain region of a table.  It stores all columns
@@ -413,7 +415,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   
   @VisibleForTesting
   private volatile boolean throwErrorOnScan;
-
+  
   /**
    * @return The smallest mvcc readPoint across all the scanners in this
    * region. Writes older than this readPoint, are included in every
@@ -583,28 +585,28 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     final long flushOpSeqId;
     final long flushedSeqId;
     final MemStoreSizing totalFlushableSize;
+    final List<Integer> failedReplicas;
 
     /** Constructs an early exit case */
     PrepareFlushResult(FlushResultImpl result, long flushSeqId) {
-      this(result, null, null, null, Math.max(0, flushSeqId), 0, 0, MemStoreSizing.DUD);
+      this(result, null, null, null, Math.max(0, flushSeqId), 0, 0, MemStoreSizing.DUD,
+          Collections.EMPTY_LIST);
     }
 
     /** Constructs a successful prepare flush result */
-    PrepareFlushResult(
-      TreeMap<byte[], StoreFlushContext> storeFlushCtxs,
-      TreeMap<byte[], List<Path>> committedFiles,
-      TreeMap<byte[], MemStoreSize> storeFlushableSize, long startTime, long flushSeqId,
-      long flushedSeqId, MemStoreSizing totalFlushableSize) {
+    PrepareFlushResult(TreeMap<byte[], StoreFlushContext> storeFlushCtxs,
+        TreeMap<byte[], List<Path>> committedFiles,
+        TreeMap<byte[], MemStoreSize> storeFlushableSize, long startTime, long flushSeqId,
+        long flushedSeqId, MemStoreSizing totalFlushableSize, List<Integer> failedReplicas) {
       this(null, storeFlushCtxs, committedFiles, storeFlushableSize, startTime,
-        flushSeqId, flushedSeqId, totalFlushableSize);
+        flushSeqId, flushedSeqId, totalFlushableSize, failedReplicas);
     }
 
-    private PrepareFlushResult(
-        FlushResultImpl result,
-      TreeMap<byte[], StoreFlushContext> storeFlushCtxs,
-      TreeMap<byte[], List<Path>> committedFiles,
-      TreeMap<byte[], MemStoreSize> storeFlushableSize, long startTime, long flushSeqId,
-      long flushedSeqId, MemStoreSizing totalFlushableSize) {
+    private PrepareFlushResult(FlushResultImpl result,
+        TreeMap<byte[], StoreFlushContext> storeFlushCtxs,
+        TreeMap<byte[], List<Path>> committedFiles,
+        TreeMap<byte[], MemStoreSize> storeFlushableSize, long startTime, long flushSeqId,
+        long flushedSeqId, MemStoreSizing totalFlushableSize, List<Integer> failedReplicas) {
       this.result = result;
       this.storeFlushCtxs = storeFlushCtxs;
       this.committedFiles = committedFiles;
@@ -613,6 +615,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       this.flushOpSeqId = flushSeqId;
       this.flushedSeqId = flushedSeqId;
       this.totalFlushableSize = totalFlushableSize;
+      this.failedReplicas = failedReplicas;
     }
 
     public FlushResult getResult() {
@@ -2505,8 +2508,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   protected FlushResultImpl internalFlushcache(WAL wal, long myseqid,
       Collection<HStore> storesToFlush, MonitoredTask status, boolean writeFlushWalMarker,
       FlushLifeCycleTracker tracker) throws IOException {
-    PrepareFlushResult result =
-        internalPrepareFlushCache(wal, myseqid, storesToFlush, status, writeFlushWalMarker, tracker);
+    PrepareFlushResult result = internalPrepareFlushCache(wal, myseqid, storesToFlush, status,
+      writeFlushWalMarker, tracker, 1);
     if (result.result == null) {
       return internalFlushCacheAndCommit(wal, status, result, storesToFlush);
     } else {
@@ -2518,7 +2521,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       justification="FindBugs seems confused about trxId")
   protected PrepareFlushResult internalPrepareFlushCache(WAL wal, long myseqid,
       Collection<HStore> storesToFlush, MonitoredTask status, boolean writeFlushWalMarker,
-      FlushLifeCycleTracker tracker) throws IOException {
+      FlushLifeCycleTracker tracker, int currentReplicaIndex) throws IOException {
     if (this.rsServices != null && this.rsServices.isAborted()) {
       // Don't flush when server aborting, it's unsafe
       throw new IOException("Aborting flush because server is aborted...");
@@ -2529,6 +2532,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // bulk loaded file between memory and existing hfiles. It wants a good seqeunceId that belongs
     // to no other that it can use to associate with the bulk load. Hence this little dance below
     // to go get one.
+    CompletableFuture<ReplicateMemstoreResponse> future = null;
     if (this.memStoreSize.getDataSize() <= 0) {
       // Take an update lock so no edits can come into memory just yet.
       this.updatesLock.writeLock().lock();
@@ -2540,12 +2544,27 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           // edits in the WAL sub-system. Up the sequence number so the resulting flush id is for
           // sure just beyond the last appended region edit and not associated with any edit
           // (useful as marker when bulk loading, etc.).
+          HRegion.FlushResultImpl flushResult = null;
           if (wal != null) {
             writeEntry = mvcc.begin();
             long flushOpSeqId = writeEntry.getWriteNumber();
-            FlushResultImpl flushResult =
-                new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH_MEMSTORE_EMPTY, flushOpSeqId,
-                    "Nothing to flush", writeFlushRequestMarkerToWAL(wal, writeFlushWalMarker), null);
+            flushResult = new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH_MEMSTORE_EMPTY,
+              flushOpSeqId, "Nothing to flush",
+              true, null);
+            if (RegionReplicaUtil.isDefaultReplica(getRegionInfo().getReplicaId())) {
+              // EVen if there is no flush happening we need to send this CANNOT_FLUSH RPC
+              // so that the replica region can be enabled for reads. The reads were disabled in
+              // replica when the ReplicaRegionFlushHandler was called. This RPC
+              // will ensure that the replica  regions are enabled for reads during replay of flush markers
+
+              // TODO : Avoid this RPC itself and handle the special case of empty memstore. If the
+              // pipeline
+              // creation is not done now because we don't do this RPC then all the initial
+              // mutations have to wait
+              // for it to be done and then only mutations can proceed
+              future = sendFlushRpc(FlushAction.CANNOT_FLUSH, flushOpSeqId, null,
+                currentReplicaIndex, flushOpSeqId, true, null);
+            }
             mvcc.completeAndWait(writeEntry);
             // Set to null so we don't complete it again down in finally block.
             writeEntry = null;
@@ -2595,6 +2614,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // will be in advance of this sequence id.
     long flushedSeqId = HConstants.NO_SEQNUM;
     byte[] encodedRegionName = getRegionInfo().getEncodedNameAsBytes();
+    boolean rpcSent = false;
     try {
       if (wal != null) {
         Long earliestUnflushedSequenceIdForTheRegion =
@@ -2624,15 +2644,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         committedFiles.put(s.getColumnFamilyDescriptor().getName(), null);
       }
 
-      // write the snapshot start to WAL
-      if (wal != null && !writestate.readOnly) {
-        FlushDescriptor desc = ProtobufUtil.toFlushDescriptor(FlushAction.START_FLUSH,
-            getRegionInfo(), flushOpSeqId, committedFiles);
-        // No sync. Sync is below where no updates lock and we do FlushAction.COMMIT_FLUSH
-        WALUtil.writeFlushMarker(wal, this.getReplicationScope(), getRegionInfo(), desc, false,
-            mvcc);
+      // send an RPC to the replica with the new seqID and the special cell
+      // Create a start flush indicating the start of flush instead of WAL
+      if (RegionReplicaUtil.isDefaultReplica(getRegionInfo().getReplicaId()) && !writestate.readOnly) {
+        // TODO  : we should add this in primary also
+        future = sendFlushRpc(FlushAction.START_FLUSH, flushOpSeqId, committedFiles,
+            currentReplicaIndex, flushOpSeqId, true, null);
       }
-
+      rpcSent = true;
       // Prepare flush (take a snapshot)
       storeFlushCtxs.forEach((name, flush) -> {
         MemStoreSize snapshotSize = flush.prepare();
@@ -2640,17 +2659,122 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         storeFlushableSize.put(name, snapshotSize);
       });
     } catch (IOException ex) {
-      doAbortFlushToWAL(wal, flushOpSeqId, committedFiles);
+      if (!rpcSent) {
+        // If one of the replicas did not accept the start_flush it is still ok because the primary
+        // will be able to complete the flush. Anyway if any replica comes back again it will try to trigger a
+        // flush in the primary.
+        // I think there cannot be any error as we are not sure if the RPC has been sent
+        // because we are async here.
+        sendAbortFlushRpc(wal, committedFiles, flushOpSeqId);
+      }
       throw ex;
     } finally {
       this.updatesLock.writeLock().unlock();
     }
+    List<Integer> failedReplicas = waitForStartFlushMarkerReplication(future);
     String s = "Finished memstore snapshotting " + this + ", syncing WAL and waiting on mvcc, " +
         "flushsize=" + totalSizeOfFlushableStores;
     status.setStatus(s);
     doSyncOfUnflushedWALChanges(wal, getRegionInfo());
     return new PrepareFlushResult(storeFlushCtxs, committedFiles, storeFlushableSize, startTime,
-        flushOpSeqId, flushedSeqId, totalSizeOfFlushableStores);
+        flushOpSeqId, flushedSeqId, totalSizeOfFlushableStores, failedReplicas);
+  }
+
+  private CompletableFuture<ReplicateMemstoreResponse> sendFlushRpc(FlushAction action,
+      long flushOpSeqId, TreeMap<byte[], List<Path>> committedFiles, int currentReplicaIndex,
+      long seqId, boolean async, List<Integer> failedReplicas) throws IOException {
+    if (!this.closing.get() && !this.closed.get()) {
+      FlushDescriptor desc =
+          ProtobufUtil.toFlushDescriptor(action, getRegionInfo(), flushOpSeqId, committedFiles);
+      KeyValue kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
+          WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
+      // we need a sequenceid
+      //System.out.println("the seq id is "+seqId + " "+desc);
+      kv.setSequenceId(seqId);
+      MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
+          this.getRegionInfo().getEncodedNameAsBytes(), currentReplicaIndex);
+      MemstoreEdits memstoreEdits = new MemstoreEdits();
+      memstoreEdits.add(kv);
+      memstoreReplicationKey.setSequenceId(seqId);
+      // replicate this
+      if (async) {
+        return this.memstoreReplicator.replicateAsync(memstoreReplicationKey, memstoreEdits,
+          regionReplicator);
+      }
+      ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
+        memstoreEdits, regionReplicator);
+      if (response.getFailedReplicasCount() > 0) {
+        // TODO should mark these failedReplicas as BAD
+        failedReplicas.addAll(response.getFailedReplicasList());
+      }
+    }
+    return null;
+  }
+
+  public void sendCompactionRPC(CompactionDescriptor desc, int replicaOffered) throws IOException {
+    byte[] byteArray = desc.toByteArray();
+    KeyValue kv = new KeyValue(WALEdit.getRowForRegion(this.getRegionInfo()), WALEdit.METAFAMILY,
+        WALEdit.COMPACTION, EnvironmentEdgeManager.currentTime(), byteArray);
+    // begin mvcc transaction
+    WriteEntry writeEntry = this.getMVCC().begin();
+    // we need a sequenceID without which we will not be able to associate a seqId to the batch
+    // when replicated
+    try {
+      kv.setSequenceId(writeEntry.getWriteNumber());
+      MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
+          this.getRegionInfo().getEncodedNameAsBytes(), replicaOffered);
+      MemstoreEdits memstoreEdits = new MemstoreEdits();
+      memstoreEdits.add(kv);
+      memstoreReplicationKey.setSequenceId(writeEntry.getWriteNumber());
+      ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
+          memstoreEdits, regionReplicator);
+      if (response.getFailedReplicasCount() > 0) {
+        List<Integer> failedReplicas = response.getFailedReplicasList();
+        // TODO should mark these as BAD
+      }
+    } finally {
+      this.getMVCC().complete(writeEntry);
+    }
+  }
+
+  private List<Integer>
+      waitForStartFlushMarkerReplication(CompletableFuture<ReplicateMemstoreResponse> future) {
+    List<Integer> failedReplicas = null;
+    if (future != null) {
+      // We are out of updatesLock so wait for the completion of the START_FLUSH marker replication
+      try {
+        ReplicateMemstoreResponse response =
+            future.get(this.memstoreReplicator.getReplicationTimeout(), TimeUnit.MILLISECONDS);
+        failedReplicas = response.getFailedReplicasList();
+        // TODO should we mark these as BAD
+      } catch (InterruptedException | ExecutionException | TimeoutException e) {
+        LOG.debug("Exception while waiting for the START_FLUSH replay at replicas", e);
+        // TODO how to handle this situation?
+      }
+    }
+    return failedReplicas;
+  }
+
+  private void sendAbortFlushRpc(final WAL wal, TreeMap<byte[], List<Path>> committedFiles,
+      long flushOpSeqId) {
+    try {
+      WriteEntry writeNumber = mvcc.begin();
+      try {
+        // TODO : In what case should we even have this??
+        // TODO we have to handle the actual marker async ops still hanging around?
+        sendFlushRpc(FlushAction.ABORT_FLUSH, flushOpSeqId, committedFiles, 1,
+          writeNumber.getWriteNumber(), false, new ArrayList<Integer>());// TODO hanlde failed replicas
+      } finally {
+        // complete it if the flush was sent
+        mvcc.complete(writeNumber);
+      }
+    } catch (Throwable ex) {
+      LOG.warn(
+        getRegionInfo().getEncodedName() + " : " + "failed writing ABORT_FLUSH marker to WAL",
+        ex);
+      // ignore this since we will be aborting the RS with DSE.
+    }
+    wal.abortCacheFlush(this.getRegionInfo().getEncodedNameAsBytes());
   }
 
   /**
@@ -2749,7 +2873,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     long startTime = prepareResult.startTime;
     long flushOpSeqId = prepareResult.flushOpSeqId;
     long flushedSeqId = prepareResult.flushedSeqId;
-
+    boolean rpcSent = false;
     String s = "Flushing stores of " + this;
     status.setStatus(s);
     if (LOG.isTraceEnabled()) LOG.trace(s);
@@ -2760,6 +2884,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // be part of the current running servers state.
     boolean compactionRequested = false;
     long flushedOutputFileSize = 0;
+    List<Integer> failedReplicas = prepareResult.failedReplicas;
     try {
       // A.  Flush memstore to all the HStores.
       // Keep running vector of all store files that includes both old and the
@@ -2793,7 +2918,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
       // Set down the memstore size by amount of flush.
       this.decrMemStoreSize(prepareResult.totalFlushableSize);
-
+      // Mark the end of flush
       // Increase the size of this Region for the purposes of quota. Noop if quotas are disabled.
       // During startup, quota manager may not be initialized yet.
       if (rsServices != null) {
@@ -2803,13 +2928,18 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
               this.getRegionInfo(), flushedOutputFileSize);
         }
       }
-
-      if (wal != null) {
-        // write flush marker to WAL. If fail, we should throw DroppedSnapshotException
-        FlushDescriptor desc = ProtobufUtil.toFlushDescriptor(FlushAction.COMMIT_FLUSH,
-          getRegionInfo(), flushOpSeqId, committedFiles);
-        WALUtil.writeFlushMarker(wal, this.getReplicationScope(), getRegionInfo(), desc, true,
-            mvcc);
+      // increment the mvcc
+      rpcSent = true;
+      WriteEntry writeNumber = mvcc.begin();
+      // Mark the end of flush
+      try {
+        // failure of this should not mean that we should call ABORT_FLUSH because primary has already flushed
+        // TODO : shall we wait for the response in this case??
+        sendFlushRpc(FlushAction.COMMIT_FLUSH, flushOpSeqId, committedFiles, 1,
+            writeNumber.getWriteNumber(), false, failedReplicas);
+      } finally {
+        // complete it if the flush was sent
+        mvcc.complete(writeNumber);
       }
     } catch (Throwable t) {
       // An exception here means that the snapshot was not persisted.
@@ -4281,7 +4411,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   public ReplicateMemstoreResponse replicateMemstore(ReplicateMemstoreRequest request,
-      List<Cell> allCells) throws IOException {
+      List<Cell> allCells, int replicasOffered) throws IOException {
     ReplicateMemstoreResponse response;
     try {
       response = this.memstoreReplicator.replicate(request, allCells, this.regionReplicator);
@@ -4303,7 +4433,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // Important change. Without this things just don't work. MultiMaps needs to be revisited
     NavigableMap<byte[], List<Cell>> familyMap = new TreeMap<byte[], List<Cell>>(
         Bytes.BYTES_COMPARATOR);
-    long[] seqIds = splitCells(request, allCells, familyMap);
+    long[] seqIds = splitCells(request, allCells, familyMap, replicasOffered);
     doBatchOpForMemstoreReplication(familyMap, seqIds);
     return response;
   }
@@ -4331,7 +4461,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       for (int i = 0; i < seqIds.length; i++) {
         writeEntries[i] = this.mvcc.begin(seqIds[i]);
       }
-      MemStoreAsyncAddHandler handler = new MemStoreAsyncAddHandler(this.mvcc, writeEntries);
+      MemStoreAsyncAddHandler handler = new MemStoreAsyncAddHandler(this, writeEntries);
       try {
         for (Map.Entry<byte[], List<Cell>> e : familyMap.entrySet()) {
           HStore store = this.getStore(e.getKey());
@@ -4353,7 +4483,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   private long[] splitCells(ReplicateMemstoreRequest request, List<Cell> cells,
-      NavigableMap<byte[], List<Cell>> familyMap) throws IOException {
+      NavigableMap<byte[], List<Cell>> familyMap, int replicasOffered) throws IOException {
     List<MemstoreReplicationEntry> entries = request.getEntryList();
     long[] seqIds = new long[entries.size()];
     int cellCounter = 0;
@@ -4368,10 +4498,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
         }
         if (CellUtil.matchingFamily(cell, WALEdit.METAFAMILY)) {
-          // TODO
-          // A Marker cell should come as single entry in Req with no other Mutations. I think this
-          // happens this way only. Just confirm
-          // handleMetaMarkerCell(cell, region, replicasOffered);
+           handleMetaMarkerCell(cell, replicasOffered);
         } else {
           byte[] fam = CellUtil.cloneFamily(cell);
           List<Cell> list = familyMap.get(fam);
@@ -4386,6 +4513,33 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
     Arrays.sort(seqIds);
     return seqIds;
+  }
+
+  private void handleMetaMarkerCell(Cell cell, int replicasOffered)
+      throws IOException {
+    CompactionDescriptor compactionDesc = WALEdit.getCompaction(cell);
+    if (compactionDesc != null) {
+      // replay the compaction. Remove the files from stores only if we are the primary
+      // region replica (thus own the files)
+      replayWALCompactionMarker(compactionDesc, true, false, cell.getSequenceId());
+    } else {
+      FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(cell);
+      if (flushDesc != null) {
+        replayWALFlushMarker(flushDesc, cell.getSequenceId(), replicasOffered);
+      } else {
+        // TODO region open and close events not been RPCed into replicas now. This can help?
+        RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(cell);
+        if (regionEvent != null) {
+          replayWALRegionEventMarker(regionEvent);
+        } else {
+          // TODO bulk load events not been RPCed to replicas now.
+          BulkLoadDescriptor bulkLoadEvent = WALEdit.getBulkLoadDescriptor(cell);
+          if (bulkLoadEvent != null) {
+            replayWALBulkLoadEventMarker(bulkLoadEvent);
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -5131,6 +5285,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * Call to complete a compaction. Its for the case where we find in the WAL a compaction
    * that was not finished.  We could find one recovering a WAL after a regionserver crash.
    * See HBASE-2331.
+   * @param replicasOffered 
    */
   void replayWALCompactionMarker(CompactionDescriptor compaction, boolean pickCompactionFiles,
       boolean removeFiles, long replaySeqId)
@@ -5193,7 +5348,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
-  void replayWALFlushMarker(FlushDescriptor flush, long replaySeqId) throws IOException {
+  void replayWALFlushMarker(FlushDescriptor flush, long replaySeqId, int replicasOffered)
+      throws IOException {
     checkTargetRegion(flush.getEncodedRegionName().toByteArray(),
       "Flush marker from WAL ", flush);
 
@@ -5211,7 +5367,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       FlushAction action = flush.getAction();
       switch (action) {
       case START_FLUSH:
-        replayWALFlushStartMarker(flush);
+        replayWALFlushStartMarker(flush, replicasOffered);
         break;
       case COMMIT_FLUSH:
         replayWALFlushCommitMarker(flush);
@@ -5240,7 +5396,22 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * edit (because the events may be coming out of order).
    */
   @VisibleForTesting
+  // TODO : change all these names as there is no WAL marker. They are all direct cells sent
+  // via RPCs
   PrepareFlushResult replayWALFlushStartMarker(FlushDescriptor flush) throws IOException {
+    return replayWALFlushStartMarker(flush, 1);
+  }
+  
+  /** Replay the flush marker from primary region by creating a corresponding snapshot of
+   * the store memstores, only if the memstores do not have a higher seqId from an earlier wal
+   * edit (because the events may be coming out of order).
+   * @param replicasOffered 
+   */
+  @VisibleForTesting
+  // TODO : change all these names as there is no WAL marker. They are all direct cells sent
+  // via RPCs
+  PrepareFlushResult replayWALFlushStartMarker(FlushDescriptor flush, int replicasOffered)
+      throws IOException {
     long flushSeqId = flush.getFlushSequenceNumber();
 
     HashSet<HStore> storesToFlush = new HashSet<>();
@@ -5280,7 +5451,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
           // invoke prepareFlushCache. Send null as wal since we do not want the flush events in wal
           PrepareFlushResult prepareResult = internalPrepareFlushCache(null, flushSeqId,
-            storesToFlush, status, false, FlushLifeCycleTracker.DUMMY);
+            storesToFlush, status, false, FlushLifeCycleTracker.DUMMY, replicasOffered);
           if (prepareResult.result == null) {
             // save the PrepareFlushResult so that we can use it later from commit flush
             this.writestate.flushing = true;

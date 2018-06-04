@@ -23,6 +23,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.hadoop.hbase.util.ReflectionUtils;
+import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
 
 /**
  * A memstore-local allocation buffer.
@@ -117,10 +118,17 @@ public interface MemStoreLAB {
     if (isEnabled(conf)) {
       // TODO Default MSLAB to be old impl class only. Some way using which we can change this auto
       // in code rather than asking user to change?
-      String className = conf.get(MSLAB_CLASS_NAME, DurableMemStoreLABImpl.class.getName());
-      memStoreLAB = ReflectionUtils.instantiateWithCustomCtor(className,
+      if (DurableMemStoreLABImpl.useDurableMemstore) {
+        String className = conf.get(MSLAB_CLASS_NAME, DurableMemStoreLABImpl.class.getName());
+        memStoreLAB = ReflectionUtils.instantiateWithCustomCtor(className,
           new Class[] { byte[].class, byte[].class, Configuration.class },
           new Object[] { regionName, cfName, conf });
+      } else {
+        String className = conf.get(MSLAB_CLASS_NAME, MemStoreLABImpl.class.getName());
+        memStoreLAB = ReflectionUtils.instantiateWithCustomCtor(className,
+          new Class[] { byte[].class, byte[].class, Configuration.class },
+          new Object[] { regionName, cfName, conf });
+      }
     }
     return memStoreLAB;
   }

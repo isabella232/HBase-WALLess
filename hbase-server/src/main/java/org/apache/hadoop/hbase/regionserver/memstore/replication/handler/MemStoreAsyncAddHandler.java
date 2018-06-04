@@ -25,8 +25,8 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.executor.EventHandler;
 import org.apache.hadoop.hbase.executor.EventType;
 import org.apache.hadoop.hbase.regionserver.AbstractMemStore;
+import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.regionserver.MemStoreSizing;
-import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl;
 import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -37,12 +37,13 @@ public class MemStoreAsyncAddHandler extends EventHandler {
 
   private final MemStoreSizing memstoreSizing = new MemStoreSizing();
   private final List<Pair<AbstractMemStore, List<Cell>>> allCell = new ArrayList<>();
-  private final MultiVersionConcurrencyControl mvcc;
   private final WriteEntry[] writeEntries;
+  private final HRegion hRegion;
 
-  public MemStoreAsyncAddHandler(MultiVersionConcurrencyControl mvcc, WriteEntry[] writeEntries) {
+  public MemStoreAsyncAddHandler(HRegion hRegion,
+      WriteEntry[] writeEntries) {
     super(null, EventType.RS_REGION_REPLICA_MEMSTORE_ASYNC_ADD);
-    this.mvcc = mvcc;
+    this.hRegion = hRegion;
     this.writeEntries = writeEntries;
   }
 
@@ -55,8 +56,10 @@ public class MemStoreAsyncAddHandler extends EventHandler {
     }
     // TODO advance mvcc
     for (WriteEntry writeEntry : writeEntries) {
-      this.mvcc.complete(writeEntry);
+      this.hRegion.getMVCC().complete(writeEntry);
     }
+    // important change - without this the size in the replica side was never getting added
+    this.hRegion.incMemStoreSize(memstoreSizing);
   }
 
   public void append(AbstractMemStore memstore, List<Cell> cells) {

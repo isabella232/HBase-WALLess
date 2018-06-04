@@ -1132,7 +1132,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
             }
             FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(metaCell);
             if (flushDesc != null && !isDefaultReplica) {
-              hRegion.replayWALFlushMarker(flushDesc, replaySeqId);
+              hRegion.replayWALFlushMarker(flushDesc, replaySeqId, 1);
               continue;
             }
             RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(metaCell);
@@ -3661,12 +3661,12 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
         throw new ServiceException(e);
       }
       ByteString regionName = request.getEncodedRegionName();
-      //int replicasOffered = request.getReplicasOffered();
+      int replicasOffered = request.getReplicasOffered();
       HRegion region = (HRegion) regionServer.getRegionByEncodedName(regionName.toStringUtf8());
       assert !(ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo()));
       ReplicateMemstoreResponse response = null;
       try {
-        response = region.replicateMemstore(request, allCells);
+        response = region.replicateMemstore(request, allCells, replicasOffered);
       } catch (IOException e1) {
         LOG.error("Exception in getting the memstore response from the pipeline " + e1 + " "
             + region.getRegionInfo());

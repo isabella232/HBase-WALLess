@@ -30,11 +30,17 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ObjectIntPair;
+import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.yetus.audience.InterfaceAudience;
 
 @InterfaceAudience.Private
 public class DurableMemStoreLABImpl extends MemStoreLABImpl {
+
+  @VisibleForTesting
+  public static boolean useDurableMemstore = true;
+  private static final int SIZE_OF_SEQ_ID = Bytes.SIZEOF_LONG;
 
   private AtomicReference<DurableSlicedChunk> firstChunk = new AtomicReference<>();
   private volatile int chunkSeqId = 1;

@@ -2095,18 +2095,19 @@ public final class ProtobufUtil {
         .setRegionName(UnsafeByteOperations.unsafeWrap(hri.getRegionName()))
         .setFlushSequenceNumber(flushSeqId)
         .setTableName(UnsafeByteOperations.unsafeWrap(hri.getTable().getName()));
-
-    for (Map.Entry<byte[], List<Path>> entry : committedFiles.entrySet()) {
-      WALProtos.FlushDescriptor.StoreFlushDescriptor.Builder builder =
-          WALProtos.FlushDescriptor.StoreFlushDescriptor.newBuilder()
-          .setFamilyName(UnsafeByteOperations.unsafeWrap(entry.getKey()))
-          .setStoreHomeDir(Bytes.toString(entry.getKey())); //relative to region
-      if (entry.getValue() != null) {
-        for (Path path : entry.getValue()) {
-          builder.addFlushOutput(path.getName());
+    if (committedFiles != null) {
+      for (Map.Entry<byte[], List<Path>> entry : committedFiles.entrySet()) {
+        WALProtos.FlushDescriptor.StoreFlushDescriptor.Builder builder =
+            WALProtos.FlushDescriptor.StoreFlushDescriptor.newBuilder()
+                .setFamilyName(UnsafeByteOperations.unsafeWrap(entry.getKey()))
+                .setStoreHomeDir(Bytes.toString(entry.getKey())); // relative to region
+        if (entry.getValue() != null) {
+          for (Path path : entry.getValue()) {
+            builder.addFlushOutput(path.getName());
+          }
         }
+        desc.addStoreFlushes(builder);
       }
-      desc.addStoreFlushes(builder);
     }
     return desc.build();
   }

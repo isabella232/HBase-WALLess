@@ -270,7 +270,6 @@ public class RegionReplicaReplicator {
     }
   }
 
-  // TODO to be used
   public boolean removeFromBadReplicasInMeta(Integer replica) {
     // This should be called only when this is Primary Region
     assert RegionReplicaUtil.isDefaultReplica(curRegion);
@@ -424,7 +423,7 @@ public class RegionReplicaReplicator {
           }
         }
       }
-      LOG.debug("The pipeline created has " + this.pipeline.size() + " " + pipeline + " "
+      LOG.info("The pipeline created has " + this.pipeline.size() + " " + pipeline + " "
           + this.getRegionInfo());
     } finally {
       lock.unlock();
