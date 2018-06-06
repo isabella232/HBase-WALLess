@@ -234,14 +234,17 @@ public class MultiVersionConcurrencyControl {
     }
   }
 
+  void waitForRead(WriteEntry e) {
+    waitForRead(e.getWriteNumber());
+  }
   /**
    * Wait for the global readPoint to advance up to the passed in write entry number.
    */
-  void waitForRead(WriteEntry e) {
+  void waitForRead(long pnt) {
     boolean interrupted = false;
     int count = 0;
     synchronized (readWaiters) {
-      while (readPoint.get() < e.getWriteNumber()) {
+      while (readPoint.get() < pnt) {
         if (count % 100 == 0 && count > 0) {
           LOG.warn("STUCK: " + this);
         }

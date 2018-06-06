@@ -19,6 +19,7 @@
 package org.apache.hadoop.hbase.client;
 
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -241,6 +242,49 @@ public class ResultBoundedCompletionService<V> {
     return null;
   }
 
+  public QueueingFuture<V> pollForFirstSuccessfullyCompletedTask(long timeout, TimeUnit unit,
+      Set<Integer> goodReplicaIds)
+      throws InterruptedException, CancellationException, ExecutionException {
+
+    QueueingFuture<V>  f;
+    long start, duration;
+    //  better to do it reverse? or check parallely?
+    for (int i = 0; i < goodReplicaIds.size();  i++) {
+
+      start = EnvironmentEdgeManager.currentTime();
+      f = pollForSpecificCompletedTask(timeout, unit, i);
+      duration = EnvironmentEdgeManager.currentTime() - start;
+
+      // Even with operationTimeout less than 0, still loop through the rest as there could
+      // be other completed tasks before operationTimeout.
+      timeout -= duration;
+
+      if (f == null) {
+        return null;
+      } else if (f.getExeEx() != null) {
+        // we continue here as we need to loop through all the results.
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Replica " + ((f == null) ? 0 : f.getReplicaId()) + " returns " +
+              f.getExeEx().getCause());
+        }
+
+        if (i == (goodReplicaIds.size() - 1)) {
+          // return null indicating results were not go and it had exception.
+          return null;
+        }
+        continue;
+      }
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Replica " + f.getReplicaId() + " returns result");
+      }
+      return f;
+    }
+
+    // impossible to reach
+    return null;
+  }
+
+  
   /**
    * Poll for the Nth completed task (index starts from 0 (the 1st), 1 (the second)...)
    *

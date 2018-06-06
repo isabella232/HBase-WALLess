@@ -638,7 +638,7 @@ public class ChunkCreator {
       // this translation will (most likely) return null
       Chunk chunk = ChunkCreator.this.getChunk(chunkID);
       if (chunk != null) {
-        if (chunk.isFromPool() && chunk.isIndexChunk()) {
+        if (indexChunksPool != null && chunk.isFromPool() && chunk.isIndexChunk()) {
           indexChunksPool.putbackChunks(chunk);
         } else if (chunk.isFromPool() && chunk.size == dataChunksPool.getChunkSize()) {
           dataChunksPool.putbackChunks(chunk);

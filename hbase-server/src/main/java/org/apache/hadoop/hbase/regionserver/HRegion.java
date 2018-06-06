@@ -6786,10 +6786,25 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           this.readPt = mvccReadPoint;
         } else if (nonce == HConstants.NO_NONCE || rsServices == null
             || rsServices.getNonceManager() == null) {
-          this.readPt = getReadPoint(isolationLevel);
+          long tempMvcc;
+          // We are reading from a replica and no RPCs happened to primary. So no readPnt been
+          // known. We have the seqNo till which been committed here and replied back to its
+          // replicating region. This is there in 'currentMaxSeqNo'. Assume that is the readPnt.
+          if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())
+              && (tempMvcc = currentMaxSeqId.get()) != -1) {
+            this.readPt = tempMvcc;
+          } else {
+            this.readPt = getReadPoint(isolationLevel);
+          }
         } else {
           this.readPt = rsServices.getNonceManager().getMvccFromOperationContext(nonceGroup, nonce);
         }
+        if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
+          // The cells are added to the CSLM (from where we read) in an async way for the replica
+          // regions. The below wait is to confirm that all the Cells till the readPnt are actually
+          // committed into CSLM.
+          mvcc.waitForRead(this.readPt);
+        } 
         scannerReadPoints.put(this, this.readPt);
       }
       initializeScanners(scan, additionalScanners);
@@ -9155,5 +9170,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   @Override
   public void requestFlush(FlushLifeCycleTracker tracker) throws IOException {
     requestFlush0(tracker);
+  }
+
+  public List<Integer> getGoodReplicas() {
+    return this.regionReplicator.getCurrentPiplineForReads();
   }
 }

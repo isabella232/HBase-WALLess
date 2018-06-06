@@ -26,6 +26,8 @@ import static org.apache.hadoop.hbase.client.ConnectionUtils.updateServerSideMet
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.DoNotRetryIOException;
@@ -37,9 +39,6 @@ import org.apache.hadoop.hbase.RegionLocations;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.UnknownScannerException;
-import org.apache.yetus.audience.InterfaceAudience;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.hadoop.hbase.client.metrics.ScanMetrics;
 import org.apache.hadoop.hbase.exceptions.ScannerResetException;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
@@ -49,6 +48,9 @@ import org.apache.hadoop.hbase.shaded.protobuf.RequestConverter;
 import org.apache.hadoop.hbase.shaded.protobuf.ResponseConverter;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.ScanRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.ScanResponse;
+import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Scanner operations such as create, next, etc.
@@ -73,6 +75,7 @@ public class ScannerCallable extends ClientServiceCallable<Result[]> {
   private boolean logScannerActivity = false;
   private int logCutOffLatency = 1000;
   protected final int id;
+  protected Set<Integer> goodReplicaIds;
 
   enum MoreResults {
     YES, NO, UNKNOWN
@@ -337,6 +340,15 @@ public class ScannerCallable extends ClientServiceCallable<Result[]> {
       }
       if (response.hasMvccReadPoint()) {
         this.scan.setMvccReadPoint(response.getMvccReadPoint());
+      }
+      if (response.getGoodReplicaIdsCount() > 0) {
+        // add the good replicas
+        if (goodReplicaIds == null) {
+          goodReplicaIds = new HashSet<Integer>();
+        }
+        for (int replicaid : response.getGoodReplicaIdsList()) {
+          goodReplicaIds.add(replicaid);
+        }
       }
       this.scannerId = id;
       return response;

@@ -3033,6 +3033,14 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
     long scannerId = scannerIdGenerator.generateNewScannerId();
     builder.setScannerId(scannerId);
     builder.setMvccReadPoint(scanner.getMvccReadPoint());
+    //Adding good replicas here. only for primary region
+    if (RegionReplicaUtil.isDefaultReplica(region.getRegionInfo())) {
+      if (((HRegion) region).getGoodReplicas() != null) {
+        for (int id : ((HRegion) region).getGoodReplicas()) {
+          builder.addGoodReplicaIds(id);
+        }
+      }
+    }
     builder.setTtl(scannerLeaseTimeoutPeriod);
     String scannerName = String.valueOf(scannerId);
     return addScanner(scannerName, scanner, shipper, region, scan.isNeedCursorResult());
