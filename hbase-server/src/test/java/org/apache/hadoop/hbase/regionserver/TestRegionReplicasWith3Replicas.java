@@ -117,15 +117,15 @@ public class TestRegionReplicasWith3Replicas {
     HTU.shutdownMiniCluster();
   }
 
-  private HRegionServer getRS() {
+  private static HRegionServer getRS() {
     return HTU.getMiniHBaseCluster().getRegionServer(0);
   }
 
-  private HRegionServer getSecondaryRS() {
+  private static HRegionServer getSecondaryRS() {
     return HTU.getMiniHBaseCluster().getRegionServer(1);
   }
 
-  private HRegionServer getTertiaryRS() {
+  private static HRegionServer getTertiaryRS() {
     return HTU.getMiniHBaseCluster().getRegionServer(2);
   }
 
@@ -182,10 +182,10 @@ public class TestRegionReplicasWith3Replicas {
       pair = openSecondary();
       tertiaryOpenedIn = openTertiary(pair);
       // load some data to primary
-      loadInDifferentThreads();
+      loadInDifferentThreads(pair);
       //HTU.loadNumericRows(table, f, 0, 100);
       // assert that we can read back from primary
-      Assert.assertEquals(100, HTU.countRows(table));
+      Assert.assertEquals(99, HTU.countRows(table));
       // flush so that region replica can read
       Region primaryRegion = getPrimaryRegion(pair);
       // region.flush(true);
@@ -210,12 +210,12 @@ public class TestRegionReplicasWith3Replicas {
     }
   }
 
-  private void loadInDifferentThreads() throws InterruptedException {
+  private void loadInDifferentThreads(Pair<OpenedIn, OpenedIn> pair) throws InterruptedException {
     // TODO Auto-generated method stub
-    int threads = 100;
+    int threads = 1;
     LoadThread[] loadThreads = new LoadThread[threads];
     for(int i = 0; i < threads; i++) {
-      loadThreads[i] = new LoadThread();
+      loadThreads[i] = new LoadThread(pair);
     }
     for(int i = 0; i < threads; i++) {
       loadThreads[i].start();
@@ -226,14 +226,26 @@ public class TestRegionReplicasWith3Replicas {
   }
 
   private static class LoadThread extends Thread {
-/*    Table table;
+    Pair<OpenedIn, OpenedIn> pair;
+public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
+      // TODO Auto-generated constructor stub
+      this.pair = pair;
+    }
+
+    /*    Table table;
     public LoadThread(Table table) {
       this.table = table;
     }*/
     @Override
     public void run() {
       try {
-        HTU.loadNumericRows(table, f, 0, 100);
+        for(int i = 0; i < 100; i++) {
+        HTU.loadNumericRows(table, f, 0, i);
+        if(i % 10 == 0) {
+          Region primaryRegion = getPrimaryRegion(pair);
+          ((HRegion)primaryRegion).flush(true);
+        }
+        }
       } catch (IOException e) {
         // TODO Auto-generated catch block
         e.printStackTrace();
@@ -517,7 +529,7 @@ public class TestRegionReplicasWith3Replicas {
     }
   }
 
-  private Region getPrimaryRegion(Pair<OpenedIn, OpenedIn> pair) throws NotServingRegionException {
+  static Region getPrimaryRegion(Pair<OpenedIn, OpenedIn> pair) throws NotServingRegionException {
     Region region = null;
     switch (pair.getFirst()) {
     case PRIMARY:

@@ -1202,7 +1202,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private void initMemstoreReplication(RegionServerServices rsServices) {
     this.memstoreReplicator = rsServices.getMemstoreReplicator();
     int replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
-    this.regionReplicator = new RegionReplicaReplicator(this.conf, this.getRegionInfo(),
+    this.regionReplicator = new RegionReplicaReplicator(this.conf, this.getRegionInfo(), this.mvcc,
         this.htableDescriptor.getMinRegionReplication(), replicationThreadIndex);
   }
 
@@ -1647,6 +1647,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       status.setStatus("Pre-flushing region before close");
       LOG.info("Running close preflush of {}" + this.getRegionInfo().getEncodedName());
       try {
+        // TODO : what happens when the server crashes here?? The switch over works or not??
+        // Critical thing to be checked.
         internalFlushcache(status);
       } catch (IOException ioe) {
         // Failed to flush the region. Keep going.
@@ -1769,6 +1771,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
       status.setStatus("Writing region close event to WAL");
       if (!abort && wal != null && getRegionServerServices() != null && !writestate.readOnly) {
+        // TODO : Should we send an RPC for this??
         writeRegionCloseMarker(wal);
       }
 
@@ -2562,8 +2565,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
               // creation is not done now because we don't do this RPC then all the initial
               // mutations have to wait
               // for it to be done and then only mutations can proceed
-              future = sendFlushRpc(FlushAction.CANNOT_FLUSH, flushOpSeqId, null,
-                currentReplicaIndex, flushOpSeqId, true, null);
+              Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
+                  sendFlushRpc(FlushAction.CANNOT_FLUSH, flushOpSeqId, null,
+                    currentReplicaIndex, flushOpSeqId, true, null);
+              if (sendFlushRpc != null) {
+                future = sendFlushRpc.getFirst();
+              }
             }
             mvcc.completeAndWait(writeEntry);
             // Set to null so we don't complete it again down in finally block.
@@ -2616,6 +2623,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     byte[] encodedRegionName = getRegionInfo().getEncodedNameAsBytes();
     boolean rpcSent = false;
     try {
+      // TODO : This check should not be there.
       if (wal != null) {
         Long earliestUnflushedSequenceIdForTheRegion =
             wal.startCacheFlush(encodedRegionName, flushedFamilyNamesToSeq);
@@ -2627,6 +2635,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
               new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH, msg, false),
               myseqid);
         }
+        // here passing WAL is of no use
         flushOpSeqId = getNextSequenceId(wal);
         // Back up 1, minus 1 from oldest sequence id in memstore to get last 'flushed' edit
         flushedSeqId =
@@ -2638,6 +2647,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
 
       for (HStore s : storesToFlush) {
+        // if we can add this to the store flush ctx after sending the RPC
+        // then we need not have mvcc generation at the beginning here.
+        // For now its ok because anyway there is no other mutation when this
+        // happens
         storeFlushCtxs.put(s.getColumnFamilyDescriptor().getName(),
           s.createFlushContext(flushOpSeqId, tracker));
         // for writing stores to WAL
@@ -2646,10 +2659,15 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
       // send an RPC to the replica with the new seqID and the special cell
       // Create a start flush indicating the start of flush instead of WAL
-      if (RegionReplicaUtil.isDefaultReplica(getRegionInfo().getReplicaId()) && !writestate.readOnly) {
-        // TODO  : we should add this in primary also
-        future = sendFlushRpc(FlushAction.START_FLUSH, flushOpSeqId, committedFiles,
-            currentReplicaIndex, flushOpSeqId, true, null);
+      if (RegionReplicaUtil.isDefaultReplica(getRegionInfo().getReplicaId())
+          && !writestate.readOnly) {
+        // TODO : we should add this in primary also
+        Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
+            sendFlushRpc(FlushAction.START_FLUSH, flushOpSeqId, committedFiles, currentReplicaIndex,
+              flushOpSeqId, true, null);
+        if (sendFlushRpc != null) {
+          future = sendFlushRpc.getFirst();
+        }
       }
       rpcSent = true;
       // Prepare flush (take a snapshot)
@@ -2680,9 +2698,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         flushOpSeqId, flushedSeqId, totalSizeOfFlushableStores, failedReplicas);
   }
 
-  private CompletableFuture<ReplicateMemstoreResponse> sendFlushRpc(FlushAction action,
+  private Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc(FlushAction action,
       long flushOpSeqId, TreeMap<byte[], List<Path>> committedFiles, int currentReplicaIndex,
       long seqId, boolean async, List<Integer> failedReplicas) throws IOException {
+    Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> res = null;
     if (!this.closing.get() && !this.closed.get()) {
       FlushDescriptor desc =
           ProtobufUtil.toFlushDescriptor(action, getRegionInfo(), flushOpSeqId, committedFiles);
@@ -2690,55 +2709,57 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
       // we need a sequenceid
       //System.out.println("the seq id is "+seqId + " "+desc);
-      kv.setSequenceId(seqId);
       MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
           this.getRegionInfo().getEncodedNameAsBytes(), currentReplicaIndex);
       MemstoreEdits memstoreEdits = new MemstoreEdits();
       memstoreEdits.add(kv);
-      memstoreReplicationKey.setSequenceId(seqId);
+      res = new Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry>();
       // replicate this
       if (async) {
-        return this.memstoreReplicator.replicateAsync(memstoreReplicationKey, memstoreEdits,
-          regionReplicator);
+        memstoreReplicationKey.setSequenceId(seqId);
+        res.setFirst(this.memstoreReplicator.replicateAsync(memstoreReplicationKey, memstoreEdits,
+          regionReplicator));
+        return res;
       }
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
         memstoreEdits, regionReplicator);
+      res.setSecond(memstoreReplicationKey.getWriteEntry());
       if (response.getFailedReplicasCount() > 0) {
-        // TODO should mark these failedReplicas as BAD
-        failedReplicas.addAll(response.getFailedReplicasList());
+        // this failedReplicas cannot be modified. So better
+        // we mark all those replicas as failed
+        // we need this. commenting now due to some issues
+        //checkIfMinWriteReplicSatisfied(response);
       }
     }
-    return null;
+    return res;
   }
 
   public void sendCompactionRPC(CompactionDescriptor desc, int replicaOffered) throws IOException {
     byte[] byteArray = desc.toByteArray();
     KeyValue kv = new KeyValue(WALEdit.getRowForRegion(this.getRegionInfo()), WALEdit.METAFAMILY,
         WALEdit.COMPACTION, EnvironmentEdgeManager.currentTime(), byteArray);
-    // begin mvcc transaction
-    WriteEntry writeEntry = this.getMVCC().begin();
-    // we need a sequenceID without which we will not be able to associate a seqId to the batch
-    // when replicated
+    WriteEntry writeNum = null;
     try {
-      kv.setSequenceId(writeEntry.getWriteNumber());
       MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
           this.getRegionInfo().getEncodedNameAsBytes(), replicaOffered);
       MemstoreEdits memstoreEdits = new MemstoreEdits();
       memstoreEdits.add(kv);
-      memstoreReplicationKey.setSequenceId(writeEntry.getWriteNumber());
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
           memstoreEdits, regionReplicator);
+      writeNum = memstoreReplicationKey.getWriteEntry();
       if (response.getFailedReplicasCount() > 0) {
         List<Integer> failedReplicas = response.getFailedReplicasList();
         // TODO should mark these as BAD
       }
     } finally {
-      this.getMVCC().complete(writeEntry);
+      if (writeNum != null) {
+        this.getMVCC().complete(writeNum);
+      }
     }
   }
 
-  private List<Integer>
-      waitForStartFlushMarkerReplication(CompletableFuture<ReplicateMemstoreResponse> future) {
+  private List<Integer> waitForStartFlushMarkerReplication(
+      CompletableFuture<ReplicateMemstoreResponse> future) throws IOException {
     List<Integer> failedReplicas = null;
     if (future != null) {
       // We are out of updatesLock so wait for the completion of the START_FLUSH marker replication
@@ -2746,27 +2767,35 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         ReplicateMemstoreResponse response =
             future.get(this.memstoreReplicator.getReplicationTimeout(), TimeUnit.MILLISECONDS);
         failedReplicas = response.getFailedReplicasList();
-        // TODO should we mark these as BAD
+        // TODO should we mark these as BAD. But this step alone is not enough. It is late to mark as BAD here?
+        checkIfMinWriteReplicSatisfied(response);
       } catch (InterruptedException | ExecutionException | TimeoutException e) {
         LOG.debug("Exception while waiting for the START_FLUSH replay at replicas", e);
         // TODO how to handle this situation?
       }
     }
+    // we should mark as bad here.
     return failedReplicas;
   }
 
   private void sendAbortFlushRpc(final WAL wal, TreeMap<byte[], List<Path>> committedFiles,
       long flushOpSeqId) {
     try {
-      WriteEntry writeNumber = mvcc.begin();
+      WriteEntry writeNumber = null;
       try {
         // TODO : In what case should we even have this??
         // TODO we have to handle the actual marker async ops still hanging around?
-        sendFlushRpc(FlushAction.ABORT_FLUSH, flushOpSeqId, committedFiles, 1,
-          writeNumber.getWriteNumber(), false, new ArrayList<Integer>());// TODO hanlde failed replicas
+        Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
+            sendFlushRpc(FlushAction.ABORT_FLUSH, flushOpSeqId, committedFiles, 1, flushOpSeqId,
+              false, new ArrayList<Integer>());
+        if (sendFlushRpc != null) {
+          writeNumber = sendFlushRpc.getSecond();// TODO hanlde failed replicas
+        }
       } finally {
         // complete it if the flush was sent
-        mvcc.complete(writeNumber);
+        if (writeNumber != null) {
+          mvcc.complete(writeNumber);
+        }
       }
     } catch (Throwable ex) {
       LOG.warn(
@@ -2930,16 +2959,22 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
       // increment the mvcc
       rpcSent = true;
-      WriteEntry writeNumber = mvcc.begin();
+      WriteEntry writeNumber = null;
       // Mark the end of flush
       try {
         // failure of this should not mean that we should call ABORT_FLUSH because primary has already flushed
         // TODO : shall we wait for the response in this case??
-        sendFlushRpc(FlushAction.COMMIT_FLUSH, flushOpSeqId, committedFiles, 1,
-            writeNumber.getWriteNumber(), false, failedReplicas);
+        Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
+            sendFlushRpc(FlushAction.COMMIT_FLUSH, flushOpSeqId, committedFiles, 1, flushOpSeqId,
+              false, failedReplicas);
+        if (sendFlushRpc != null) {
+          writeNumber = sendFlushRpc.getSecond();
+        }
       } finally {
         // complete it if the flush was sent
-        mvcc.complete(writeNumber);
+        if (writeNumber != null) {
+          mvcc.complete(writeNumber);
+        }
       }
     } catch (Throwable t) {
       // An exception here means that the snapshot was not persisted.
@@ -3547,7 +3582,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         public boolean visit(int index) throws IOException {
           Mutation m = getMutation(index);
           // we use durability of the original mutation for the mutation passed by CP.
-          if (region.getEffectiveDurability(m.getDurability()) == Durability.SKIP_WAL) {
+          // For user table just avoid WALEdits so that we always go with WALLess
+          if (!region.getRegionInfo().getTable().isSystemTable()
+              || region.getEffectiveDurability(m.getDurability()) == Durability.SKIP_WAL) {
             region.recordMutationWithoutWal(m.getFamilyCellMap());
             return true;
           }
@@ -4266,7 +4303,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         Pair<NonceKey, WALEdit> nonceKeyWALEditPair = it.next();
         walEdit = nonceKeyWALEditPair.getSecond();
         NonceKey nonceKey = nonceKeyWALEditPair.getFirst();
-
+        // TODO : We are still writing META to this WAL?? Need some way to avoid this??
         if (walEdit != null && !walEdit.isEmpty()) {
           writeEntry = doWALAppend(walEdit, batchOp.durability, batchOp.getClusterIds(), now,
               nonceKey.getNonceGroup(), nonceKey.getNonce(), batchOp.getOrigLogSeqNum());
@@ -4282,13 +4319,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // Replicate memstoreEdit to replica regions
       // TODO this logic should be part of a WAL impl and fully plugged in with out any core changes
       // as here. It is just a PoC
+      if (!memstoreEdit.isEmpty() && !this.getRegionInfo().getTable().isSystemTable()) {
+        writeEntry = replicateCurrentBatch(memstoreEdit, 1);
+      }
+      // if null create one
       if (writeEntry == null) {
         writeEntry = mvcc.begin();
       }
-      if (!memstoreEdit.isEmpty() && !this.getRegionInfo().getTable().isSystemTable()) {
-        replicateCurrentBatch(memstoreEdit, 1, writeEntry.getWriteNumber());
-      }
-      
       // STEP 5. Write back to memStore
       // NOTE: writeEntry can be null here
       writeEntry = batchOp.writeMiniBatchOperationsToMemStore(miniBatchOp, writeEntry);
@@ -4322,12 +4359,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
-  private ReplicateMemstoreResponse replicateCurrentBatch(MemstoreEdits memstoreEdits,
-      int replicasOffered, long seqId) throws IOException {
+  private WriteEntry replicateCurrentBatch(MemstoreEdits memstoreEdits,
+      int replicasOffered) throws IOException {
     MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
         this.getRegionInfo().getEncodedNameAsBytes(), replicasOffered);
     // replicasOffered is +1ed considering this region write will be success now.
-    memstoreReplicationKey.setSequenceId(seqId);
     try {
       // ensure that we do things in order (probably easier for flush special entry? We need
       // that to be done.)
@@ -4336,7 +4372,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       checkIfMinWriteReplicSatisfied(response);
       // TODO : need to handle all exceptions - make things synchronous in terms of
       // replication to all the replicas. End the mvcc in case of exception
-      return response;
+      return memstoreReplicationKey.getWriteEntry();
     } catch (IOException e) {
       //updateLocationOnException(null);
       // TODO no need to catch. Just added with rethrow as not sure whether
@@ -4457,10 +4493,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // regions.(Like checkAndPut, increment etc).. Only plain Cell write op will come to here. We
       // don't really worry abt what kind of Mutation it is.
       lock(this.updatesLock.readLock(), familyMap.size());
-      WriteEntry[] writeEntries = new WriteEntry[seqIds.length];
+     WriteEntry[] writeEntries = new WriteEntry[seqIds.length];
       for (int i = 0; i < seqIds.length; i++) {
         writeEntries[i] = this.mvcc.begin(seqIds[i]);
       }
+
       MemStoreAsyncAddHandler handler = new MemStoreAsyncAddHandler(this, writeEntries);
       try {
         for (Map.Entry<byte[], List<Cell>> e : familyMap.entrySet()) {
@@ -4498,7 +4535,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
         }
         if (CellUtil.matchingFamily(cell, WALEdit.METAFAMILY)) {
-           handleMetaMarkerCell(cell, replicasOffered);
+           handleMetaMarkerCell(cell, replicasOffered, entry.getSequenceId());
         } else {
           byte[] fam = CellUtil.cloneFamily(cell);
           List<Cell> list = familyMap.get(fam);
@@ -4515,17 +4552,17 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return seqIds;
   }
 
-  private void handleMetaMarkerCell(Cell cell, int replicasOffered)
+  private void handleMetaMarkerCell(Cell cell, int replicasOffered, long seqId)
       throws IOException {
     CompactionDescriptor compactionDesc = WALEdit.getCompaction(cell);
     if (compactionDesc != null) {
       // replay the compaction. Remove the files from stores only if we are the primary
       // region replica (thus own the files)
-      replayWALCompactionMarker(compactionDesc, true, false, cell.getSequenceId());
+      replayWALCompactionMarker(compactionDesc, true, false, seqId);
     } else {
       FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(cell);
       if (flushDesc != null) {
-        replayWALFlushMarker(flushDesc, cell.getSequenceId(), replicasOffered);
+        replayWALFlushMarker(flushDesc, seqId, replicasOffered);
       } else {
         // TODO region open and close events not been RPCed into replicas now. This can help?
         RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(cell);
@@ -4756,7 +4793,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * @param cellItr
    * @param now
    */
-  public void updateCellTimestamps(final Iterable<List<Cell>> cellItr, final byte[] now)
+  private static void updateCellTimestamps(final Iterable<List<Cell>> cellItr, final byte[] now)
       throws IOException {
     for (List<Cell> cells: cellItr) {
       if (cells == null) continue;
@@ -4811,12 +4848,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       requestFlush();
       // Don't print current limit because it will vary too much. The message is used as a key
       // over in RetriesExhaustedWithDetailsException processing.
-      throw new RegionTooBusyException("Over memstore limit; regionName=" +
+      throw new RegionTooBusyException("Over memstore limit=" +
+        org.apache.hadoop.hbase.procedure2.util.StringUtils.humanSize(this.blockingMemStoreSize) +
+        ", regionName=" +
           (this.getRegionInfo() == null? "unknown": this.getRegionInfo().getEncodedName()) +
-          ", server=" + (this.getRegionServerServices() == null ? "unknown":
-          this.getRegionServerServices().getServerName()) +
-          ", blockingMemStoreSize=" +
-          org.apache.hadoop.hbase.procedure2.util.StringUtils.humanSize(blockingMemStoreSize));
+          ", server=" + (this.getRegionServerServices() == null? "unknown":
+              this.getRegionServerServices().getServerName()));
     }
   }
 
@@ -9175,4 +9212,5 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   public List<Integer> getGoodReplicas() {
     return this.regionReplicator.getCurrentPiplineForReads();
   }
+
 }

@@ -41,10 +41,10 @@ public class MemStoreAsyncAddHandler extends EventHandler {
   private final HRegion hRegion;
 
   public MemStoreAsyncAddHandler(HRegion hRegion,
-      WriteEntry[] writeEntries) {
+      WriteEntry[] seqIds) {
     super(null, EventType.RS_REGION_REPLICA_MEMSTORE_ASYNC_ADD);
     this.hRegion = hRegion;
-    this.writeEntries = writeEntries;
+    this.writeEntries = seqIds;
   }
 
   @Override

@@ -41,6 +41,8 @@ import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
 import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
+import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl;
+import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.PipelineException;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
@@ -112,14 +114,15 @@ public class RegionReplicaReplicator {
   private Set<Integer> pipeline;
   private ReadWriteLock lock = new ReentrantReadWriteLock();
   private AtomicInteger badCountToBeCommittedInMeta = new AtomicInteger(0);
-
+  private MultiVersionConcurrencyControl mvcc;
   private volatile long badReplicaInProgressTs = UNSET;
   private static final Log LOG = LogFactory.getLog(RegionReplicaReplicator.class);
 
-  public RegionReplicaReplicator(Configuration conf, RegionInfo currentRegion, int minWriteReplicas,
-       int replicationThreadIndex) {
+  public RegionReplicaReplicator(Configuration conf, RegionInfo currentRegion,
+      MultiVersionConcurrencyControl mvcc, int minWriteReplicas, int replicationThreadIndex) {
     this.conf = conf;
     this.curRegion = currentRegion;
+    this.mvcc = mvcc;
     this.minNonPrimaryWriteReplicas = minWriteReplicas - 1;
     this.replicationThreadIndex = replicationThreadIndex;
     if (RegionReplicaUtil.isDefaultReplica(this.curRegion)) {
@@ -128,11 +131,17 @@ public class RegionReplicaReplicator {
     }
   }
 
-  public CompletableFuture<ReplicateMemstoreResponse> append(MemstoreReplicationEntry entry)
-      throws IOException {
+  public CompletableFuture<ReplicateMemstoreResponse> append(MemstoreReplicationEntry entry,
+      boolean beginMvcc) throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future = new CompletableFuture<>();
     // Seems no way to avoid this sync
     synchronized (this) {
+      // begin the mvcc here
+      if (beginMvcc) {
+        WriteEntry writeNumber = this.mvcc.begin();
+        // attach the seqId here. Ensures strict order then
+        entry.getMemstoreReplicationKey().setWriteEntry(writeNumber);
+      }
       entry.attachFuture(future, nextSeq++);
       this.entryBuffer.add(entry);
     }
@@ -150,7 +159,7 @@ public class RegionReplicaReplicator {
       return null;
     }
     List<MemstoreReplicationEntry> local = this.entryBuffer;
-    this.entryBuffer = new ArrayList<>();
+    this.entryBuffer = new ArrayList<MemstoreReplicationEntry>();
     this.curMaxConsumedSeq = this.nextSeq - 1;
     return local;
   }

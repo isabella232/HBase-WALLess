@@ -111,8 +111,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   @Override
   public ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
       MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicator) throws IOException {
-    CompletableFuture<ReplicateMemstoreResponse> future = offerForReplicate(memstoreReplicationKey,
-        memstoreEdits, regionReplicator);
+    CompletableFuture<ReplicateMemstoreResponse> future =
+        offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicator, true);
     try {
       return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
@@ -124,10 +124,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   private CompletableFuture<ReplicateMemstoreResponse> offerForReplicate(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaReplicator regionReplicator) throws IOException {
+      RegionReplicaReplicator regionReplicator, boolean beginMvcc) throws IOException {
     MemstoreReplicationEntry entry = new MemstoreReplicationEntry(memstoreReplicationKey,
         memstoreEdits);
-    CompletableFuture<ReplicateMemstoreResponse> future = regionReplicator.append(entry);
+    CompletableFuture<ReplicateMemstoreResponse> future = regionReplicator.append(entry, beginMvcc);
     offer(regionReplicator, entry);
     return future;
   }
@@ -136,7 +136,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   public CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
       RegionReplicaReplicator regionReplicaReplicator) throws IOException {
-    return offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator);
+    // ideally the same should be done for both async and sync case. But it does not work so.
+    return offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator, false);
   }
 
   @Override

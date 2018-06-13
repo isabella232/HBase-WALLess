@@ -198,6 +198,11 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
   }
 
   @Override
+  public int getMemstoreReplicationQueueLength() {
+    return memstoreReplicationExecutor == null ? 0 : memstoreReplicationExecutor.getQueueLength();
+  }
+
+  @Override
   public int getActiveRpcHandlerCount() {
     return callExecutor.getActiveHandlerCount() + getActivePriorityRpcHandlerCount()
         + getActiveReplicationRpcHandlerCount();
@@ -216,6 +221,11 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
   @Override
   public int getActiveReplicationRpcHandlerCount() {
     return (replicationExecutor == null ? 0 : replicationExecutor.getActiveHandlerCount());
+  }
+
+  @Override
+  public int getActiveMemstoreReplicationRpcHandlerCount() {
+    return (memstoreReplicationExecutor == null ? 0 : memstoreReplicationExecutor.getActiveHandlerCount());
   }
 
   @Override
@@ -280,6 +290,13 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
       queueName = "Replication Queue";
       callQueueInfo.setCallMethodCount(queueName, replicationExecutor.getCallQueueCountsSummary());
       callQueueInfo.setCallMethodSize(queueName, replicationExecutor.getCallQueueSizeSummary());
+    }
+    if (memstoreReplicationExecutor != null) {
+      queueName = "Memstore replication Queue";
+      callQueueInfo.setCallMethodCount(queueName,
+        memstoreReplicationExecutor.getCallQueueCountsSummary());
+      callQueueInfo.setCallMethodSize(queueName,
+        memstoreReplicationExecutor.getCallQueueSizeSummary());
     }
 
     return callQueueInfo;

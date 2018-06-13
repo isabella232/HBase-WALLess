@@ -52,6 +52,7 @@ public interface MemstoreReplicator {
    * way we want the primary region only should NOT wait on a sync call for the op (like
    * flush/compaction)
    */
+  // Make this async version also to generate the mvcc within itself
   CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
       RegionReplicaReplicator regionReplicaReplicator) throws IOException;

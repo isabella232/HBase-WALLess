@@ -19,6 +19,7 @@
 package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
 import org.apache.yetus.audience.InterfaceAudience;
+import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
 import org.apache.hadoop.hbase.util.Bytes;
 
 /**
@@ -31,7 +32,7 @@ public class MemstoreReplicationKey {
    */
   public static final long NO_SEQUENCE_ID = -1;
   private byte [] encodedRegionName;
-
+  private WriteEntry writeEntry;
   /**
    * SequenceId for this edit. Set post-construction at write-to-WAL time. Until then it is
    * NO_SEQUENCE_ID. Change it so multiple threads can read it -- e.g. access is synchronized.
@@ -57,6 +58,7 @@ public class MemstoreReplicationKey {
     return this.encodedRegionName;
   }
 
+  // Can we have only WriteEntry??
   public void setSequenceId(long seqId) {
     this.sequenceId = seqId;
   }
@@ -82,4 +84,14 @@ public class MemstoreReplicationKey {
     return this.replicasOffered;
   }
   // Add proto file for this. PD serDe methods to be added
+
+  public void setWriteEntry(WriteEntry writeEntry) {
+    this.writeEntry = writeEntry;
+    // set the seqId also here
+    this.sequenceId = this.writeEntry.getWriteNumber();
+  }
+
+  public WriteEntry getWriteEntry() {
+    return this.writeEntry;
+  }
 }

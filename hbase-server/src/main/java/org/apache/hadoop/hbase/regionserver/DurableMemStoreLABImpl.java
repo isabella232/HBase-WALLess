@@ -180,8 +180,8 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
 
   private void persistWrite(WriteEntry writeEntry) {
     writeEntry.complete();
+    List<WriteEntry> completedWrites = new ArrayList<>();
     synchronized (this.persistOrderingLockObj) {
-      List<WriteEntry> completedWrites = new ArrayList<>();
       while (!writeQueue.isEmpty()) {
         if (this.writeQueue.getFirst().isCompleted()) {
           completedWrites.add(this.writeQueue.removeFirst());
@@ -224,40 +224,39 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     }
     lastChunk.persist(offset, len);
     // Update the meta data in the first chunk
+    // removing this gives atleast 6% saving
     this.firstChunk.get().writeEndOfCellsOffset(lastChunk.getSeqId(), (int) (offset + len));
   }
 
   private void waitForPriorWritesCompletion(WriteEntry writeEntry) {
     while (true) {
-      synchronized (this.persistOrderingLockObj) {
-        try {
-          if (!writeQueue.isEmpty()) {
-            // before waiting here check for the writeQueue is empty or not. Only
-            // if not empty go for the wait state. If the writeQueue is empty
-            // never even wait.
-            // The case is this
-            //  -> Thread 1 writes with seqNo 1 and thread 2 writes with SeqNo 2. Now writeQueue
-            // has 2 entries 1 & 2.
-            // -> Thread 2 enters persistWrite first and inside the 'synchronized
-            // (this.persistOrderingLockObj)'. It sees the write with SeqNo 1 is not yet completed
-            // so it starts waiting here.
-            // -> thread 1 enters persistWrite() and completes the persist of all the entries but
-            // before doing so it removes the entries from writeQueue.
-            // -> Thread 2 that was waiting comes out of the wait state and never knows that the
-            // writeQueue has become empty.
-            this.persistOrderingLockObj.wait(10);
-          } else {
-            break;
-          }
-        } catch (InterruptedException e) {
-          // TODO need to handle any?
-        }
-        // We are been acked. Check now whether our write is persisted.
-        if (!this.writeQueue.isEmpty() && (this.writeQueue.getFirst().seqNo > writeEntry.seqNo)) {
+      try {
+        if (!writeQueue.isEmpty()) {
+          // before waiting here check for the writeQueue is empty or not. Only
+          // if not empty go for the wait state. If the writeQueue is empty
+          // never even wait.
+          // The case is this
+          // -> Thread 1 writes with seqNo 1 and thread 2 writes with SeqNo 2. Now writeQueue
+          // has 2 entries 1 & 2.
+          // -> Thread 2 enters persistWrite first and inside the 'synchronized
+          // (this.persistOrderingLockObj)'. It sees the write with SeqNo 1 is not yet completed
+          // so it starts waiting here.
+          // -> thread 1 enters persistWrite() and completes the persist of all the entries but
+          // before doing so it removes the entries from writeQueue.
+          // -> Thread 2 that was waiting comes out of the wait state and never knows that the
+          // writeQueue has become empty.
+          this.persistOrderingLockObj.wait();
+        } else {
           break;
         }
-        // we are not yet done. Just continue to wait!
+      } catch (InterruptedException e) {
+        // TODO need to handle any?
       }
+      // We are been acked. Check now whether our write is persisted.
+      if (!this.writeQueue.isEmpty() && (this.writeQueue.getFirst().seqNo > writeEntry.seqNo)) {
+        break;
+      }
+      // we are not yet done. Just continue to wait!
     }
   }
 

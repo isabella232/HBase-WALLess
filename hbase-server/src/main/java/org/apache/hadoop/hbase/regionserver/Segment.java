@@ -33,6 +33,7 @@ import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.io.TimeRange;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ClassSize;
+import org.apache.hadoop.hbase.util.CollectionBackedScanner;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
@@ -119,7 +120,8 @@ public abstract class Segment {
   }
 
   public List<KeyValueScanner> getScanners(long readPoint) {
-    return Collections.singletonList(new SegmentScanner(this, readPoint));
+    return Collections
+        .singletonList(new CollectionBackedScanner(this.cellSet.get(), this.getComparator()));
   }
 
   /**

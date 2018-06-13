@@ -133,11 +133,11 @@ public class MemStoreLABImpl implements MemStoreLAB {
   @Override
   public Cell forceCopyOfBigCellInto(Cell cell) {
     int size = KeyValueUtil.length(cell) + ChunkCreator.SIZEOF_CHUNK_HEADER;
+    size += ChunkCreator.SIZEOF_CHUNK_HEADER;
     Preconditions.checkArgument(size >= 0, "negative size");
     if (size <= dataChunkSize) {
       // Using copyCellInto for cells which are bigger than the original maxAlloc
-      Cell newCell = copyCellInto(cell, dataChunkSize);
-      return newCell;
+      return copyCellInto(cell, dataChunkSize);
     } else {
       Chunk c = getNewExternalChunk(size);
       int allocOffset = c.alloc(size);
@@ -269,8 +269,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
    */
   protected Chunk getOrMakeChunk() {
     // Try to get the chunk
-    Chunk c;
-    c = currChunk.get();
+    Chunk c = currChunk.get();
     if (c != null) {
       return c;
     }

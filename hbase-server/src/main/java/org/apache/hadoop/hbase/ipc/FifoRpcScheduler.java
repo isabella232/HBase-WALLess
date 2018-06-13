@@ -219,4 +219,16 @@ public class FifoRpcScheduler extends RpcScheduler {
 
     return callQueueInfo;
   }
+
+  @Override
+  public int getMemstoreReplicationQueueLength() {
+    // TODO Auto-generated method stub
+    return 0;
+  }
+
+  @Override
+  public int getActiveMemstoreReplicationRpcHandlerCount() {
+    // TODO Auto-generated method stub
+    return 0;
+  }
 }
