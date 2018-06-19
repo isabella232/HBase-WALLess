@@ -61,6 +61,13 @@ public class FlushRegionCallable extends RegionAdminServiceCallable<FlushRegionR
       regionInfo.getStartKey(), writeFlushWalMarker, null);
   }
 
+  public FlushRegionCallable(ClusterConnection connection,
+      RpcControllerFactory rpcControllerFactory, RegionInfo regionInfo, boolean writeFlushWalMarker,
+      RegionInfo requestingRegionReplica) {
+    this(connection, rpcControllerFactory, regionInfo.getTable(), regionInfo.getRegionName(),
+        regionInfo.getStartKey(), writeFlushWalMarker, requestingRegionReplica);
+  }
+
   @Override
   public void prepare(boolean reload) throws IOException {
     super.prepare(reload);

@@ -126,6 +126,7 @@ public class AssignReplicaAsPrimaryRegionProcedure extends AssignProcedure {
     env.getAssignmentManager().getRegionStates().removeFromFailedOpen(regionNode.getRegionInfo());
     // TODO : Shall we add a new state for this so that on failure this assign alone is done once again
     // rather than other steps??
+    LOG.info("Creating new assign procedure for the region "+this.destinationRegion);
     return new AssignProcedure(this.destinationRegion, true);
   }
 

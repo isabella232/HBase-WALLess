@@ -2702,6 +2702,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       long flushOpSeqId, TreeMap<byte[], List<Path>> committedFiles, int currentReplicaIndex,
       long seqId, boolean async, List<Integer> failedReplicas) throws IOException {
     Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> res = null;
+    // TODO : We should send the RPC for a case where a region is closed as part of MOVE.
+    // In case of disabling or RS shutdown this may be ok.
     if (!this.closing.get() && !this.closed.get()) {
       FlushDescriptor desc =
           ProtobufUtil.toFlushDescriptor(action, getRegionInfo(), flushOpSeqId, committedFiles);
@@ -4493,7 +4495,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // regions.(Like checkAndPut, increment etc).. Only plain Cell write op will come to here. We
       // don't really worry abt what kind of Mutation it is.
       lock(this.updatesLock.readLock(), familyMap.size());
-     WriteEntry[] writeEntries = new WriteEntry[seqIds.length];
+      WriteEntry[] writeEntries = new WriteEntry[seqIds.length];
       for (int i = 0; i < seqIds.length; i++) {
         writeEntries[i] = this.mvcc.begin(seqIds[i]);
       }

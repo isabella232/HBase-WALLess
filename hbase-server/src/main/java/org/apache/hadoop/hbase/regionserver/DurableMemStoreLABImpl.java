@@ -224,7 +224,6 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     }
     lastChunk.persist(offset, len);
     // Update the meta data in the first chunk
-    // removing this gives atleast 6% saving
     this.firstChunk.get().writeEndOfCellsOffset(lastChunk.getSeqId(), (int) (offset + len));
   }
 

@@ -34,18 +34,17 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HConstants;
-import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.ClusterConnection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
+import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
 import org.apache.hadoop.hbase.exceptions.TimeoutIOException;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
 import org.apache.hadoop.hbase.regionserver.RegionServerServices;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.protobuf.MemstoreReplicationProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
@@ -227,7 +226,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
           // 
           RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
               rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
-              nextRegionLocation.getRegionInfo(), nextRegionLocation.getRegion().getStartKey(),
+              nextRegionLocation.getRegion(), nextRegionLocation.getRegion().getStartKey(),
               request, replicationEntries, pipeline);
           try {
             ReplicateMemstoreResponse response =
@@ -347,7 +346,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
     public RegionReplicaReplayCallable(ClusterConnection connection,
         RpcControllerFactory rpcControllerFactory, TableName tableName, HRegionLocation location,
-        HRegionInfo regionInfo, byte[] row,
+        RegionInfo regionInfo, byte[] row,
         RequestEntryHolder request, List<MemstoreReplicationEntry> entries, List<Integer> pipeline) {
       super(connection, rpcControllerFactory, location, tableName, row, regionInfo.getReplicaId());
       this.initialEncodedRegionName = regionInfo.getEncodedNameAsBytes();
@@ -393,7 +392,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
           reqBuilder.addReplicas(request.getRequest().getReplicas(i));
         }
         reqBuilder.setEncodedRegionName(
-          UnsafeByteOperations.unsafeWrap(location.getRegionInfo().getEncodedNameAsBytes()));
+          UnsafeByteOperations.unsafeWrap(location.getRegion().getEncodedNameAsBytes()));
         reqBuilder.setReplicasOffered(request.getRequest().getReplicasOffered() + 1);
         return stub.replicateMemstore(controller, reqBuilder.build());
       }

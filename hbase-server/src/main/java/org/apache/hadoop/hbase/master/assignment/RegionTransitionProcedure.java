@@ -319,10 +319,10 @@ public abstract class RegionTransitionProcedure
           case REGION_TRANSITION_FINISH:
             // 3. wait assignment response. completion/failure
             LOG.debug("Finishing {}; {}", this, regionNode.toShortString());
-            finishTransition(env, regionNode);
+            Procedure subProc = finishTransition(env, regionNode);
             am.removeRegionInTransition(regionNode, this);
             postFinish(env, regionNode);
-            return null;
+            return subProc == null ? null : new Procedure[] {subProc};
             
         case PRIMARY_REGION_REPLICA_SWTICH_OVER:
           /**

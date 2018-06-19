@@ -1722,8 +1722,12 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
 
   private void reportReplicaGoodToMeta(HRegion region, int requestingReplica,
       HRegion.FlushResultImpl flushResult) {
-    if (flushResult != null && flushResult.failedReplicas != null) {
-      if (requestingReplica > 0 && !(flushResult.failedReplicas.contains(requestingReplica))) {
+    // TODO : revisit. Something wrong here.
+    if (flushResult != null) {
+      if (flushResult.failedReplicas != null) {
+        if (requestingReplica > 0 && (flushResult.failedReplicas.contains(requestingReplica))) {
+          return;
+        }
         this.regionServer.reportReplicaRegionHealthGood(
           RegionReplicaUtil.getRegionInfoForReplica(region.getRegionInfo(), requestingReplica),
           region);

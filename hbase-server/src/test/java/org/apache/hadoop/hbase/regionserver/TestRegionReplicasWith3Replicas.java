@@ -42,6 +42,7 @@ import org.apache.hadoop.hbase.client.RegionLocator;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
+import org.apache.hadoop.hbase.ipc.SimpleRpcServer;
 import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.regionserver.HRegionServer;
 import org.apache.hadoop.hbase.regionserver.Region;
@@ -178,6 +179,7 @@ public class TestRegionReplicasWith3Replicas {
   public void testGetOnTargetRegionReplica() throws Exception {
     Pair<OpenedIn, OpenedIn> pair = null;
     OpenedIn tertiaryOpenedIn = null;
+    System.out.println(SimpleRpcServer.class.getName());
     try {
       pair = openSecondary();
       tertiaryOpenedIn = openTertiary(pair);
