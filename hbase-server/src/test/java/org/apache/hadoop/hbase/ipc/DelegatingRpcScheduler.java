@@ -123,14 +123,4 @@ public class DelegatingRpcScheduler extends RpcScheduler {
   public CallQueueInfo getCallQueueInfo() {
     return delegate.getCallQueueInfo();
   }
-
-  @Override
-  public int getMemstoreReplicationQueueLength() {
-    return delegate.getMemstoreReplicationQueueLength();
-  }
-
-  @Override
-  public int getActiveMemstoreReplicationRpcHandlerCount() {
-    return delegate.getActiveMemstoreReplicationRpcHandlerCount();
-  }
 }

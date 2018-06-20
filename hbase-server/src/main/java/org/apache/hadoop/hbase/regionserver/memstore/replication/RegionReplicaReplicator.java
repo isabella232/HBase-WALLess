@@ -131,16 +131,16 @@ public class RegionReplicaReplicator {
     }
   }
 
-  public CompletableFuture<ReplicateMemstoreResponse> append(MemstoreReplicationEntry entry,
-      boolean beginMvcc) throws IOException {
+  public CompletableFuture<ReplicateMemstoreResponse> append(MemstoreReplicationEntry entry)
+      throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future = new CompletableFuture<>();
     // Seems no way to avoid this sync
     synchronized (this) {
-      // begin the mvcc here
-      if (beginMvcc) {
-        WriteEntry writeNumber = this.mvcc.begin();
+      // begin the mvcc here if not yet
+      if (entry.getMemstoreReplicationKey().getWriteEntry() == null) {
+        WriteEntry we = this.mvcc.begin();
         // attach the seqId here. Ensures strict order then
-        entry.getMemstoreReplicationKey().setWriteEntry(writeNumber);
+        entry.getMemstoreReplicationKey().setWriteEntry(we);
       }
       entry.attachFuture(future, nextSeq++);
       this.entryBuffer.add(entry);

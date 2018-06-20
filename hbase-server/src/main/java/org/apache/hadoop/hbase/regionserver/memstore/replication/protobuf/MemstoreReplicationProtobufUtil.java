@@ -51,7 +51,6 @@ public class MemstoreReplicationProtobufUtil {
       MemstoreReplicaProtos.MemstoreReplicationEntry.Builder entryBuilder =
           MemstoreReplicaProtos.MemstoreReplicationEntry.newBuilder();
       entryBuilder.setAssociatedCellCount(cells.size());
-      // TODO : Better to write max seqId here itself
       entryBuilder.setSequenceId(key.getSequenceId());
       reqBuilder.addEntry(entryBuilder.build());
       replicasOffsered = key.getReplicasOffered();// Its ok to overwrite. Write comments.. Handle.

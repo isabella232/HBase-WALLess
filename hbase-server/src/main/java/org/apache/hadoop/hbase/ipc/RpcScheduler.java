@@ -77,9 +77,6 @@ public abstract class RpcScheduler {
   /** Retrieves length of the replication queue for metrics. */
   public abstract int getReplicationQueueLength();
 
-  /** Retrieves length of the memstore replication queue for metrics. */
-  public abstract int getMemstoreReplicationQueueLength();
-
   /** Retrieves the total number of active handler. */
   public abstract int getActiveRpcHandlerCount();
 
@@ -91,9 +88,6 @@ public abstract class RpcScheduler {
 
   /** Retrieves the number of active replication handler. */
   public abstract int getActiveReplicationRpcHandlerCount();
-
-  /** Retrieves the number of active memstore replication handler. */
-  public abstract int getActiveMemstoreReplicationRpcHandlerCount();
 
   /**
    * If CoDel-based RPC executors are used, retrieves the number of Calls that were dropped

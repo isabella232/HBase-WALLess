@@ -134,6 +134,7 @@ import org.apache.hadoop.hbase.monitoring.MonitoredTask;
 import org.apache.hadoop.hbase.monitoring.TaskMonitor;
 import org.apache.hadoop.hbase.regionserver.HRegion.MutationBatchOperation;
 import org.apache.hadoop.hbase.regionserver.HRegion.RegionScannerImpl;
+import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
 import org.apache.hadoop.hbase.regionserver.Region.RowLock;
 import org.apache.hadoop.hbase.regionserver.TestHStore.FaultyFileSystem;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionRequestImpl;
@@ -5897,7 +5898,7 @@ public class TestHRegion {
       super(tableDir, wal, fs, confParam, regionInfo, htd, rsServices);
     }
     @Override
-    protected long getNextSequenceId(WAL wal) throws IOException {
+    protected long getNextSequenceId(WriteEntry we) throws IOException {
       return 42;
     }
   }

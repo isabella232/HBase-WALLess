@@ -2536,10 +2536,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // to no other that it can use to associate with the bulk load. Hence this little dance below
     // to go get one.
     CompletableFuture<ReplicateMemstoreResponse> future = null;
+    WriteEntry writeEntry = null;
     if (this.memStoreSize.getDataSize() <= 0) {
       // Take an update lock so no edits can come into memory just yet.
       this.updatesLock.writeLock().lock();
-      WriteEntry writeEntry = null;
       try {
         if (this.memStoreSize.getDataSize() <= 0) {
           // Presume that if there are still no edits in the memstore, then there are no edits for
@@ -2549,6 +2549,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           // (useful as marker when bulk loading, etc.).
           HRegion.FlushResultImpl flushResult = null;
           if (wal != null) {
+            // We can do the MVCC begin here itself rather than doing while adding to the Q for the
+            // Region replication. The order will not be an issue. See above we acquire write lock
+            // on this.updatesLock. So there won't be any cocurrent writes.
             writeEntry = mvcc.begin();
             long flushOpSeqId = writeEntry.getWriteNumber();
             flushResult = new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH_MEMSTORE_EMPTY,
@@ -2567,7 +2570,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
               // for it to be done and then only mutations can proceed
               Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
                   sendFlushRpc(FlushAction.CANNOT_FLUSH, flushOpSeqId, null,
-                    currentReplicaIndex, flushOpSeqId, true, null);
+                    currentReplicaIndex, writeEntry, true, null);
               if (sendFlushRpc != null) {
                 future = sendFlushRpc.getFirst();
               }
@@ -2635,8 +2638,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
               new FlushResultImpl(FlushResult.Result.CANNOT_FLUSH, msg, false),
               myseqid);
         }
-        // here passing WAL is of no use
-        flushOpSeqId = getNextSequenceId(wal);
+        // We can do the MVCC begin here itself rather than doing while adding to the Q for the
+        // Region replication. The order will not be an issue. See above we acquire write lock
+        // on this.updatesLock. So there won't be any cocurrent writes.
+        writeEntry = mvcc.begin();
+        mvcc.completeAndWait(writeEntry);
+        flushOpSeqId = getNextSequenceId(writeEntry);
         // Back up 1, minus 1 from oldest sequence id in memstore to get last 'flushed' edit
         flushedSeqId =
             earliestUnflushedSequenceIdForTheRegion.longValue() == HConstants.NO_SEQNUM?
@@ -2664,7 +2671,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // TODO : we should add this in primary also
         Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
             sendFlushRpc(FlushAction.START_FLUSH, flushOpSeqId, committedFiles, currentReplicaIndex,
-              flushOpSeqId, true, null);
+                writeEntry, true, null);
         if (sendFlushRpc != null) {
           future = sendFlushRpc.getFirst();
         }
@@ -2698,29 +2705,32 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         flushOpSeqId, flushedSeqId, totalSizeOfFlushableStores, failedReplicas);
   }
 
+  @VisibleForTesting
+  protected long getNextSequenceId(WriteEntry writeEntry) throws IOException {
+    return writeEntry.getWriteNumber();
+  }
+
   private Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc(FlushAction action,
       long flushOpSeqId, TreeMap<byte[], List<Path>> committedFiles, int currentReplicaIndex,
-      long seqId, boolean async, List<Integer> failedReplicas) throws IOException {
-    Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> res = null;
+      WriteEntry writeEntry, boolean async, List<Integer> failedReplicas) throws IOException {
+    Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> res =
+        new Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry>();
     // TODO : We should send the RPC for a case where a region is closed as part of MOVE.
     // In case of disabling or RS shutdown this may be ok.
     if (!this.closing.get() && !this.closed.get()) {
       FlushDescriptor desc =
           ProtobufUtil.toFlushDescriptor(action, getRegionInfo(), flushOpSeqId, committedFiles);
-      KeyValue kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
+      Cell kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
           WALEdit.FLUSH, EnvironmentEdgeManager.currentTime(), desc.toByteArray());
-      // we need a sequenceid
-      //System.out.println("the seq id is "+seqId + " "+desc);
       MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
           this.getRegionInfo().getEncodedNameAsBytes(), currentReplicaIndex);
+      if (writeEntry != null) memstoreReplicationKey.setWriteEntry(writeEntry);
       MemstoreEdits memstoreEdits = new MemstoreEdits();
       memstoreEdits.add(kv);
-      res = new Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry>();
-      // replicate this
       if (async) {
-        memstoreReplicationKey.setSequenceId(seqId);
         res.setFirst(this.memstoreReplicator.replicateAsync(memstoreReplicationKey, memstoreEdits,
           regionReplicator));
+        // Anoop : TODO No need to check response.getFailedReplicasCount here?
         return res;
       }
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
@@ -2729,7 +2739,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       if (response.getFailedReplicasCount() > 0) {
         // this failedReplicas cannot be modified. So better
         // we mark all those replicas as failed
-        // we need this. commenting now due to some issues
+        // TODO we need this. commenting now due to some issues
         //checkIfMinWriteReplicSatisfied(response);
       }
     }
@@ -2788,7 +2798,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // TODO : In what case should we even have this??
         // TODO we have to handle the actual marker async ops still hanging around?
         Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
-            sendFlushRpc(FlushAction.ABORT_FLUSH, flushOpSeqId, committedFiles, 1, flushOpSeqId,
+            sendFlushRpc(FlushAction.ABORT_FLUSH, flushOpSeqId, committedFiles, 1, null,
               false, new ArrayList<Integer>());
         if (sendFlushRpc != null) {
           writeNumber = sendFlushRpc.getSecond();// TODO hanlde failed replicas
@@ -2967,7 +2977,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // failure of this should not mean that we should call ABORT_FLUSH because primary has already flushed
         // TODO : shall we wait for the response in this case??
         Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
-            sendFlushRpc(FlushAction.COMMIT_FLUSH, flushOpSeqId, committedFiles, 1, flushOpSeqId,
+            sendFlushRpc(FlushAction.COMMIT_FLUSH, flushOpSeqId, committedFiles, 1, null,
               false, failedReplicas);
         if (sendFlushRpc != null) {
           writeNumber = sendFlushRpc.getSecond();
@@ -3057,18 +3067,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return new FlushResultImpl(compactionRequested ?
         FlushResult.Result.FLUSHED_COMPACTION_NEEDED :
           FlushResult.Result.FLUSHED_NO_COMPACTION_NEEDED, flushOpSeqId, null);
-  }
-
-  /**
-   * Method to safely get the next sequence number.
-   * @return Next sequence number unassociated with any actual edit.
-   * @throws IOException
-   */
-  @VisibleForTesting
-  protected long getNextSequenceId(final WAL wal) throws IOException {
-    WriteEntry we = mvcc.begin();
-    mvcc.completeAndWait(we);
-    return we.getWriteNumber();
   }
 
   //////////////////////////////////////////////////////////////////////////////

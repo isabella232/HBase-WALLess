@@ -33,24 +33,13 @@ public class MemstoreReplicationKey {
   public static final long NO_SEQUENCE_ID = -1;
   private byte [] encodedRegionName;
   private WriteEntry writeEntry;
-  /**
-   * SequenceId for this edit. Set post-construction at write-to-WAL time. Until then it is
-   * NO_SEQUENCE_ID. Change it so multiple threads can read it -- e.g. access is synchronized.
-   */
-  private long sequenceId;
 
   //Is it right to add here??
   private final int replicasOffered;
 
   // TODO : Support compression, nonceGroup and nonces, inter cluster replication
-  public MemstoreReplicationKey(byte[] encodedRegionNameInBytes, int replicasOffered) {
-    this(encodedRegionNameInBytes, NO_SEQUENCE_ID, replicasOffered);
-  }
-
-  // TODO : Support compression, nonceGroup and nonces, inter cluster replication
-  public MemstoreReplicationKey(byte[] encodedRegionName, long sequenceId, int replicasOffered) {
+  public MemstoreReplicationKey(byte[] encodedRegionName, int replicasOffered) {
     this.encodedRegionName = encodedRegionName;
-    this.sequenceId = sequenceId;
     this.replicasOffered = replicasOffered;
   }
 
@@ -58,13 +47,8 @@ public class MemstoreReplicationKey {
     return this.encodedRegionName;
   }
 
-  // Can we have only WriteEntry??
-  public void setSequenceId(long seqId) {
-    this.sequenceId = seqId;
-  }
-  
   public long getSequenceId() {
-    return this.sequenceId;
+    return this.writeEntry.getWriteNumber();
   }
 
   /**
@@ -87,8 +71,6 @@ public class MemstoreReplicationKey {
 
   public void setWriteEntry(WriteEntry writeEntry) {
     this.writeEntry = writeEntry;
-    // set the seqId also here
-    this.sequenceId = this.writeEntry.getWriteNumber();
   }
 
   public WriteEntry getWriteEntry() {

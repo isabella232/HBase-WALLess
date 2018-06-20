@@ -198,11 +198,6 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
   }
 
   @Override
-  public int getMemstoreReplicationQueueLength() {
-    return memstoreReplicationExecutor == null ? 0 : memstoreReplicationExecutor.getQueueLength();
-  }
-
-  @Override
   public int getActiveRpcHandlerCount() {
     return callExecutor.getActiveHandlerCount() + getActivePriorityRpcHandlerCount()
         + getActiveReplicationRpcHandlerCount();
@@ -221,11 +216,6 @@ public class SimpleRpcScheduler extends RpcScheduler implements ConfigurationObs
   @Override
   public int getActiveReplicationRpcHandlerCount() {
     return (replicationExecutor == null ? 0 : replicationExecutor.getActiveHandlerCount());
-  }
-
-  @Override
-  public int getActiveMemstoreReplicationRpcHandlerCount() {
-    return (memstoreReplicationExecutor == null ? 0 : memstoreReplicationExecutor.getActiveHandlerCount());
   }
 
   @Override
