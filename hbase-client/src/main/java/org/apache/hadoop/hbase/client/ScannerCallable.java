@@ -75,7 +75,7 @@ public class ScannerCallable extends ClientServiceCallable<Result[]> {
   private boolean logScannerActivity = false;
   private int logCutOffLatency = 1000;
   protected final int id;
-  protected Set<Integer> goodReplicaIds;
+  protected Set<Integer> goodReplicaIds = new HashSet<Integer>();
 
   enum MoreResults {
     YES, NO, UNKNOWN
@@ -341,14 +341,10 @@ public class ScannerCallable extends ClientServiceCallable<Result[]> {
       if (response.hasMvccReadPoint()) {
         this.scan.setMvccReadPoint(response.getMvccReadPoint());
       }
+      // Opened the scanner on Primary region and these are then GOOD replicas having all data
+      // consistent till the mvcc read point for this scanner.
       if (response.getGoodReplicaIdsCount() > 0) {
-        // add the good replicas
-        if (goodReplicaIds == null) {
-          goodReplicaIds = new HashSet<Integer>();
-        }
-        for (int replicaid : response.getGoodReplicaIdsList()) {
-          goodReplicaIds.add(replicaid);
-        }
+        this.goodReplicaIds.addAll(response.getGoodReplicaIdsList());
       }
       this.scannerId = id;
       return response;

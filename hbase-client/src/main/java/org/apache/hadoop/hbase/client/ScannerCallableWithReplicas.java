@@ -162,28 +162,20 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
     replicaSwitched.set(false);
     // submit call for the primary replica.
     addCallsForCurrentReplica(cs);
-    if (LOG.isDebugEnabled()) {
-      if (currentScannerCallable != null && currentScannerCallable.getHRegionInfo() != null) {
-        //LOG.debug("The current replica being served is "
-           // + currentScannerCallable.getHRegionInfo().getReplicaId());
-      }
-    }
     // The algo works like this for SCans
     // 1) First hit the primary and wait for the timeBeforeReplicas.
     // 2) if we have a result from 1) return the result.
     // 3) if we have no result from 1), there are two cases
     //      3a 1) if the previous scan RPC was  successful and if it has the goodReplicas in it use those good replicas and continue the scan
-    //      3a 2) while doing this set the read pt that we got from the scan.
-    //      3a 3) if we get the result. Return back. If not read the good replicas from the META and try for the result.
-    //      
-    //      3b 1) if there was no successful RPC first hit the region replicas that is available with the callable.
-    //      3b 2) if we get the result return the result. 
-    //      3c 3)  If not read the good replicas from the META and try for the result.
+    //      3a 2) while doing this, set the read pt that we got from the scan.
+    //      3a 3) if we get the result, return back. If not read the then good replicas from the META and try for the result.
+    //
+    //      3b 1) Read the good replicas from the META and try for the result from those.
     //  4) if the there is only one region replica just wait till the timeout is expired to see if the primary returns a result back
     try {
       // wait for the timeout to see whether the primary responds back
-      Future<Pair<Result[], ScannerCallable>> f =
-          cs.poll(timeBeforeReplicas, TimeUnit.MICROSECONDS); // Yes, microseconds
+      Future<Pair<Result[], ScannerCallable>> f = cs.poll(timeBeforeReplicas,
+          TimeUnit.MICROSECONDS); // Yes, microseconds
       if (f != null) {
         // After poll, if f is not null, there must be a completed task
         try {
@@ -193,20 +185,21 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
           }
           return r == null ? null : r.getFirst(); // great we got a response
         } catch (ExecutionException e) {
-
+          // We ignore the ExecutionException and continue with the replicas
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("Scan with primary region returns " + e.getCause());
+          }
         }
       }
       if (regionReplication != 1) {
         // result not got from primary. Try with the replicas if there was a successful RPC.
         // Use the good Replicas
         if (currentScannerCallable != null) {
-          if (currentScannerCallable.goodReplicaIds != null) {
-            System.out.println("the good replicas are "+currentScannerCallable.goodReplicaIds);
-            // we already have the goodReplicaIds with us.
-            // TODO This is kind of Hedged reads? We need read from any of the good replica as and
-            // when needed.
+          if (!currentScannerCallable.goodReplicaIds.isEmpty()) {
+            // We already have the goodReplicaIds with us. Use them to query the corresponding
+            // TODO This is Hedged reads. We need read from any of the good replica as needed.
             addCallsForOtherReplicas(timeout, TimeUnit.MILLISECONDS, cs,
-              currentScannerCallable.goodReplicaIds);
+                currentScannerCallable.goodReplicaIds);
             f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS,
               currentScannerCallable.goodReplicaIds);
 
@@ -214,19 +207,13 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
               f = getGoodReplicaFromMETAandRetry(timeout, cs);
             }
           } else {
-            // the case where the even the first RPC was not set.
-            // in that case directly go with replicas
-            addCallsForOtherReplicas(cs, 0, regionReplication - 1);
-            f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS, 1,
-              regionReplication);
-            if (f == null) {
-              // probably the timeout should be adjusted
-              f = getGoodReplicaFromMETAandRetry(timeout, cs);
-            }
+            // TODO probably the timeout should be adjusted
+            f = getGoodReplicaFromMETAandRetry(timeout, cs);
           }
         }
       } else {
-        // when region replica is 1 wait for results from primary till timeout
+        // when region replica is 1 wait for results from primary till timeout. We waited for lesser
+        // time period only before and then went with replicas
         f = cs.pollForFirstSuccessfullyCompletedTask(timeout, TimeUnit.MILLISECONDS, 0, 1);
       }
       if (f == null) {
@@ -240,6 +227,8 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
       }
       return r == null ? null : r.getFirst(); // great we got an answer
     } catch (ExecutionException e) {
+      // TODO why this throw been changed? We would never reach here ideally? If so, better throw Exception only as any way we dont expect this to happen.
+      //RpcRetryingCallerWithReadReplicas.throwEnrichedException(e, retries);
       LOG.error("Error should not happen ", e);
     } catch (CancellationException e) {
       throw new InterruptedIOException(e.getMessage());
@@ -297,7 +286,7 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
       throws InterruptedIOException, IOException {
     RegionLocations rl = null;
     try {
-      rl = RpcRetryingCallerWithReadReplicas.getRegionLocations(true,
+      rl = RpcRetryingCallerWithReadReplicas.getRegionLocations(useCache,
           RegionReplicaUtil.DEFAULT_REPLICA_ID, cConnection, tableName,
           currentScannerCallable.getRow());
     } catch (RetriesExhaustedException | DoNotRetryIOException e) {
