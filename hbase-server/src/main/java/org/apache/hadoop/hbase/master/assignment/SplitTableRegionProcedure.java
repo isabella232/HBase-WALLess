@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -98,6 +99,7 @@ public class SplitTableRegionProcedure
   private RegionInfo daughter_2_RI;
   private byte[] bestSplitRow;
   private RegionSplitPolicy splitPolicy;
+  private static final Random RANDOM = new Random(System.currentTimeMillis());
 
   public SplitTableRegionProcedure() {
     // Required by the Procedure framework to create the procedure on replay
@@ -810,14 +812,32 @@ public class SplitTableRegionProcedure
       final int regionReplication) {
     final ServerName targetServer = getParentRegionServerName(env);
     final AssignProcedure[] procs = new AssignProcedure[regionReplication * 2];
+    List<ServerName> onlineServersList = env.getMasterServices().getServerManager().getOnlineServersList();
+    onlineServersList.remove(targetServer);
     int procsIdx = 0;
+    int serverIdx = 0;
     for (int i = 0; i < regionReplication; ++i) {
       final RegionInfo hri = RegionReplicaUtil.getRegionInfoForReplica(daughter_1_RI, i);
-      procs[procsIdx++] = env.getAssignmentManager().createAssignProcedure(hri, targetServer);
+      if (RegionReplicaUtil.isDefaultReplica(hri)) {
+        procs[procsIdx++] = env.getAssignmentManager().createAssignProcedure(hri, targetServer);
+      } else {
+        serverIdx = serverIdx % (onlineServersList.size());
+        procs[procsIdx++] =
+            env.getAssignmentManager().createAssignProcedure(hri, onlineServersList.get(serverIdx));
+        serverIdx++;
+      }
     }
+    serverIdx = 0;
     for (int i = 0; i < regionReplication; ++i) {
       final RegionInfo hri = RegionReplicaUtil.getRegionInfoForReplica(daughter_2_RI, i);
-      procs[procsIdx++] = env.getAssignmentManager().createAssignProcedure(hri, targetServer);
+      if (RegionReplicaUtil.isDefaultReplica(hri)) {
+        procs[procsIdx++] = env.getAssignmentManager().createAssignProcedure(hri, targetServer);
+      } else {
+        serverIdx = serverIdx % (onlineServersList.size());
+        procs[procsIdx++] =
+            env.getAssignmentManager().createAssignProcedure(hri, onlineServersList.get(serverIdx));
+        serverIdx++;
+      }
     }
     return procs;
   }
