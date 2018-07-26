@@ -184,6 +184,11 @@ implements ServerProcedureInterface {
         case SERVER_CRASH_FINISH:
           services.getAssignmentManager().getRegionStates().removeServer(serverName);
           services.getServerManager().getDeadServers().finish(serverName);
+          // TODO : Server crash procedure is fast for this replica based cases.
+          // But after the replica assignment happens the balancer once again balances
+          // the entire set of regions. That has to be avoided otherwise once agian writes
+          // will fail because the pipeline may not be satisfied. AM and balancer needs a thorough
+          // rework for replicas
           return Flow.NO_MORE_STATE;
 
         default:

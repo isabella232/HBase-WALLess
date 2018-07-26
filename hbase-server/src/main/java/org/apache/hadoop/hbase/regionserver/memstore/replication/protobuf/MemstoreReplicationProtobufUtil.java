@@ -24,9 +24,11 @@ import java.util.List;
 
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellScanner;
+import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
+import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.util.Pair;
@@ -37,7 +39,8 @@ import org.apache.yetus.audience.InterfaceAudience;
 public class MemstoreReplicationProtobufUtil {
 
   public static Pair<ReplicateMemstoreRequest, List<Cell>> buildReplicateMemstoreEntryRequest(
-      final MemstoreReplicationEntry[] entries, byte[] encodedRegionName, List<Integer> pipeline) {
+      final MemstoreReplicationEntry[] entries, byte[] encodedRegionName,
+      List<Pair<Integer, ServerName>> pipeline, boolean specialCell) {
     // Accumulate all the Cells seen in here.
     List<Cell> allCells = new ArrayList<>();
     ReplicateMemstoreRequest.Builder reqBuilder = ReplicateMemstoreRequest.newBuilder();
@@ -58,8 +61,11 @@ public class MemstoreReplicationProtobufUtil {
     }
     reqBuilder.setEncodedRegionName(UnsafeByteOperations.unsafeWrap(encodedRegionName));
     reqBuilder.setReplicasOffered(replicasOffsered);
-    for (int replicaId : pipeline) {
-      reqBuilder.addReplicas(replicaId);
+    for (Pair<Integer, ServerName> replicaId : pipeline) {
+      reqBuilder.addReplicas(replicaId.getFirst());
+      if (specialCell) {
+        reqBuilder.addLocations(ProtobufUtil.toServerName(replicaId.getSecond()));
+      }
     }
     return new Pair<>(reqBuilder.build(), allCells);
   }

@@ -941,16 +941,20 @@ public final class RequestConverter {
    * @param regionName the name of the region to get info
    * @param writeFlushWALMarker to write the flush WAL marker or not
    * @param requestingRegionReplica the replica region requesting the flush
+   * @param replicaRegionLocation the replica region location
    * @return a protocol buffer FlushRegionRequest
    */
   public static FlushRegionRequest buildFlushRegionRequest(final byte[] regionName,
-      boolean writeFlushWALMarker, int requestingRegionReplica) {
+      boolean writeFlushWALMarker, int requestingRegionReplica, ServerName replicaRegionLocation) {
     FlushRegionRequest.Builder builder = FlushRegionRequest.newBuilder();
     RegionSpecifier region = buildRegionSpecifier(RegionSpecifierType.REGION_NAME, regionName);
     builder.setRegion(region);
     builder.setWriteFlushWalMarker(writeFlushWALMarker);
     if (requestingRegionReplica > 0) {
       builder.setRequestingReplica(requestingRegionReplica);
+      if (replicaRegionLocation != null) {
+        builder.setReplicaServerName(ProtobufUtil.toServerName(replicaRegionLocation));
+      }
     }
     return builder.build();
   }

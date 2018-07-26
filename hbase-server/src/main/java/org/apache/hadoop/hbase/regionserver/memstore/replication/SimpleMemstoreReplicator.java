@@ -35,6 +35,7 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionLocation;
+import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.ClusterConnection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
@@ -111,7 +112,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   public ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
       MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicator) throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future =
-        offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicator);
+        offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicator, true);
     try {
       return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
@@ -123,11 +124,11 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   private CompletableFuture<ReplicateMemstoreResponse> offerForReplicate(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaReplicator regionReplicator) throws IOException {
+      RegionReplicaReplicator regionReplicator, boolean beginMvcc) throws IOException {
     MemstoreReplicationEntry entry = new MemstoreReplicationEntry(memstoreReplicationKey,
         memstoreEdits);
     CompletableFuture<ReplicateMemstoreResponse> future = regionReplicator.append(entry);
-    offer(regionReplicator, entry);
+    offer(regionReplicator, entry, beginMvcc);
     return future;
   }
 
@@ -136,7 +137,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
       RegionReplicaReplicator regionReplicaReplicator) throws IOException {
     // ideally the same should be done for both async and sync case. But it does not work so.
-    return offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator);
+    return offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator, false);
   }
 
   @Override
@@ -144,7 +145,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   public ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
       RegionReplicaReplicator replicator) throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future = new CompletableFuture<>(); 
-    replicate(new RequestEntryHolder(request, allCells, future), null, replicator);
+    replicate(new RequestEntryHolder(request, allCells, future), null, replicator, false);
     try {
       return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
@@ -161,9 +162,26 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     }
   }
 
-  public void offer(RegionReplicaReplicator replicator, MemstoreReplicationEntry entry) {
+  public void offer(RegionReplicaReplicator replicator, MemstoreReplicationEntry entry,
+      boolean beginMvcc) {
     int index = replicator.getReplicationThreadIndex();
-    this.replicationThreads[index].regionQueue.offer(new Entry(replicator, entry.getSeq()));
+    // beginMvcc 'false' indicates it is for Async
+    this.replicationThreads[index].regionQueue.offer(new Entry(replicator, entry.getSeq(), !beginMvcc));
+    if (!beginMvcc) {
+      synchronized (this.replicationThreads[index].lock) {
+        while (!this.replicationThreads[index].regionQueue.isEmpty()) {
+          try {
+            // We are ensuring that this entry added to the regionqueue is taken up by the thread.
+            // this ensures that we are not allowing any other upates to be part of it.
+            // This should not be so long as waiting for the future itself. that is still async.
+            this.replicationThreads[index].lock.wait(1);
+          } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+          }
+        }
+      }
+    }
   }
 
   // called only when the region replicator is created
@@ -181,14 +199,15 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
    * For primary, make up the pipeline here.
    */
   void replicate(RequestEntryHolder request, List<MemstoreReplicationEntry> replicationEntries,
-      RegionReplicaReplicator replicator) {
+      RegionReplicaReplicator replicator, boolean specialCell) {
     int curRegionReplicaId = replicator.getCurRegionReplicaId();
-    List<Integer> pipeline = null;
+    List<Pair<Integer, ServerName>> pipeline = null;
     try {
       if (request == null) {
-        pipeline = replicator.createPipeline();
+        pipeline = replicator.createPipeline(specialCell);
       } else {
-        pipeline = replicator.verifyPipeline(request.request.getReplicasList());
+        pipeline = replicator.verifyPipeline(request.request.getReplicasList(),
+          request.request.getLocationsList());
       }
     } catch (PipelineException e) {
       // TODO mark the future with Exception.
@@ -202,9 +221,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       // TODO : If a RS goes down we assign the region to the same RS. So two replicas in same RS is
       // not right. Fix it in LB.
       if (pipeline != null) {
-        for (Integer replica : pipeline) {
-          if (replica <= curRegionReplicaId) continue;
-          HRegionLocation nextRegionLocation = replicator.getRegionLocation(replica);
+        for (Pair<Integer, ServerName> replica : pipeline) {
+          if (replica.getFirst() <= curRegionReplicaId) continue;
+          HRegionLocation nextRegionLocation = replicator.getRegionLocation(replica.getFirst());
           if (nextRegionLocation == null) {
             // This can happen. Then we will have to reload from META.
             // TODO
@@ -227,7 +246,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
           RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
               rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
               nextRegionLocation.getRegion(), nextRegionLocation.getRegion().getStartKey(),
-              request, replicationEntries, pipeline);
+              request, replicationEntries, pipeline, specialCell);
           try {
             ReplicateMemstoreResponse response =
                 rpcRetryingCallerFactory.<ReplicateMemstoreResponse> newCaller()
@@ -243,7 +262,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
             break;// Break the inner for loop
           } catch (IOException | RuntimeException e) {
             // There may be other parallel handlers also trying to write to that replica.
-            builder.addFailedReplicas(replica);
+            builder.addFailedReplicas(replica.getFirst());
             // We should mark the future with exception only after retrying with the other Replicas
             // so that the write is successful??
           }
@@ -267,10 +286,12 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private class Entry {
     private final RegionReplicaReplicator replicator;
     private final long seq;
+    private final boolean specialCell;
 
-    Entry(RegionReplicaReplicator replicator, long seq) {
+    Entry(RegionReplicaReplicator replicator, long seq, boolean specialCell) {
       this.replicator = replicator;
       this.seq = seq;
+      this.specialCell = specialCell;
     }
   }
 
@@ -278,6 +299,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     
     private volatile boolean closed = false;
     private final BlockingQueue<Entry> regionQueue;
+    private final Object lock = new Object();
     
     // TODO : create thread affinity here.
     public ReplicationThread() {
@@ -291,6 +313,12 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
           Entry entry = regionQueue.take();// TODO Check whether this call
                                            // will make the thread under wait
                                            // or whether consume CPU
+          if (entry.specialCell) {
+            synchronized (this.lock) {
+              // Only works for flush.
+              this.lock.notifyAll();
+            }
+          }
           replicate(entry);
         } catch (InterruptedException e) {
           e.printStackTrace();
@@ -305,7 +333,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       if (entries == null || entries.isEmpty()) {
         return;
       }
-      SimpleMemstoreReplicator.this.replicate(null, entries, replicator);
+      SimpleMemstoreReplicator.this.replicate(null, entries, replicator, entry.specialCell);
     }
  
     public void stop() {
@@ -346,8 +374,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
     public RegionReplicaReplayCallable(ClusterConnection connection,
         RpcControllerFactory rpcControllerFactory, TableName tableName, HRegionLocation location,
-        RegionInfo regionInfo, byte[] row,
-        RequestEntryHolder request, List<MemstoreReplicationEntry> entries, List<Integer> pipeline) {
+        RegionInfo regionInfo, byte[] row, RequestEntryHolder request,
+        List<MemstoreReplicationEntry> entries, List<Pair<Integer, ServerName>> pipeline,
+        boolean specialCell) {
       super(connection, rpcControllerFactory, location, tableName, row, regionInfo.getReplicaId());
       this.initialEncodedRegionName = regionInfo.getEncodedNameAsBytes();
       if (request != null) {
@@ -359,7 +388,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
           MemstoreReplicationEntry[] entriesArray = new MemstoreReplicationEntry[entries.size()];
           entriesArray = entries.toArray(entriesArray);
           Pair<ReplicateMemstoreRequest, List<Cell>> pair = MemstoreReplicationProtobufUtil
-              .buildReplicateMemstoreEntryRequest(entriesArray, initialEncodedRegionName, pipeline);
+              .buildReplicateMemstoreEntryRequest(entriesArray, initialEncodedRegionName, pipeline, specialCell);
           this.request = new RequestEntryHolder(pair.getFirst(), pair.getSecond(), null);
         }
       }
@@ -390,6 +419,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         // and in the next replica the request is empty and we just don't replicate at all.
         for (int i = 0; i < request.getRequest().getReplicasCount(); i++) {
           reqBuilder.addReplicas(request.getRequest().getReplicas(i));
+        }
+        for (int i = 0; i < request.getRequest().getLocationsCount(); i++) {
+          reqBuilder.addLocations(request.getRequest().getLocations(i));
         }
         reqBuilder.setEncodedRegionName(
           UnsafeByteOperations.unsafeWrap(location.getRegion().getEncodedNameAsBytes()));

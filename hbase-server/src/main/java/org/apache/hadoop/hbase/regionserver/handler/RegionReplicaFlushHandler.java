@@ -24,6 +24,7 @@ import java.io.InterruptedIOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.Server;
+import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableNotFoundException;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
@@ -75,7 +76,7 @@ public class RegionReplicaFlushHandler extends EventHandler {
 
   @Override
   public void process() throws IOException {
-    triggerFlushInPrimaryRegion(region);
+    triggerFlushInPrimaryRegion(region, server.getServerName());
   }
 
   @Override
@@ -103,7 +104,8 @@ public class RegionReplicaFlushHandler extends EventHandler {
     return numRetries;
   }
 
-  void triggerFlushInPrimaryRegion(final HRegion region) throws IOException, RuntimeException {
+  void triggerFlushInPrimaryRegion(final HRegion region, ServerName serverName) throws IOException, RuntimeException {
+    // TODO : this retry is causing issues. We need to change this to a higher value.
     long pause = connection.getConfiguration().getLong(HConstants.HBASE_CLIENT_PAUSE,
       HConstants.DEFAULT_HBASE_CLIENT_PAUSE);
 
@@ -119,7 +121,7 @@ public class RegionReplicaFlushHandler extends EventHandler {
         && !server.isAborted() && !server.isStopped()) {
       FlushRegionCallable flushCallable = new FlushRegionCallable(connection, rpcControllerFactory,
           RegionReplicaUtil.getRegionInfoForDefaultReplica(region.getRegionInfo()), true,
-          region.getRegionInfo());
+          region.getRegionInfo(), serverName);
 
       // TODO: flushRegion() is a blocking call waiting for the flush to complete. Ideally we
       // do not have to wait for the whole flush here, just initiate it.

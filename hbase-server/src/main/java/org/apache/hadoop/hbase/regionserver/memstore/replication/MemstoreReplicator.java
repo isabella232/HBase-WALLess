@@ -46,11 +46,13 @@ public interface MemstoreReplicator {
 
   //TODO : Shall we return our own CompletedFuture here and wait on the Future explicitly??
   /**
-   * An async way of replicate to replicas. Used to pass the Meta cells like the flush markers and
-   * compaction markers. This is called by primary only. In a replica region, to replicate to itse
+   * An async way of replicate to replicas. Used to pass the Meta cells like the flush markers 
+   * This is called by primary only. In a replica region, to replicate to its
    * next replicas, we can make use of the API which takes the ReplicateMemstoreRequest itself. Any
    * way we want the primary region only should NOT wait on a sync call for the op (like
-   * flush/compaction)
+   * flush/compaction). Another thing to note is that this calls ensures that the region queue that processes
+   * this special cell has taken up this cell for processing and only after that returns back
+   * the future.
    */
   // Make this async version also to generate the mvcc within itself
   CompletableFuture<ReplicateMemstoreResponse> replicateAsync(

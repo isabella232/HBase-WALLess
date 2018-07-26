@@ -383,6 +383,12 @@ public class PerformanceEvaluation extends Configured implements Tool {
         }
       }
       admin.createTable(desc, splits);
+      try {
+		Thread.sleep(10000);
+	} catch (InterruptedException e) {
+		// TODO Auto-generated catch block
+		e.printStackTrace();
+	}
       LOG.info("Table " + desc + " created");
     }
     return admin.tableExists(tableName);

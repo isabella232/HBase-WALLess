@@ -51,6 +51,8 @@ public abstract class BloomContext {
   public void writeBloom(Cell cell) throws IOException {
     // only add to the bloom filter on a new, unique key
     if (isNewKey(cell)) {
+      // TODO : In some case this sanity check is failing. Is it due to
+      // parallel reads or due to some other case needs to be checked??
       sanityCheck(cell);
       bloomFilterWriter.append(cell);
     }

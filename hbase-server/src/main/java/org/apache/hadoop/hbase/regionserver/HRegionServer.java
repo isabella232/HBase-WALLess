@@ -2250,7 +2250,7 @@ public class HRegionServer extends HasThread implements
     // Since the primary region is already opened by this time it starts accepting mutations and
     // this call to flush the primary causes smaller fluhes
     // Need to fix this and then enable it.
-    //if (!primaryRegionReplace) triggerFlushInPrimaryRegion(r);
+    if (!primaryRegionReplace) triggerFlushInPrimaryRegion(r);
 
     LOG.debug("Finished post open deploy task for " + r.getRegionInfo().getRegionNameAsString());
   }

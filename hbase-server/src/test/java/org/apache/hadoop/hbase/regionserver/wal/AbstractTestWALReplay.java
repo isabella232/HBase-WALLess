@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -55,6 +56,7 @@ import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
+import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.MiniHBaseCluster;
@@ -831,10 +833,11 @@ public abstract class AbstractTestWALReplay {
             @Override
             protected FlushResultImpl internalFlushcache(final WAL wal, final long myseqid,
                 final Collection<HStore> storesToFlush, MonitoredTask status,
-                boolean writeFlushWalMarker, FlushLifeCycleTracker tracker) throws IOException {
+                boolean writeFlushWalMarker, FlushLifeCycleTracker tracker,
+                boolean requestingReplica, HRegionLocation regionLocation) throws IOException {
               LOG.info("InternalFlushCache Invoked");
               FlushResultImpl fs = super.internalFlushcache(wal, myseqid, storesToFlush,
-                Mockito.mock(MonitoredTask.class), writeFlushWalMarker, tracker);
+                Mockito.mock(MonitoredTask.class), writeFlushWalMarker, tracker, false, null);
               flushcount.incrementAndGet();
               return fs;
             }

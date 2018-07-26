@@ -32,6 +32,8 @@ import org.apache.mnemonic.ChunkBuffer;
 import org.apache.mnemonic.DurableChunk;
 import org.apache.mnemonic.NonVolatileMemAllocator;
 import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Notes on what this chunk should have
@@ -62,15 +64,18 @@ public class DurableSlicedChunk extends Chunk {
   public static final int OFFSET_TO_REGION_IDENTIFIER = OFFSET_TO_OFFSETMETA + SIZE_OF_OFFSETMETA; 
   private static final int EO_CELLS = -1;
 
+  static final Logger LOG = LoggerFactory.getLogger(DurableSlicedChunk.class);
   private DurableChunk<NonVolatileMemAllocator> durableChunk;
   private ChunkBuffer chunkBuffer;
   private long offset;
+  byte[] dummy;
 
   public DurableSlicedChunk(int id, DurableChunk<NonVolatileMemAllocator> durableBigChunk,
       long offset, int size) {
     super(size, id, true);// Durable chunks are always created out of pool.
     this.offset = offset;
     this.durableChunk = durableBigChunk;
+    dummy = new byte[this.size];
   }
 
   @Override
@@ -79,6 +84,8 @@ public class DurableSlicedChunk extends Chunk {
       chunkBuffer = durableChunk.getChunkBuffer(offset, size);
       data = chunkBuffer.get();
       data.putInt(0, this.getId());// Write the chunk ID
+      LOG.info("Prepopulating the chunk");
+      ByteBufferUtils.copyFromArrayToBuffer(data, Bytes.SIZEOF_INT, dummy, 0, (size - Bytes.SIZEOF_INT));
     }
     // createBuffer.cancelAutoReclaim(); this causes NPE
     // fill the data here

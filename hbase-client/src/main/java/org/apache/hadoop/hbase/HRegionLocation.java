@@ -41,6 +41,7 @@ public class HRegionLocation implements Comparable<HRegionLocation> {
   private final RegionInfo regionInfo;
   private final ServerName serverName;
   private final long seqNum;
+  private boolean good = true;
 
   public HRegionLocation(RegionInfo regionInfo, ServerName serverName) {
     this(regionInfo, serverName, HConstants.NO_SEQNUM);
@@ -52,6 +53,13 @@ public class HRegionLocation implements Comparable<HRegionLocation> {
     this.seqNum = seqNum;
   }
 
+  public void setState(boolean state) {
+    this.good = state;
+  }
+
+  public boolean isGood() {
+    return this.good;
+  }
   /**
    * @see java.lang.Object#toString()
    */

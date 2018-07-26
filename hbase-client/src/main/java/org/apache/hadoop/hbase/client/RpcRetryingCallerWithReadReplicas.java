@@ -226,6 +226,7 @@ public class RpcRetryingCallerWithReadReplicas {
         addCallsForReplica(cs, rl, 0, 0);
         try {
           // wait for the timeout to see whether the primary responds back
+          // TODO : this timeout is very low 10ms. Need to be changed
           Future<Result> f = cs.poll(timeBeforeReplicas, TimeUnit.MICROSECONDS); // Yes, microseconds
           if (f != null) {
             return f.get(); //great we got a response

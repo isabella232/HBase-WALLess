@@ -58,6 +58,7 @@ import org.apache.hadoop.hbase.DoNotRetryIOException;
 import org.apache.hadoop.hbase.DroppedSnapshotException;
 import org.apache.hadoop.hbase.HBaseIOException;
 import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.MultiActionResultTooLarge;
 import org.apache.hadoop.hbase.NotServingRegionException;
 import org.apache.hadoop.hbase.PrivateCellUtil;
@@ -1693,10 +1694,22 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
         // bad state? Should HM pass the info whether u r in BAD state, while opening? Another way
         // is we have the BAD status here in primary. We can make use of that to ignore this call.
         int requestingReplica =
-            request.hasRequestingReplica() ? request.getRequestingReplica() : -1;        
+            request.hasRequestingReplica() ? request.getRequestingReplica() : -1;
+        HRegionLocation replicaRegionLocation = null;
+        if(request.hasReplicaServerName() && requestingReplica > 0) {
+          replicaRegionLocation = new HRegionLocation(RegionReplicaUtil.getRegionInfoForReplica(region.getRegionInfo(),
+            requestingReplica), ProtobufUtil.toServerName(request.getReplicaServerName()));
+          // here it is in bad state only still
+          replicaRegionLocation.setState(false);
+        }
         HRegion.FlushResultImpl flushResult =
             region.flushcache(true, writeFlushWalMarker, requestingReplica,
-              FlushLifeCycleTracker.DUMMY);
+              FlushLifeCycleTracker.DUMMY, replicaRegionLocation);
+        if (requestingReplica > 0) {
+          // do this after we mark it as GOOD
+          ((HRegion) region).regionReplicator.removeFromBadReplicas(requestingReplica);
+        }
+        // on this call the loc should be updating the pipeline with good state
         reportReplicaGoodToMeta(region, requestingReplica, flushResult);
         boolean compactionNeeded = flushResult.isCompactionNeeded();
         if (compactionNeeded) {

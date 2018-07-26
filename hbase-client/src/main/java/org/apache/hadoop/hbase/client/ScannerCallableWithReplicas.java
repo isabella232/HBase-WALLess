@@ -174,6 +174,8 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
     //  4) if the there is only one region replica just wait till the timeout is expired to see if the primary returns a result back
     try {
       // wait for the timeout to see whether the primary responds back
+      // TODO : Change this timeout for sure to really test the fail over cases.
+      //this timeout seems to be very low 10ms. 
       Future<Pair<Result[], ScannerCallable>> f = cs.poll(timeBeforeReplicas,
           TimeUnit.MICROSECONDS); // Yes, microseconds
       if (f != null) {
@@ -205,6 +207,11 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
 
             if (f == null) {
               f = getGoodReplicaFromMETAandRetry(timeout, cs);
+            } else {
+              if (f.get().getFirst() != null) {
+                // Just for debug purpose
+                LOG.debug("Got the result from the replica as the primary was down");
+              }
             }
           } else {
             // TODO probably the timeout should be adjusted
@@ -309,7 +316,11 @@ class ScannerCallableWithReplicas implements RetryingCallable<Result[]> {
   private void updateCurrentlyServingReplica(ScannerCallable scanner, Result[] result,
       AtomicBoolean done, ExecutorService pool) {
     if (done.compareAndSet(false, true)) {
-      if (currentScannerCallable != scanner) replicaSwitched.set(true);
+      if (currentScannerCallable != scanner) {
+        // for debug purpose
+        LOG.debug("The replica switch happened here");
+        replicaSwitched.set(true);
+       }
       currentScannerCallable = scanner;
       // store where to start the replica scanner from if we need to.
       if (result != null && result.length != 0) this.lastResult = result[result.length - 1];

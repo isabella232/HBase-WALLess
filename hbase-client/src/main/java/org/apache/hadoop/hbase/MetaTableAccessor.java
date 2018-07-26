@@ -1012,11 +1012,11 @@ public class MetaTableAccessor {
       final int replicaId) {
     ServerName serverName = getServerName(r, replicaId);
     long seqNum = getSeqNumDuringOpen(r, replicaId);
-    if (getHealthStatus(r, replicaId)) {
-      RegionInfo replicaInfo = RegionReplicaUtil.getRegionInfoForReplica(regionInfo, replicaId);
-      return new HRegionLocation(replicaInfo, serverName, seqNum);
-    }
-    return null;
+    boolean good = getHealthStatus(r, replicaId);
+    RegionInfo replicaInfo = RegionReplicaUtil.getRegionInfoForReplica(regionInfo, replicaId);
+    HRegionLocation loc = new HRegionLocation(replicaInfo, serverName, seqNum);
+    loc.setState(good);
+    return loc;
   }
 
   /**

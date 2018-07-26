@@ -580,22 +580,22 @@
 	<dependency>
       <artifactId>mnemonic-core</artifactId>
       <groupId>org.apache.mnemonic</groupId>
-      <version>0.10.0-SNAPSHOT</version>
+      <version>0.11.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <artifactId>mnemonic-collections</artifactId>
       <groupId>org.apache.mnemonic</groupId>
-      <version>0.10.0-SNAPSHOT</version>
+      <version>0.11.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <artifactId>mnemonic-nvml-pmem-service</artifactId>
       <groupId>org.apache.mnemonic</groupId>
-      <version>0.10.0-SNAPSHOT</version>
+      <version>0.11.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <artifactId>mnemonic-nvml-vmem-service</artifactId>
       <groupId>org.apache.mnemonic</groupId>
-      <version>0.10.0-SNAPSHOT</version>
+      <version>0.11.0-SNAPSHOT</version>
     </dependency>
   </dependencies>
   <profiles>

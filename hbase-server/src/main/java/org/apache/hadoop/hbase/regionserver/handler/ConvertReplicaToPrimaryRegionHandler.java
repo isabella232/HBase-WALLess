@@ -50,26 +50,44 @@ public class ConvertReplicaToPrimaryRegionHandler extends OpenPriorityRegionHand
     HRegion region = (HRegion) ((HRegionServer)this.rsServices)
         .getRegion(this.replicaRegionInfo.getEncodedName());
     this.replicaRegion = region;
-    LOG.info("Converting region "+region.getRegionInfo() +  "  to primary region");
+    LOG.debug("Converting region "+region.getRegionInfo() +  "  to primary region");
+    // First remove the replica region from online regions.
+    // TODO we are not following the regular way of close of a region where 1st it is in RIT
+    // This typecasting is ok as in Trunk we will do many changes and here in handler we will have
+    // HRS
+    boolean removeRegion = ((HRegionServer) this.rsServices).removeRegion(this.replicaRegion, null);
+    LOG.debug("Removed replica region " + replicaRegion + " from server " + removeRegion);        
     region.convertAsPrimaryRegion();
     return region;
   }
 
   @Override
-  protected void addToOnlineRegions(HRegion region) {
-    // First remove the replica region from online regions.
-    // TODO we are not following the regular way of close of a region where 1st it is in RIT
-    // This typecasting is ok as in Trunk we will do many changes and here in handler we will have
-    // HRS
-    ((HRegionServer) this.rsServices).removeRegion(this.replicaRegion, null);
-    this.rsServices.addRegion(region);
+  protected boolean postRegionOpenSteps(HRegion region) {
+    // Successful region open, and add it to MutableOnlineRegions
+    addToOnlineRegions(region);
+    // Open region won't fail here in this handler because we are just doing a simple conversion.
+    // Why we do this?
+    // When a replica region is converted to primary we inform the master on the transition
+    // completion
+    // and that starts another procedure which assigns the actual replica region to another server.
+    // Sometimes it so happens that the RPC to open the replica happens to reach the same
+    // server(current one)
+    // before it does the addToOnlineregions(). (the RPC reaching this server itself is wrong) but
+    // when that happens we are just not able to do anything and that region keeps hanging in RIT
+    // (*).
+    // So here we add that new converted region and remove the replica region from this server's
+    // memory
+    // and then update the transition to maser.
+    // Pls see the RsRpcServices#openRegion changes to see how (*) is handled : TODO
+    if (!updateMeta(region, masterSystemTime) || this.server.isStopped()
+        || this.rsServices.isStopping()) {
+      return false;
+    }
+    return true;
   }
 
   @Override
-  protected PostOpenDeployTasksThread createPostOpenDeployTasksThread(final Region r,
-      final RegionInfo replacedRegionInfo, final AtomicBoolean signaller, long masterSystemTime) {
-    // TODO Auto-generated method stub
-    return super.createPostOpenDeployTasksThread(r, this.replicaRegionInfo, signaller,
-      masterSystemTime);
+  protected void addToOnlineRegions(HRegion region) {
+    this.rsServices.addRegion(region);
   }
 }

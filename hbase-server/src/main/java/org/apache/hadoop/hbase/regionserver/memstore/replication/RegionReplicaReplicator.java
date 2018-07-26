@@ -21,8 +21,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
@@ -31,10 +33,10 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.RegionLocations;
+import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.ClusterConnection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
@@ -43,9 +45,9 @@ import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl;
 import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.PipelineException;
+import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
+import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
 
 // This is a per Region instance 
@@ -111,19 +113,22 @@ public class RegionReplicaReplicator {
   // in META where as we will add to above immediately after we see a replica as out of data
   // consistency as one of the write did not reach there
   private Set<Integer> badReplicasInMeta;
-  private Set<Integer> pipeline;
+  private Map<Integer, Pair<ServerName, Boolean>> pipeline;
   private ReadWriteLock lock = new ReentrantReadWriteLock();
   private AtomicInteger badCountToBeCommittedInMeta = new AtomicInteger(0);
   private MultiVersionConcurrencyControl mvcc;
   private volatile long badReplicaInProgressTs = UNSET;
+  private int tableReplication;
   private static final Log LOG = LogFactory.getLog(RegionReplicaReplicator.class);
 
   public RegionReplicaReplicator(Configuration conf, RegionInfo currentRegion,
-      MultiVersionConcurrencyControl mvcc, int minWriteReplicas, int replicationThreadIndex) {
+      MultiVersionConcurrencyControl mvcc, int minWriteReplicas, int replicationThreadIndex,
+      int tableReplication) {
     this.conf = conf;
     this.curRegion = currentRegion;
     this.mvcc = mvcc;
     this.minNonPrimaryWriteReplicas = minWriteReplicas - 1;
+    this.tableReplication = tableReplication;
     this.replicationThreadIndex = replicationThreadIndex;
     if (RegionReplicaUtil.isDefaultReplica(this.curRegion)) {
       badReplicas = new HashSet<>();
@@ -169,7 +174,12 @@ public class RegionReplicaReplicator {
     // TODO after a new replica is added at runtime, (Table alter) and if this is a secondary
     // replica, it can so happen that we dont have this replicaId itself in the array. Handle so as
     // not to get Array Index Out of Bounds.
-    return this.regionLocations[replicaId];
+    for (HRegionLocation loc : this.regionLocations) {
+      if (loc != null && loc.getRegion().getReplicaId() == replicaId) {
+        return loc;
+      }
+    }
+    return null;
   }
 
   public int getCurRegionReplicaId() {
@@ -207,7 +217,12 @@ public class RegionReplicaReplicator {
       // are any way treated as BAD from now on. Later when we mark again as good, we might reload
       // the location
       for (Integer replica : replicas) {
-        this.regionLocations[replica] = null;
+        for (HRegionLocation loc : this.regionLocations) {
+          if (loc.getRegion().getReplicaId() == replica) {
+            loc = null;
+            break;
+          }
+        }
       }
     } finally {
       lock.unlock();
@@ -257,19 +272,16 @@ public class RegionReplicaReplicator {
     Lock lock = this.lock.writeLock();
     lock.lock();
     try {
-      // when a replica region opens it makes a call for primary region flush. 
+      // when a replica region opens it makes a call for primary region flush.
       // there is no pipeline at that point of time. This Null checks helps avoid NPE
       if (pipeline != null) {
-        this.pipeline.add(replica);
-        // In a region opening sequence (on create table), there is a chance that replica 2
-        // is opened first and then the replica 1 is opened. So when replica 2 is opened
-        // by the time the region location is updated with primary replica server and replica 2's
-        // server. When the replica 1 is opened we don update the region location but since
-        // the we add 1 to the pipeline we have a mismatch between pipeline and region location.
-        // so we check if the region locations and the pipeline matches and if not we update the region location
-        //This is a temp fix only. Need to understand all other cases where a region opening fails and how we deal with it.
-        if (!allRegionLocationsLoaded(new ArrayList<Integer>(this.pipeline))) {
-          loadRegionLocations(null);
+        Pair<ServerName, Boolean> pair = this.pipeline.get(replica);
+        // update the bad replica to good. so that on next pipeline only this new updated location is obtained.
+        this.pipeline.put(replica, new Pair<ServerName, Boolean>(pair.getFirst(), true));
+        for (HRegionLocation loc : this.regionLocations) {
+          if (loc != null && loc.getRegion().getReplicaId() == replica) {
+            loc.setState(true);
+          }
         }
         return this.badReplicas.remove(replica);
       }
@@ -300,7 +312,7 @@ public class RegionReplicaReplicator {
     lock.lock();
     try {
       if (pipeline != null) {
-        return new ArrayList<>(this.pipeline);
+        return new ArrayList<>(this.pipeline.keySet());
       } else {
         return null;
       }
@@ -309,12 +321,10 @@ public class RegionReplicaReplicator {
     }
   }
   
-  public List<Integer> createPipeline() throws PipelineException {
+  public List<Pair<Integer, ServerName>> createPipeline(boolean specialCell) throws PipelineException {
     // This should be called only when this is Primary Region
     assert RegionReplicaUtil.isDefaultReplica(curRegion);
-    if (this.regionLocations == null) {
-      loadRegionLocations(null);
-    }
+    assert regionLocations != null;
     Lock lock = this.lock.readLock();
     lock.lock();
     // When there are some pending updates to META for making replica region(s) as BAD, we should
@@ -329,54 +339,130 @@ public class RegionReplicaReplicator {
     }
     // Early out. Already there are not enough replicas for making the write as successful. Why to
     // continue then? 
+    if(pipeline == null) {
+      // This happens only for the system tables. Ideally should solve in the caller place.
+      // Just leaving this for now. Because for META and namespace table we should still mark
+      // the special cells in WAL and handle it. That is yet to be done.
+      LOG.info("The pipeline is null "+specialCell+" "+this.curRegion);
+      return null;
+    }
     if (this.pipeline.size() < this.minNonPrimaryWriteReplicas) {
       throw new PipelineException();
     }
     try {
-      return new ArrayList<>(this.pipeline);
+      List<Pair<Integer, ServerName>> locPipeline = new ArrayList<Pair<Integer, ServerName>>();
+      for (Entry<Integer, Pair<ServerName, Boolean>> pipe : this.pipeline.entrySet()) {
+        if (specialCell) {
+          // don't bother about the state. Just pass on the location for the pipeline creation.
+          locPipeline.add(new Pair<Integer, ServerName>(pipe.getKey(), pipe.getValue().getFirst()));
+        } else {
+          // pass only those locations which are in GOOD state.
+          if (pipe.getValue().getSecond()) {
+            locPipeline
+                .add(new Pair<Integer, ServerName>(pipe.getKey(), pipe.getValue().getFirst()));
+          }
+        }
+      }
+      if (!specialCell && (locPipeline.size() < this.minNonPrimaryWriteReplicas)) {
+        throw new PipelineException("Not enough good replicas found.");
+      }
+      LOG.debug("The pipeline to be used " + locPipeline.size() + " " + locPipeline + " "
+          + this.getRegionInfo());
+      return locPipeline;
     } finally {
       lock.unlock();
     }
   }
 
-  public List<Integer> verifyPipeline(List<Integer> requestPipeline) throws PipelineException {
+  public List<Pair<Integer, ServerName>> verifyPipeline(List<Integer> requestPipeline,
+      List<org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName> replicaLocations)
+      throws PipelineException {
     // This should be called only when this is NOT a Primary Region
     assert !RegionReplicaUtil.isDefaultReplica(curRegion);
-    if (this.regionLocations == null || !allRegionLocationsLoaded(requestPipeline)) {
-      loadRegionLocations(requestPipeline);
+    // if (this.regionLocations == null || !allRegionLocationsLoaded(requestPipeline)) {
+    if(replicaLocations != null && !replicaLocations.isEmpty()) {
+      if(requestPipeline.size() != replicaLocations.size()) {
+        // in this case try loading the region locations.
+        // this should not happen
+        //getRegionLocations();
+        LOG.error("This should not happen at all ");
+      }
+    }
+    if(replicaLocations != null && !replicaLocations.isEmpty()) {
+      regionLocations = new HRegionLocation[replicaLocations.size()];
+      int i = 0;
+      for(int replicaId : requestPipeline) {
+        if(!RegionReplicaUtil.isDefaultReplica(replicaId)) {
+          if (replicaId == curRegion.getReplicaId()) {
+            regionLocations[i] =
+                new HRegionLocation(curRegion, ProtobufUtil.toServerName(replicaLocations.get(i)));
+          } else {
+            regionLocations[i] =
+                new HRegionLocation(RegionReplicaUtil.getRegionInfoForReplica(curRegion, replicaId),
+                    ProtobufUtil.toServerName(replicaLocations.get(i)));
+          }
+          i++;
+        }
+      }
+    }
+    if (regionLocations != null) {
+      // TODO : Avoid double iteration??
+      List<Pair<Integer, ServerName>> pipeline = new ArrayList<Pair<Integer, ServerName>>();
+      for (HRegionLocation loc : regionLocations) {
+        // If the regionLocations is available then it means we are processing the flush cell (special cell).
+        // In that case just create the pipeline with all the region locations.
+        if (replicaLocations != null && !replicaLocations.isEmpty()) {
+          pipeline.add(
+            new Pair<Integer, ServerName>(loc.getRegion().getReplicaId(), loc.getServerName()));
+        } else {
+          // In a normal pipeline case just ensure that we create the pipeline based on what
+          // the primary has said.
+          if (requestPipeline.contains(loc.getRegion().getReplicaId())) {
+            // only those in the pipeline will be added here
+            pipeline.add(
+              new Pair<Integer, ServerName>(loc.getRegion().getReplicaId(), loc.getServerName()));
+          }
+        }
+      }
+      return pipeline;
     }
     // TODO no extra verify here. We can do the case of new replicas added as part of Table alter
     // and all here.
-    return requestPipeline;
+    return null;
   }
 
   // Compares the region location and pipeline and ensures that the pipeline and regoin location are the same.
   // this is needed on region open sequence where the region locations could be updated even before the replicas
   // are opened
+  // TODO : Remove it after checking all cases
   private boolean allRegionLocationsLoaded(List<Integer> requestPipeline) {
     // make this more easier and avoid these loops. Better to have one more ds having the non default replicas
     // fetched as part of region locations
-    for (HRegionLocation loc : this.regionLocations) {
-      if (loc != null && loc.getServerName() != null) {
-        int replicaId = loc.getRegionInfo().getReplicaId();
-        if ((!RegionReplicaUtil.isDefaultReplica(replicaId))
-            && (!requestPipeline.contains(replicaId))) {
-          LOG.info("The requested pipeline " + requestPipeline + " does not have the replica id "
-              + replicaId);
-          resetRegionLocations();
-          return false;
+    if (regionLocations != null) {
+      for (HRegionLocation loc : this.regionLocations) {
+        if (loc != null && loc.getServerName() != null) {
+          int replicaId = loc.getRegionInfo().getReplicaId();
+          if ((!RegionReplicaUtil.isDefaultReplica(replicaId))
+              && (!requestPipeline.contains(replicaId))) {
+            LOG.info("The requested pipeline " + requestPipeline + " does not have the replica id "
+                + replicaId);
+            resetRegionLocations();
+            return false;
+          }
         }
       }
     }
     // check both ways
     for (int requestReplicaId : requestPipeline) {
       boolean found = false;
-      for (HRegionLocation loc : this.regionLocations) {
-        if (loc != null && loc.getServerName() != null) {
-          int replicaId = loc.getRegionInfo().getReplicaId();
-          if ((!RegionReplicaUtil.isDefaultReplica(replicaId)) && requestReplicaId == replicaId) {
-            found = true;
-            break;
+      if (regionLocations != null) {
+        for (HRegionLocation loc : this.regionLocations) {
+          if (loc != null && loc.getServerName() != null) {
+            int replicaId = loc.getRegionInfo().getReplicaId();
+            if ((!RegionReplicaUtil.isDefaultReplica(replicaId)) && requestReplicaId == replicaId) {
+              found = true;
+              break;
+            }
           }
         }
       }
@@ -391,52 +477,61 @@ public class RegionReplicaReplicator {
   }
 
   private void resetRegionLocations() {
+    if (regionLocations == null) {
+      return;
+    }
     Lock lock = this.lock.writeLock();
     lock.lock();
     try {
-      LOG.info("resetting region locations "+this.getRegionInfo());
       this.regionLocations = null;
     } finally {
       lock.unlock();
     }
   }
 
-  private void loadRegionLocations(List<Integer> requestPipeline) throws PipelineException {
+/*  private void loadRegionLocations(List<Integer> requestPipeline) throws PipelineException {
     // update the region locations here.
     Lock lock = this.lock.writeLock();
     lock.lock();
     try {
       if (this.regionLocations == null) {
-        RegionLocations regionLocations;
-        // Every time reload will create new connection! That may be ok. Why to retain connection
-        // that too one per region
-        // TODO we can reset some of the thread# related stuff in this conf for connection creation.
-        // Any way we know this will be used by single thread only and just once.
-        try (ClusterConnection connection = (ClusterConnection) ConnectionFactory
-            .createConnection(this.conf)) {
-          // never use cache here
-          regionLocations = RegionAdminServiceCallable.getRegionLocations(connection,
-              this.getRegionInfo().getTable(), this.getRegionInfo().getStartKey(), false,
-              this.getRegionInfo().getReplicaId());
-        } catch (IOException e) {
-          throw new PipelineException(e);
+        getRegionLocations();
+        if(regionLocations == null) {
+          return;
         }
-        this.regionLocations = regionLocations.getRegionLocations();
       }
-      this.pipeline = new TreeSet<>();
+      this.pipeline = new TreeMap<Integer, ServerName>();
+      // this is the pipeline to be used by the primary
       for (HRegionLocation loc : this.regionLocations) {
         if (loc != null && loc.getServerName() != null) {
           int replicaId = loc.getRegionInfo().getReplicaId();
           if (!RegionReplicaUtil.isDefaultReplica(replicaId)) {
-            this.pipeline.add(replicaId);
+            this.pipeline.put(replicaId, loc.isGood());
           }
         }
       }
-      LOG.info("The pipeline created has " + this.pipeline.size() + " " + pipeline + " "
+      LOG.debug("The pipeline created has " + this.pipeline.size() + " " + pipeline + " "
           + this.getRegionInfo());
     } finally {
       lock.unlock();
     }
+  }*/
+
+  private void getRegionLocations() throws PipelineException {
+    RegionLocations regionLocations;
+    // Every time reload will create new connection! That may be ok. Why to retain connection
+    // that too one per region
+    // TODO we can reset some of the thread# related stuff in this conf for connection creation.
+    // Any way we know this will be used by single thread only and just once.
+    try (ClusterConnection connection =
+        (ClusterConnection) ConnectionFactory.createConnection(this.conf)) {
+      regionLocations =
+          RegionAdminServiceCallable.getRegionLocations(connection, this.getRegionInfo().getTable(),
+            this.getRegionInfo().getStartKey(), false, this.getRegionInfo().getReplicaId());
+    } catch (IOException e) {
+      throw new PipelineException(e);
+    }
+    this.regionLocations = regionLocations.getRegionLocations();
   }
 
   public void convertAsPrimaryRegion(RegionInfo primaryRegion) {
@@ -467,5 +562,83 @@ public class RegionReplicaReplicator {
       return true;
     }
     return false;
+  }
+
+  /**
+   * This method is called when the replica triggers a flush on the primary.
+   * On the primary region we invovke this API passing the replica region's location(that triggered
+   * the flush). Because if we try to read the META this replica region will have BAD health.
+   * So we directly use this region location to update our pipeline.
+   * @param replicaRegionLocation
+   * @throws PipelineException
+   */
+  public void updateRegionLocations(HRegionLocation replicaRegionLocation) throws PipelineException {
+    Lock lock = this.lock.writeLock();
+    lock.lock();
+    // Now take the case where a region is newly opened. In create table case.
+    // we may have one of the replica triggering a flush on the primary. In that case
+    // create the pipeline with the replica location that is passed over here.
+    // If we can get the location from the META just try using it or update it.
+    // In case of a replica region move- even in that case we will still have the regionlocation
+    // but we can just update the replica location with the new location passed to us.
+    try {
+      if (regionLocations == null) {
+        // this will update the region location
+        // When can we have regionLocation as null? It can happen when there were no writes
+        // to a region and its replicas but due to cluster fail over this new replica became
+        // a primary.
+        LOG.debug("The region locations for the primary region was actually null");
+        getRegionLocations();
+      }
+      if(regionLocations != null && regionLocations.length != tableReplication) {
+        LOG.debug("Enought region locations not found "+regionLocations.length);
+        HRegionLocation tmp[] = new HRegionLocation[tableReplication];
+        for(HRegionLocation loc : this.regionLocations) {
+          if(loc != null) {
+            tmp[loc.getRegion().getReplicaId()] = loc;
+          }
+        }
+        // updated the region locations
+        this.regionLocations = tmp;
+      }
+      // TODO : Will the region location array be even less than the number of replicas??
+      // this logic needs some better way.
+      if (regionLocations != null) {
+        boolean requestRepReplicaFound = false;
+        for (int i = 0; i < regionLocations.length; i++) {
+          if (regionLocations[i] != null) {
+            if (regionLocations[i].getRegion().getReplicaId() == replicaRegionLocation.getRegion()
+                .getReplicaId()) {
+              // TODO : check if this case will still happen.
+              // update the region location
+              regionLocations[i] = replicaRegionLocation;
+              requestRepReplicaFound = true;
+              break;
+            }
+          }
+        }
+        if (!requestRepReplicaFound) {
+          if (regionLocations[replicaRegionLocation.getRegion().getReplicaId()] == null) {
+            regionLocations[replicaRegionLocation.getRegion().getReplicaId()] =
+                replicaRegionLocation;
+          }
+        }
+        // update the pipeline also here. Every time the pipeline is updated here.
+        this.pipeline = new TreeMap<>();
+        for (HRegionLocation loc : this.regionLocations) {
+          if (loc != null && loc.getServerName() != null) {
+            int replicaId = loc.getRegion().getReplicaId();
+            if (!RegionReplicaUtil.isDefaultReplica(replicaId)) {
+              this.pipeline.put(replicaId,
+                new Pair<ServerName, Boolean>(loc.getServerName(), loc.isGood()));
+            }
+          }
+        }
+        LOG.debug("The pipeline created has " + this.pipeline.size() + " " + pipeline + " "
+            + this.getRegionInfo());
+      }
+    } finally {
+      lock.unlock();
+    }
   }
 }

@@ -844,7 +844,8 @@ class ConnectionImplementation implements ClusterConnection, Closeable {
             // convert the row result into the HRegionLocation we need!
             RegionLocations locations = MetaTableAccessor.getRegionLocations(regionInfoRow);
             if (locations == null || locations.getRegionLocation(replicaId) == null) {
-              throw new IOException("RegionInfo null in " + tableName + ", row=" + regionInfoRow);
+              throw new IOException("RegionInfo null in " + tableName + ", row=" + regionInfoRow
+                  + " locations= " + locations + " replicaid =" + replicaId);
             }
             RegionInfo regionInfo = locations.getRegionLocation(replicaId).getRegion();
             if (regionInfo == null) {

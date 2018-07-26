@@ -91,6 +91,7 @@ import org.apache.hadoop.hbase.ExtendedCellBuilderFactory;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HConstants.OperationStatusCode;
 import org.apache.hadoop.hbase.HDFSBlocksDistribution;
+import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.NamespaceDescriptor;
@@ -199,6 +200,7 @@ import org.apache.hadoop.hbase.wal.WALSplitter;
 import org.apache.hadoop.hbase.wal.WALSplitter.MutationReplay;
 import org.apache.hadoop.io.MultipleIOException;
 import org.apache.hadoop.util.StringUtils;
+import org.apache.hadoop.util.StringUtils.TraditionalBinaryPrefix;
 import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hbase.thirdparty.com.google.common.base.Preconditions;
 import org.apache.hbase.thirdparty.com.google.common.collect.Lists;
@@ -401,7 +403,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private volatile Long timeoutForWriteLock = null;
 
   private MemstoreReplicator memstoreReplicator;
-  private volatile RegionReplicaReplicator regionReplicator;
+  volatile RegionReplicaReplicator regionReplicator;
   private org.apache.hadoop.hbase.executor.ExecutorService executor;
   // Used in Replica regions where we add Cells to CSLM in an async way. Once the cells are copied
   // to MSLAB, we consider it as success addition and reply back to caller. The actual addition to
@@ -1102,7 +1104,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       status.setStatus("Flushing data that was got from durable chunk");
       // TODO : What if the secondary is not up at this time? Pls check this case
       internalFlushcache(null, maxSeqId, stores.values(), status, false,
-        FlushLifeCycleTracker.DUMMY);
+        FlushLifeCycleTracker.DUMMY, false, null);
     }
     return maxSeqId;
   }
@@ -1203,7 +1205,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     this.memstoreReplicator = rsServices.getMemstoreReplicator();
     int replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
     this.regionReplicator = new RegionReplicaReplicator(this.conf, this.getRegionInfo(), this.mvcc,
-        this.htableDescriptor.getMinRegionReplication(), replicationThreadIndex);
+        this.htableDescriptor.getMinRegionReplication(), replicationThreadIndex,
+        this.getTableDescriptor().getRegionReplication());
   }
 
   /**
@@ -2276,7 +2279,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    */
   // TODO HBASE-18905. We might have to expose a requestFlush API for CPs
   public FlushResult flush(boolean force) throws IOException {
-    return flushcache(force, false, -1, FlushLifeCycleTracker.DUMMY);
+    return flushcache(force, false, -1, FlushLifeCycleTracker.DUMMY, null);
   }
 
   public interface FlushResult {
@@ -2313,6 +2316,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * @param writeFlushRequestWalMarker whether to write the flush request marker to WAL
    * @param the replica that is requesting the flush
    * @param tracker used to track the life cycle of this flush
+   * @param replicaRegionLocation 
    * @return whether the flush is success and whether the region needs compacting
    * @throws IOException general io exceptions
    * @throws DroppedSnapshotException Thrown when replay of wal is required because a Snapshot was
@@ -2320,7 +2324,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    *           after this.
    */
   public FlushResultImpl flushcache(boolean forceFlushAllStores, boolean writeFlushRequestWalMarker,
-      int requestingReplica, FlushLifeCycleTracker tracker) throws IOException {
+      int requestingReplica, FlushLifeCycleTracker tracker, HRegionLocation replicaRegionLocation)
+      throws IOException {
     // fail-fast instead of waiting on the lock
     if (this.closing.get()) {
       String msg = "Skipping flush on " + this + " because closing";
@@ -2368,8 +2373,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       try {
         Collection<HStore> specificStoresToFlush =
             forceFlushAllStores ? stores.values() : flushPolicy.selectStoresToFlush();
-        FlushResultImpl fs =
-            internalFlushcache(specificStoresToFlush, status, writeFlushRequestWalMarker, tracker);
+        FlushResultImpl fs = internalFlushcache(specificStoresToFlush, status,
+          writeFlushRequestWalMarker, tracker, requestingReplica > 0, replicaRegionLocation);
 
         if (coprocessorHost != null) {
           status.setStatus("Running post-flush coprocessor hooks");
@@ -2378,15 +2383,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
         if(fs.isFlushSucceeded()) {
           flushesQueued.reset();
-        }
-        // The pipeline is modified here by adding the requesting replica to the 'pipeline'.
-        // In a region opening sequence (on create table), there is a chance that replica 2
-        // is opened first and then the replica 1 is opened. So when replica 2 is opened
-        // by the time the region location is updated with primary replica server and replica 2's
-        // server. When the replica 1 is opened we don update the region location but since
-        // the below code adds 1 to the pipeline we have a mismatch between pipeline and region location.
-        if (requestingReplica > 0) {
-          this.regionReplicator.removeFromBadReplicas(requestingReplica);
         }
         status.markComplete("Flush successful");
         return fs;
@@ -2477,17 +2473,21 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * @see #internalFlushcache(Collection, MonitoredTask, boolean, FlushLifeCycleTracker)
    */
   private FlushResult internalFlushcache(MonitoredTask status) throws IOException {
-    return internalFlushcache(stores.values(), status, false, FlushLifeCycleTracker.DUMMY);
+    return internalFlushcache(stores.values(), status, false, FlushLifeCycleTracker.DUMMY, false,
+      null);
   }
 
   /**
    * Flushing given stores.
+   * @param requestingReplica 
+   * @param replicaRegionLocation 
    * @see #internalFlushcache(WAL, long, Collection, MonitoredTask, boolean, FlushLifeCycleTracker)
    */
   private FlushResultImpl internalFlushcache(Collection<HStore> storesToFlush, MonitoredTask status,
-      boolean writeFlushWalMarker, FlushLifeCycleTracker tracker) throws IOException {
+      boolean writeFlushWalMarker, FlushLifeCycleTracker tracker, boolean requestingReplica,
+      HRegionLocation replicaRegionLocation) throws IOException {
     return internalFlushcache(this.wal, HConstants.NO_SEQNUM, storesToFlush, status,
-      writeFlushWalMarker, tracker);
+      writeFlushWalMarker, tracker, requestingReplica, replicaRegionLocation);
   }
 
   /**
@@ -2504,15 +2504,17 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * @param wal Null if we're NOT to go via wal.
    * @param myseqid The seqid to use if <code>wal</code> is null writing out flush file.
    * @param storesToFlush The list of stores to flush.
+   * @param requestingReplica whether the flush was triggered by a replica
    * @return object describing the flush's state
    * @throws IOException general io exceptions
    * @throws DroppedSnapshotException Thrown when replay of WAL is required.
    */
   protected FlushResultImpl internalFlushcache(WAL wal, long myseqid,
       Collection<HStore> storesToFlush, MonitoredTask status, boolean writeFlushWalMarker,
-      FlushLifeCycleTracker tracker) throws IOException {
+      FlushLifeCycleTracker tracker, boolean requestingReplica, HRegionLocation replicaRegionLocation)
+      throws IOException {
     PrepareFlushResult result = internalPrepareFlushCache(wal, myseqid, storesToFlush, status,
-      writeFlushWalMarker, tracker, 1);
+      writeFlushWalMarker, tracker, 1, requestingReplica, replicaRegionLocation);
     if (result.result == null) {
       return internalFlushCacheAndCommit(wal, status, result, storesToFlush);
     } else {
@@ -2524,7 +2526,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       justification="FindBugs seems confused about trxId")
   protected PrepareFlushResult internalPrepareFlushCache(WAL wal, long myseqid,
       Collection<HStore> storesToFlush, MonitoredTask status, boolean writeFlushWalMarker,
-      FlushLifeCycleTracker tracker, int currentReplicaIndex) throws IOException {
+      FlushLifeCycleTracker tracker, int currentReplicaIndex, boolean requestingReplica,
+      HRegionLocation replicaRegionLocation) throws IOException {
     if (this.rsServices != null && this.rsServices.isAborted()) {
       // Don't flush when server aborting, it's unsafe
       throw new IOException("Aborting flush because server is aborted...");
@@ -2570,7 +2573,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
               // for it to be done and then only mutations can proceed
               Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
                   sendFlushRpc(FlushAction.CANNOT_FLUSH, flushOpSeqId, null,
-                    currentReplicaIndex, writeEntry, true, null);
+                    currentReplicaIndex, writeEntry, true, null, requestingReplica, replicaRegionLocation);
               if (sendFlushRpc != null) {
                 future = sendFlushRpc.getFirst();
               }
@@ -2671,7 +2674,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // TODO : we should add this in primary also
         Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
             sendFlushRpc(FlushAction.START_FLUSH, flushOpSeqId, committedFiles, currentReplicaIndex,
-                writeEntry, true, null);
+                writeEntry, true, null, requestingReplica, replicaRegionLocation);
         if (sendFlushRpc != null) {
           future = sendFlushRpc.getFirst();
         }
@@ -2690,7 +2693,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // flush in the primary.
         // I think there cannot be any error as we are not sure if the RPC has been sent
         // because we are async here.
-        sendAbortFlushRpc(wal, committedFiles, flushOpSeqId);
+        sendAbortFlushRpc(wal, committedFiles, flushOpSeqId, requestingReplica, replicaRegionLocation);
       }
       throw ex;
     } finally {
@@ -2710,9 +2713,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return writeEntry.getWriteNumber();
   }
 
-  private Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc(FlushAction action,
-      long flushOpSeqId, TreeMap<byte[], List<Path>> committedFiles, int currentReplicaIndex,
-      WriteEntry writeEntry, boolean async, List<Integer> failedReplicas) throws IOException {
+  private Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc(
+      FlushAction action, long flushOpSeqId, TreeMap<byte[], List<Path>> committedFiles,
+      int currentReplicaIndex, WriteEntry writeEntry, boolean async, List<Integer> failedReplicas,
+      boolean requestingReplica, HRegionLocation replicaRegionLocation) throws IOException {
     Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> res =
         new Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry>();
     // TODO : We should send the RPC for a case where a region is closed as part of MOVE.
@@ -2727,6 +2731,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       if (writeEntry != null) memstoreReplicationKey.setWriteEntry(writeEntry);
       MemstoreEdits memstoreEdits = new MemstoreEdits();
       memstoreEdits.add(kv);
+      if (requestingReplica && replicaRegionLocation != null) {
+        // Resetting region locations
+        LOG.debug("Resetting reigon location in flush flow" + this.getRegionInfo());
+        // regionReplicator.resetRegionLocations();
+        regionReplicator.updateRegionLocations(replicaRegionLocation);
+      }
+
       if (async) {
         res.setFirst(this.memstoreReplicator.replicateAsync(memstoreReplicationKey, memstoreEdits,
           regionReplicator));
@@ -2791,7 +2802,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   private void sendAbortFlushRpc(final WAL wal, TreeMap<byte[], List<Path>> committedFiles,
-      long flushOpSeqId) {
+      long flushOpSeqId, boolean requestingReplica, HRegionLocation replicaRegionLocation) {
     try {
       WriteEntry writeNumber = null;
       try {
@@ -2799,7 +2810,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // TODO we have to handle the actual marker async ops still hanging around?
         Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
             sendFlushRpc(FlushAction.ABORT_FLUSH, flushOpSeqId, committedFiles, 1, null,
-              false, new ArrayList<Integer>());
+              false, new ArrayList<Integer>(), requestingReplica, replicaRegionLocation);
         if (sendFlushRpc != null) {
           writeNumber = sendFlushRpc.getSecond();// TODO hanlde failed replicas
         }
@@ -2978,7 +2989,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // TODO : shall we wait for the response in this case??
         Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry> sendFlushRpc =
             sendFlushRpc(FlushAction.COMMIT_FLUSH, flushOpSeqId, committedFiles, 1, null,
-              false, failedReplicas);
+              false, failedReplicas, false, null);
         if (sendFlushRpc != null) {
           writeNumber = sendFlushRpc.getSecond();
         }
@@ -4541,9 +4552,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           List<Cell> list = familyMap.get(fam);
           if (list == null) {
             list = new ArrayList<Cell>();
+            familyMap.put(fam, list);
           }
           list.add(cell);
-          familyMap.put(fam, list);
         }
         CellUtil.setSequenceId(cell, entry.getSequenceId());
       }
@@ -5081,7 +5092,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
     if (seqid > minSeqIdForTheRegion) {
       // Then we added some edits to memory. Flush and cleanup split edit files.
-      internalFlushcache(null, seqid, stores.values(), status, false, FlushLifeCycleTracker.DUMMY);
+      internalFlushcache(null, seqid, stores.values(), status, false, FlushLifeCycleTracker.DUMMY,
+        false, null);
     }
     // Now delete the content of recovered edits.  We're done w/ them.
     if (files.size() > 0 && this.conf.getBoolean("hbase.region.archive.recovered.edits", false)) {
@@ -5267,7 +5279,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           flush = isFlushSize(this.memStoreSize);
           if (flush) {
             internalFlushcache(null, currentEditSeqId, stores.values(), status, false,
-              FlushLifeCycleTracker.DUMMY);
+              FlushLifeCycleTracker.DUMMY, false, null);
           }
 
           if (coprocessorHost != null) {
@@ -5488,7 +5500,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
           // invoke prepareFlushCache. Send null as wal since we do not want the flush events in wal
           PrepareFlushResult prepareResult = internalPrepareFlushCache(null, flushSeqId,
-            storesToFlush, status, false, FlushLifeCycleTracker.DUMMY, replicasOffered);
+            storesToFlush, status, false, FlushLifeCycleTracker.DUMMY, replicasOffered, false, null);
           if (prepareResult.result == null) {
             // save the PrepareFlushResult so that we can use it later from commit flush
             this.writestate.flushing = true;
@@ -5589,6 +5601,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
             // This is the regular case where we received commit flush after prepare flush
             // corresponding to the same seqId.
             replayFlushInStores(flush, prepareFlushResult, true);
+            LOG.info(getRegionInfo().getEncodedName() + " : "
+                + "Received a flush commit marker with seqId:" + flush.getFlushSequenceNumber()
+                + " and a previous prepared snapshot was found "
+                + TraditionalBinaryPrefix.long2String(prepareFlushResult.totalFlushableSize.getDataSize(), "",1) + " "+
+                TraditionalBinaryPrefix.long2String(prepareFlushResult.totalFlushableSize.getHeapSize(), "",1) + " "+
+                     TraditionalBinaryPrefix.long2String(prepareFlushResult.totalFlushableSize.getOffHeapSize() ,"",1));
 
             // Set down the memstore size by amount of flush.
             this.decrMemStoreSize(prepareFlushResult.totalFlushableSize);

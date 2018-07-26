@@ -51,7 +51,7 @@ public class OpenRegionHandler extends EventHandler {
 
   private final RegionInfo regionInfo;
   private final TableDescriptor htd;
-  private final long masterSystemTime;
+  protected final long masterSystemTime;
 
   public OpenRegionHandler(final Server server,
       final RegionServerServices rsServices, RegionInfo regionInfo,
@@ -111,18 +111,11 @@ public class OpenRegionHandler extends EventHandler {
         return;
       }
 
-      if (!updateMeta(region, masterSystemTime) || this.server.isStopped() ||
-          this.rsServices.isStopping()) {
+      if (postRegionOpenSteps(region)) {
+        openSuccessful = true;
+      } else {
         return;
       }
-
-      if (!isRegionStillOpening()) {
-        return;
-      }
-
-      // Successful region open, and add it to MutableOnlineRegions
-      addToOnlineRegions(region);
-      openSuccessful = true;
 
       // Done!  Successful region open
       LOG.debug("Opened " + regionName + " on " + this.server.getServerName());
@@ -154,6 +147,21 @@ public class OpenRegionHandler extends EventHandler {
     }
   }
 
+  protected boolean postRegionOpenSteps(HRegion region) {
+    if (!updateMeta(region, masterSystemTime) || this.server.isStopped()
+        || this.rsServices.isStopping()) {
+      return false;
+    }
+
+    if (!isRegionStillOpening()) {
+      return false;
+    }
+
+    // Successful region open, and add it to MutableOnlineRegions
+    addToOnlineRegions(region);
+    return true;
+  }
+  
   protected void addToOnlineRegions(HRegion region) {
     this.rsServices.addRegion(region);
   }

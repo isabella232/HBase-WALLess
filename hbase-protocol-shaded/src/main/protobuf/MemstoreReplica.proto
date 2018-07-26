@@ -24,6 +24,8 @@ option java_generic_services = false;
 option java_generate_equals_and_hash = true;
 option optimize_for = SPEED;
 
+import "HBase.proto";
+
 message MemstoreReplicationEntry {
   // TODO this assume we have Codec in RSs always. When not, the cells has to come inside this entry. As of now just keep this way
   required uint32 associated_cell_count = 1;
@@ -37,6 +39,7 @@ message ReplicateMemstoreRequest {
   repeated MemstoreReplicationEntry entry = 3;
   // It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
   repeated uint32 replicas = 4;
+  repeated ServerName locations = 5;
 }
 
 message ReplicateMemstoreResponse {

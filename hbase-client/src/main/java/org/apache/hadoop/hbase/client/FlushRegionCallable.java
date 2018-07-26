@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.client;
 
 import java.io.IOException;
 
+import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
@@ -42,15 +43,21 @@ public class FlushRegionCallable extends RegionAdminServiceCallable<FlushRegionR
   private final boolean writeFlushWalMarker;
   private boolean reload;
   private int requestingRegionReplica;
+  // we need this servername because in case of a flush triggered by the replica on a primary
+  // the location may not be still updated in META. So it may still point to the old replica's replication
+  // (which was actually switched over). It is better we send the current servername directly.
+  // TODO : check if we have issues during a failure or retry
+  private ServerName serverName;
 
   public FlushRegionCallable(ClusterConnection connection,
       RpcControllerFactory rpcControllerFactory, TableName tableName, byte[] regionName,
-      byte[] regionStartKey, boolean writeFlushWalMarker, RegionInfo requestingRegion) {
+      byte[] regionStartKey, boolean writeFlushWalMarker, RegionInfo requestingRegion, ServerName serverName) {
     super(connection, rpcControllerFactory, tableName, regionStartKey);
     this.regionName = regionName;
     this.writeFlushWalMarker = writeFlushWalMarker;
     if (requestingRegion != null) {
       this.requestingRegionReplica = requestingRegion.getReplicaId();
+      this.serverName = serverName;
     }
   }
 
@@ -58,14 +65,14 @@ public class FlushRegionCallable extends RegionAdminServiceCallable<FlushRegionR
       RpcControllerFactory rpcControllerFactory, RegionInfo regionInfo,
       boolean writeFlushWalMarker) {
     this(connection, rpcControllerFactory, regionInfo.getTable(), regionInfo.getRegionName(),
-      regionInfo.getStartKey(), writeFlushWalMarker, null);
+      regionInfo.getStartKey(), writeFlushWalMarker, null, null);
   }
 
   public FlushRegionCallable(ClusterConnection connection,
       RpcControllerFactory rpcControllerFactory, RegionInfo regionInfo, boolean writeFlushWalMarker,
-      RegionInfo requestingRegionReplica) {
+      RegionInfo requestingRegionReplica, ServerName serverName) {
     this(connection, rpcControllerFactory, regionInfo.getTable(), regionInfo.getRegionName(),
-        regionInfo.getStartKey(), writeFlushWalMarker, requestingRegionReplica);
+        regionInfo.getStartKey(), writeFlushWalMarker, requestingRegionReplica, serverName);
   }
 
   @Override
@@ -93,7 +100,7 @@ public class FlushRegionCallable extends RegionAdminServiceCallable<FlushRegionR
     }
 
     FlushRegionRequest request = RequestConverter.buildFlushRegionRequest(regionName,
-      writeFlushWalMarker, this.requestingRegionReplica);
+      writeFlushWalMarker, this.requestingRegionReplica, serverName);
     return stub.flushRegion(controller, request);
   }
 }

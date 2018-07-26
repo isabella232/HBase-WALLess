@@ -2051,6 +2051,10 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
    * @return list of scanners recreated on the current Scanners
    * @throws IOException
    */
+  // TODO : While using default scan mode this recreate creates an issue because in a replica
+  // all the store files managed in the SFM are using hfilelinks. Once a replica is converted
+  // to primary and new scans comes to this new primary the activeFileName resolution does not expect
+  // hfile links but actual names. So this recreateScanners fail. For now testing with preads enabled.
   public List<KeyValueScanner> recreateScanners(List<KeyValueScanner> currentFileScanners,
       boolean cacheBlocks, boolean usePread, boolean isCompaction, ScanQueryMatcher matcher,
       byte[] startRow, boolean includeStartRow, byte[] stopRow, boolean includeStopRow, long readPt,

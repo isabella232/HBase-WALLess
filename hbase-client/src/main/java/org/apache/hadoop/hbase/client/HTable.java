@@ -369,7 +369,7 @@ public class HTable implements Table {
         get.setConsistency(DEFAULT_CONSISTENCY);
       }
     }
-
+    // TODO : remove this check totally. Otherwise we wont use replica feature at all.
     if (get.getConsistency() == Consistency.STRONG) {
       final Get configuredGet = get;
       ClientServiceCallable<Result> callable = new ClientServiceCallable<Result>(this.connection, getName(),

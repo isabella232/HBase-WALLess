@@ -1212,13 +1212,14 @@ public class TestHRegionReplayEvents {
   @Test
   public void testWriteFlushRequestMarker() throws IOException {
     // primary region is empty at this point. Request a flush with writeFlushRequestWalMarker=false
-    FlushResultImpl result = primaryRegion.flushcache(true, false, -1, FlushLifeCycleTracker.DUMMY);
+    FlushResultImpl result =
+        primaryRegion.flushcache(true, false, -1, FlushLifeCycleTracker.DUMMY, null);
     assertNotNull(result);
     assertEquals(FlushResultImpl.Result.CANNOT_FLUSH_MEMSTORE_EMPTY, result.result);
     assertFalse(result.wroteFlushWalMarker);
 
     // request flush again, but this time with writeFlushRequestWalMarker = true
-    result = primaryRegion.flushcache(true, true, -1, FlushLifeCycleTracker.DUMMY);
+    result = primaryRegion.flushcache(true, true, -1, FlushLifeCycleTracker.DUMMY, null);
     assertNotNull(result);
     assertEquals(FlushResultImpl.Result.CANNOT_FLUSH_MEMSTORE_EMPTY, result.result);
     assertTrue(result.wroteFlushWalMarker);
@@ -1253,7 +1254,7 @@ public class TestHRegionReplayEvents {
 
     // Test case 1: Test that replaying CANNOT_FLUSH request marker assuming this came from
     // triggered flush restores readsEnabled
-    primaryRegion.flushcache(true, true, -1, FlushLifeCycleTracker.DUMMY);
+    primaryRegion.flushcache(true, true, -1, FlushLifeCycleTracker.DUMMY, null);
     reader = createWALReaderForPrimary();
     while (true) {
       WAL.Entry entry = reader.next();
