@@ -68,14 +68,18 @@ public class DurableSlicedChunk extends Chunk {
   private DurableChunk<NonVolatileMemAllocator> durableChunk;
   private ChunkBuffer chunkBuffer;
   private long offset;
-  byte[] dummy;
+  private static byte[] dummy;
 
   public DurableSlicedChunk(int id, DurableChunk<NonVolatileMemAllocator> durableBigChunk,
       long offset, int size) {
     super(size, id, true);// Durable chunks are always created out of pool.
     this.offset = offset;
     this.durableChunk = durableBigChunk;
-    dummy = new byte[this.size];
+    // All DurableSlicedChunk are created at the RS startup time itself in a sequential way. No
+    // worry abt concurrent access.
+    if (dummy == null) {
+      dummy = new byte[this.size];
+    }
   }
 
   @Override
@@ -84,8 +88,11 @@ public class DurableSlicedChunk extends Chunk {
       chunkBuffer = durableChunk.getChunkBuffer(offset, size);
       data = chunkBuffer.get();
       data.putInt(0, this.getId());// Write the chunk ID
+      // We have observed that the write perf of the persistent memory is much higher when the chunk
+      // area is prepopulated with data. So this hack!
       LOG.info("Prepopulating the chunk");
-      ByteBufferUtils.copyFromArrayToBuffer(data, Bytes.SIZEOF_INT, dummy, 0, (size - Bytes.SIZEOF_INT));
+      ByteBufferUtils.copyFromArrayToBuffer(data, Bytes.SIZEOF_INT, dummy, 0,
+          (size - Bytes.SIZEOF_INT));
     }
     // createBuffer.cancelAutoReclaim(); this causes NPE
     // fill the data here
