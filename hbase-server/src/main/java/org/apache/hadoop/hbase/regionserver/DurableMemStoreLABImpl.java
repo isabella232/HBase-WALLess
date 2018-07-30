@@ -40,7 +40,6 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
 
   @VisibleForTesting
   public static boolean useDurableMemstore = true;
-  private static final int SIZE_OF_SEQ_ID = Bytes.SIZEOF_LONG;
 
   private AtomicReference<DurableSlicedChunk> firstChunk = new AtomicReference<>();
   private volatile int chunkSeqId = 1;

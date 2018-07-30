@@ -31,7 +31,6 @@ import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.Write
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
 
-// TODO name is odd?
 @InterfaceAudience.Private
 public class MemStoreAsyncAddHandler extends EventHandler {
 
@@ -40,8 +39,7 @@ public class MemStoreAsyncAddHandler extends EventHandler {
   private final WriteEntry[] writeEntries;
   private final HRegion hRegion;
 
-  public MemStoreAsyncAddHandler(HRegion hRegion,
-      WriteEntry[] seqIds) {
+  public MemStoreAsyncAddHandler(HRegion hRegion, WriteEntry[] seqIds) {
     super(null, EventType.RS_REGION_REPLICA_MEMSTORE_ASYNC_ADD);
     this.hRegion = hRegion;
     this.writeEntries = seqIds;
@@ -54,11 +52,9 @@ public class MemStoreAsyncAddHandler extends EventHandler {
         pair.getFirst().internalAdd(cell, memstoreSizing);
       }
     }
-    // TODO advance mvcc
     for (WriteEntry writeEntry : writeEntries) {
       this.hRegion.getMVCC().complete(writeEntry);
     }
-    // important change - without this the size in the replica side was never getting added
     this.hRegion.incMemStoreSize(memstoreSizing);
   }
 
