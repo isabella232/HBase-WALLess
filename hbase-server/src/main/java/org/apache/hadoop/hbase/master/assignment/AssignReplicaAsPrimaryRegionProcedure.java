@@ -20,12 +20,14 @@ package org.apache.hadoop.hbase.master.assignment;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.client.RegionInfo;
+import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.master.assignment.RegionStates.RegionStateNode;
 import org.apache.hadoop.hbase.master.procedure.MasterProcedureEnv;
 import org.apache.hadoop.hbase.master.procedure.RSProcedureDispatcher.ReplicaToPrimaryRegionConvertOperation;
@@ -119,15 +121,35 @@ public class AssignReplicaAsPrimaryRegionProcedure extends AssignProcedure {
   @Override
   protected Procedure finishTransition(final MasterProcedureEnv env,
       final RegionStateNode regionNode) throws IOException {
+    // TODO : This is not enough. We have to remove the node from ServerState in REgionStates
+    // which happens only when the node is closed. Here we don't close the node.
+    // Because of this if we try to balance without grouping by table we have an extra node
+    // and the number of regions it is balancing is totally wrong. For now going with
+    // assignments by table so that the number of regions are correct. Have to fix this
+    // Ensure that 'hbase.master.loadbalance.bytable' is made true
     env.getAssignmentManager().markRegionAsOffline(this.destinationRegion);
     env.getAssignmentManager().markRegionAsOpened(regionNode);
     // This success may have been after we failed open a few times. Be sure to cleanup any
     // failed open references. See #incrementAndCheckMaxAttempts and where it is called.
     env.getAssignmentManager().getRegionStates().removeFromFailedOpen(regionNode.getRegionInfo());
-    // TODO : Shall we add a new state for this so that on failure this assign alone is done once again
+    // TODO : Shall we add a new state for this so that on failure this assign alone is done once
+    // again
     // rather than other steps??
-    LOG.info("Creating new assign procedure for the region "+this.destinationRegion);
-    return new AssignProcedure(this.destinationRegion, true);
+    // TODO : if this assign fails - we have to do some thing more to continue with the assignment
+    // create a server that is not part of the replica list.
+    List<ServerName> replicaServers = env.getAssignmentManager().getReplicaRegionLocations(
+      RegionReplicaUtil.getRegionInfoForDefaultReplica(this.destinationRegion));
+    // TODO : any other better API.
+    if (replicaServers != null) {
+      List<ServerName> servers =
+          env.getMasterServices().getServerManager().createDestinationServersList();
+      servers.removeAll(replicaServers);
+      ServerName destinationServer =
+          servers.get(env.getAssignmentManager().RANDOM.nextInt(servers.size()));
+      return new AssignProcedure(this.destinationRegion, destinationServer);
+    } else {
+      return new AssignProcedure(this.destinationRegion, true);
+    }
   }
 
   @Override

@@ -539,6 +539,20 @@ public class RegionStates {
     return null;
   }
 
+  public List<ServerName> getReplicaRegionLocations(RegionInfo primaryRegion) {
+    Collection<RegionStateNode> regions =
+        this.regionsMap.tailMap(primaryRegion.getRegionName()).values();
+    List<ServerName> servers = new ArrayList<ServerName>();
+    for (RegionStateNode region : regions) {
+      if (!region.getTable().equals(primaryRegion.getTable())) break;
+      if (!Bytes.equals(region.regionInfo.getStartKey(), primaryRegion.getStartKey())) {
+        break;
+      }
+      servers.add(region.regionLocation);
+    }
+    return servers;
+  }  
+
   public ArrayList<RegionState> getRegionStates() {
     final ArrayList<RegionState> regions = new ArrayList<RegionState>(regionsMap.size());
     for (RegionStateNode node: regionsMap.values()) {

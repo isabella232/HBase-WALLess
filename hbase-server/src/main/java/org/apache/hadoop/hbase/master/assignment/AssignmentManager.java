@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Future;
@@ -109,6 +110,7 @@ import org.slf4j.LoggerFactory;
 public class AssignmentManager implements ServerListener {
   private static final Logger LOG = LoggerFactory.getLogger(AssignmentManager.class);
 
+  protected static final Random RANDOM = new Random(System.currentTimeMillis());
   // TODO: AMv2
   //  - handle region migration from hbase1 to hbase2.
   //  - handle sys table assignment first (e.g. acl, namespace)
@@ -652,6 +654,10 @@ public class AssignmentManager implements ServerListener {
     return procedures;
   }
 
+  public List<ServerName> getReplicaRegionLocations(RegionInfo primaryRegion) {
+    return this.regionStates.getReplicaRegionLocations(primaryRegion);
+  }
+
   public AssignProcedure[] createAssignProcedures(final List<RegionInfo> hris,
       final boolean assignReplicasAsPrimary) {
     if (hris.isEmpty()) {
@@ -673,6 +679,20 @@ public class AssignmentManager implements ServerListener {
                 nextReplicaRegion.getSecond(), nextReplicaRegion.getFirst());
               continue;
             }
+          }
+        } else {
+          // TODO : Unify code here and the one in AssignReplicaAssignProcedure
+          List<ServerName> replicaServers =
+              getReplicaRegionLocations(RegionReplicaUtil.getRegionInfoForDefaultReplica(hri));
+          // TODO : any other better API.
+          if (replicaServers != null) {
+            List<ServerName> servers = this.getProcedureEnvironment().getMasterServices()
+                .getServerManager().createDestinationServersList();
+            servers.removeAll(replicaServers);
+            // TODO : Check. This RANDOM is static. Check if it runs correctly in all cases.
+            ServerName destinationServer = servers.get(RANDOM.nextInt(servers.size()));
+            procedures[index++] = new AssignProcedure(hri, destinationServer);
+            continue;
           }
         }
       }
