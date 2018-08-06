@@ -225,7 +225,7 @@ case $startStop in
   ;;
 
 (foreground_start)
-    trap cleanAfterRun SIGHUP SIGINT SIGTERM EXIT
+    #trap cleanAfterRun SIGHUP SIGINT SIGTERM EXIT
     if [ "$HBASE_NO_REDIRECT_LOG" != "" ]; then
         # NO REDIRECT
         echo "`date` Starting $command on `hostname`"

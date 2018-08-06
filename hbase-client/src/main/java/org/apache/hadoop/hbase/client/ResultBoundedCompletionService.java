@@ -55,7 +55,7 @@ public class ResultBoundedCompletionService<V> {
   private final ArrayList<QueueingFuture> completedTasks; // completed tasks
   private volatile boolean cancelled = false;
   
-  class QueueingFuture<T> implements RunnableFuture<T> {
+  public class QueueingFuture<T> implements RunnableFuture<T> {
     private final RetryingCallable<T> future;
     private T result = null;
     private ExecutionException exeEx = null;
@@ -167,10 +167,11 @@ public class ResultBoundedCompletionService<V> {
   }
 
 
-  public void submit(RetryingCallable<V> task, int callTimeout, int id) {
+  public QueueingFuture<V> submit(RetryingCallable<V> task, int callTimeout, int id) {
     QueueingFuture<V> newFuture = new QueueingFuture<>(task, callTimeout, id);
     executor.execute(TraceUtil.wrap(newFuture, "ResultBoundedCompletionService.submit"));
     tasks[id] = newFuture;
+    return newFuture;
   }
 
   public QueueingFuture<V> take() throws InterruptedException {

@@ -1725,7 +1725,7 @@ public class PerformanceEvaluation extends Configured implements Tool {
       if (opts.filterAll) {
         get.setFilter(new FilterAllFilter());
       }
-      get.setConsistency(consistency);
+      get.setConsistency(Consistency.TIMELINE);
       if (LOG.isTraceEnabled()) LOG.trace(get.toString());
       if (opts.multiGet > 0) {
         this.gets.add(get);

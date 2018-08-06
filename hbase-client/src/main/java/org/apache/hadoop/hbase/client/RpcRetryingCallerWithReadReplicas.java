@@ -205,118 +205,123 @@ public class RpcRetryingCallerWithReadReplicas {
 
     final ResultBoundedCompletionService<Result> cs =
         new ResultBoundedCompletionService<>(this.rpcRetryingCallerFactory, pool, rl.size());
-    int startIndex = 0;
-    int endIndex = rl.size();
 
     // The algo works like this for GETs
-    // 1) If replicaID is specified try to hit that replica only and wait for the result. 
-    // 2) if no result from 1) throw exception. TODO : Remove this feature itself later
-    // 3) if replicaID is not specified, first hit the primary region wait for timeOutForReplicas (as in existing code)
-    // 4) if response is found return back.
-    // 5) if response is not found from 4), try to hit the replica regions and wait for reply from any one of them
-    // 6) if reply found return if not try to hit the META to find the GOOD replicas and repeat the same process.
-    // 7) still if reply not found throw error.
-    // 8) Note - there is no partial results here for us to set the replicas
-
-    if(isTargetReplicaSpecified) {
-      addCallsForReplica(cs, rl, get.getReplicaId(), get.getReplicaId());
-      endIndex = 1;
-    } else {
-      if (!skipPrimary) {
-        addCallsForReplica(cs, rl, 0, 0);
-        try {
-          // wait for the timeout to see whether the primary responds back
-          // TODO : this timeout is very low 10ms. Need to be changed
-          Future<Result> f = cs.poll(timeBeforeReplicas, TimeUnit.MICROSECONDS); // Yes, microseconds
-          if (f != null) {
-            return f.get(); //great we got a response
-          }
-          if (cConnection.getConnectionMetrics() != null) {
-            cConnection.getConnectionMetrics().incrHedgedReadOps();
-          }
-        } catch (ExecutionException e) {
-          // We ignore the ExecutionException and continue with the secondary replicas
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Primary replica returns " + e.getCause());
-          }
-
-          // Skip the result from the primary as we know that there is something wrong
-          startIndex = 1;
-        } catch (CancellationException e) {
-          throw new InterruptedIOException();
-        } catch (InterruptedException e) {
-          throw new InterruptedIOException();
+    // 1) First hit the primary region wait for timeOutForReplicas (as in existing code)
+    // 2) if response is found return back.
+    // 3) if response is not found from 2), try to hit the replica regions and wait for reply from any one of them
+    // 4) if reply found return if not try to hit the META to find the GOOD replicas and repeat the same process.
+    // 5) still if reply not found throw error.
+    // 6) Note - there is no partial results here for us to set the replicas
+    if (!skipPrimary) {
+      addCallsForReplica(cs, rl, 0, 0, timeBeforeReplicas);
+      try {
+        // wait for the timeout to see whether the primary responds back
+        // TODO : this timeout is very low 10ms. Need to be changed
+        Future<Result> f = cs.poll(timeBeforeReplicas, TimeUnit.MICROSECONDS); // Yes,
+                                                                               // microseconds
+        if (f != null) {
+          return f.get(); // great we got a response
         }
-      } else {
-        // Since primary replica is skipped, the endIndex needs to be adjusted accordingly
-        endIndex --;
+        if (cConnection.getConnectionMetrics() != null) {
+          cConnection.getConnectionMetrics().incrHedgedReadOps();
+        }
+      } catch (ExecutionException e) {
+        // We ignore the ExecutionException and continue with the secondary replicas
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Primary replica returns " + e.getCause());
+        }
+        // Skip the result from the primary as we know that there is something wrong
+      } catch (CancellationException e) {
+        throw new InterruptedIOException();
+      } catch (InterruptedException e) {
+        throw new InterruptedIOException();
+      } finally {
       }
-
-      // submit call for the all of the secondaries at once
-      addCallsForReplica(cs, rl, 1, rl.size() - 1);
     }
-    try {
-      // TODO : HEre also go serially or just issue gets parallely to all replicas and wait for the first result?
-      ResultBoundedCompletionService<Result>.QueueingFuture<Result> f =
-          cs.pollForFirstSuccessfullyCompletedTask(operationTimeout, TimeUnit.MILLISECONDS, startIndex, endIndex);
-      if (f == null) {
-        // TODO : This seems to wait till retries are all exhausted
-        // before throwing this error now once again check for GOOD replicas from the META??
-        if (!isTargetReplicaSpecified) {
-          rl = getRegionLocations(false, RegionReplicaUtil.DEFAULT_REPLICA_ID, cConnection,
-            tableName, get.getRow());
-          Set<Integer> updatedGoodReplicas = new HashSet<Integer>();
-          // retry by reading GOOD replicas from META
-          for (HRegionLocation loc : rl.getRegionLocations()) {
-            if (!RegionReplicaUtil.isDefaultReplica(loc.getRegion())) {
-              updatedGoodReplicas.add(loc.getRegion().getReplicaId());
-            }
-          }
-          // retry on the replicas alone as primary has not responded
-          addCallsForReplica(cs, rl, updatedGoodReplicas);
-          f = cs.pollForFirstSuccessfullyCompletedTask(operationTimeout, TimeUnit.MILLISECONDS,
-            updatedGoodReplicas);
-        } else {
-          rl = getRegionLocations(false, get.getReplicaId(), cConnection, tableName, get.getRow());
-          if (rl == null || rl.getRegionLocation(get.getReplicaId()) == null) {
-            throw new RetriesExhaustedException(
-                "The replica " + get.getReplicaId() + " is in BAD state");
-          }
-        }
-        if (f == null) {
-          throw new RetriesExhaustedException("Timed out after " + operationTimeout
-              + "ms. Get is sent to replicas with startIndex: " + startIndex + ", endIndex: "
-              + endIndex + ", Locations: " + rl);
-        }
-      }
-      if (cConnection.getConnectionMetrics() != null && !isTargetReplicaSpecified &&
-          !skipPrimary && f.getReplicaId() != RegionReplicaUtil.DEFAULT_REPLICA_ID) {
-        cConnection.getConnectionMetrics().incrHedgedReadWin();
-      }
-      return f.get();
-    } catch (ExecutionException e) {
-      throwEnrichedException(e, retries);
-    } catch (CancellationException e) {
-      throw new InterruptedIOException();
-    } catch (InterruptedException e) {
-      throw new InterruptedIOException();
-    } finally {
-      // We get there because we were interrupted or because one or more of the
-      // calls succeeded or failed. In all case, we stop all our tasks.
-      cs.cancelAll();
-    }
-
-    LOG.error("Imposible? Arrive at an unreachable line..."); // unreachable
-    return null; // unreachable
-  }
-
-  private void addCallsForReplica(ResultBoundedCompletionService<Result> cs, RegionLocations rl,
-      Set<Integer> goodReplicaIds) {
-    for (int id : goodReplicaIds) {
+    LOG.debug("Primary timed out "+timeBeforeReplicas + " "+rl.size());
+    ResultBoundedCompletionService<Result>.QueueingFuture<Result> f = null;
+    for (int id = 1; id <= rl.size() - 1; id++) {
       HRegionLocation hrl = rl.getRegionLocation(id);
       ReplicaRegionServerCallable callOnReplica = new ReplicaRegionServerCallable(id, hrl);
       cs.submit(callOnReplica, operationTimeout, id);
+      try {
+        // TODO : HEre also go serially or just issue gets parallely to all replicas and wait for
+        // the first result?
+        // Ordering or selecting the replica is critical because in a actual replica aways case
+        // the replica gets converted
+        // into primary and that replica may get changed to another replica. So this may cause
+        // timouts in the gets.
+        f = cs.poll(operationTimeout, TimeUnit.MILLISECONDS);
+        if (f == null) {
+          if (id == rl.size() - 1) {
+            LOG.info(
+              "Done with the replicas in hand. We need to retry by getting the good replicas from META");
+            break;
+          } else {
+            // continue with the next one.
+            continue;
+          }
+        } else {
+          // got the result
+          LOG.info("Got the result from the replica "+f.getReplicaId());
+          return f.get();
+        }
+      } catch (InterruptedException e) {
+        throw new InterruptedIOException();
+      } catch (CancellationException e) {
+        throw new InterruptedIOException();
+      } catch (Exception e) {
+        LOG.error("Encountered exception while trying out from replicas");
+      } finally {
+        if (f != null) {
+          // cancell only if there is a result
+          cs.cancelAll();
+        }
+      }
+      // still we don have the result
+      if (f == null) {
+        rl = getRegionLocations(false, RegionReplicaUtil.DEFAULT_REPLICA_ID, cConnection, tableName,
+          get.getRow());
+        Set<Integer> updatedGoodReplicas = new HashSet<Integer>();
+        // retry by reading GOOD replicas from META
+        for (HRegionLocation loc : rl.getRegionLocations()) {
+          if (!RegionReplicaUtil.isDefaultReplica(loc.getRegion()) && loc.isGood()) {
+            updatedGoodReplicas.add(loc.getRegion().getReplicaId());
+          }
+        }
+        int size = updatedGoodReplicas.size();
+        int i = 0;
+        for (int replicaId : updatedGoodReplicas) {
+          hrl = rl.getRegionLocation(replicaId);
+          callOnReplica = new ReplicaRegionServerCallable(id, hrl);
+          cs.submit(callOnReplica, operationTimeout, id);
+          try {
+            f = cs.poll(operationTimeout, TimeUnit.MILLISECONDS);
+            if (f == null) {
+              if (i == size - 1) {
+                // we are the last one and still no result
+                throw new RetriesExhaustedException(
+                    "All the tries even from the good replicas did not give" + "a result ");
+              }
+            } else {
+              return f.get();
+            }
+            i++;
+          } catch (ExecutionException e) {
+            throwEnrichedException(e, retries);
+          } catch (CancellationException e) {
+            throw new InterruptedIOException();
+          } catch (InterruptedException e) {
+            throw new InterruptedIOException();
+          } finally {
+            cs.cancelAll();
+          }
+        }
+      }
     }
+    LOG.error("Imposible? Arrive at an unreachable line..."); // unreachable
+    return null; // unreachable
   }
 
   /**
@@ -353,13 +358,14 @@ public class RpcRetryingCallerWithReadReplicas {
    * @param rl  - the region locations
    * @param min - the id of the first replica, inclusive
    * @param max - the id of the last replica, inclusive.
+   * @param timeBeforeReplicas2 
    */
   private void addCallsForReplica(ResultBoundedCompletionService<Result> cs,
-                                 RegionLocations rl, int min, int max) {
+                                 RegionLocations rl, int min, int max, int timeout) {
     for (int id = min; id <= max; id++) {
       HRegionLocation hrl = rl.getRegionLocation(id);
       ReplicaRegionServerCallable callOnReplica = new ReplicaRegionServerCallable(id, hrl);
-      cs.submit(callOnReplica, operationTimeout, id);
+      cs.submit(callOnReplica, timeout, id);
     }
   }
 
