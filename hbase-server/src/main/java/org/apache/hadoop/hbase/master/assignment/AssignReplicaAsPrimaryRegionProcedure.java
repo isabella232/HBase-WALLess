@@ -140,6 +140,7 @@ public class AssignReplicaAsPrimaryRegionProcedure extends AssignProcedure {
     List<ServerName> replicaServers = env.getAssignmentManager().getReplicaRegionLocations(
       RegionReplicaUtil.getRegionInfoForDefaultReplica(this.destinationRegion));
     // TODO : any other better API.
+    // TODO : Ideally this should be done by the balancer. Add this to LB interface.
     if (replicaServers != null) {
       List<ServerName> servers =
           env.getMasterServices().getServerManager().createDestinationServersList();

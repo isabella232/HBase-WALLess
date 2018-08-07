@@ -682,6 +682,7 @@ public class AssignmentManager implements ServerListener {
           }
         } else {
           // TODO : Unify code here and the one in AssignReplicaAssignProcedure
+          // TODO : Ideally this should be done by the balancer. Add this to LB interface.
           List<ServerName> replicaServers =
               getReplicaRegionLocations(RegionReplicaUtil.getRegionInfoForDefaultReplica(hri));
           // TODO : any other better API.
