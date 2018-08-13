@@ -81,7 +81,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     // fails. Adding a new config may be needed. As of now just making this to 2. And the multiplier to 1.
     this.conf.setInt("hbase.client.serverside.retries.multiplier", 1);
     this.conf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, 2);
-    this.conf.set(HConstants.RPC_CODEC_CONF_KEY, KVCodecWithSeqId.class.getCanonicalName());
+    //Not needed. We have the seqId passed via the Memstore replication key only.
+    // Not only that KVCodecWithSeqId impl has issues.
+//    this.conf.set(HConstants.RPC_CODEC_CONF_KEY, KVCodecWithSeqId.class.getCanonicalName());
 
     // TODO : Better math considering Regions count also? As per the cur parallel model, this is enough
     // use the regular RPC timeout for replica replication RPC's

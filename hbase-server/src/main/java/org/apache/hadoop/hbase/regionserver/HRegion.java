@@ -4522,7 +4522,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       } finally {
         this.updatesLock.readLock().unlock();
       }
-      this.executor.submit(handler);
+      handler.run();
+      // Submitting this as an async activity creates an issue.
+      // Since we create cells out of the MSLAB copy and then add them asynchronously, parallely there could a flush request
+      // and as part of which we prepare a snapshot and the same is cleared off on receiving a COMMIT marker. On returning
+      // the snapshot as part of close() those MSLABs are ready to be used by other new writes so the underlying cells created
+      // out of this MSLAB are corrupted. Hence we have an issue with the memstore size and we get huge numbers and the
+      // memstore gets blocked.
+      //this.executor.submit(handler);
     } finally {
       closeRegionOperation(Operation.REPLAY_BATCH_MUTATE);
       // TODO metrics should be updated but need a new one.. Should not directly affect the normal
