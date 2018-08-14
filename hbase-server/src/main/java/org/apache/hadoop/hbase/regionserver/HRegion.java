@@ -2654,6 +2654,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       } else {
         // use the provided sequence Id as WAL is not being used for this flush.
         flushedSeqId = flushOpSeqId = myseqid;
+        // if we begin here can we complete it in commit_flush marker??
+        // Making sure that all the previous Async handlers doing the cell addition, are done with
+        // their work. Then only all the cells which are there in the snapshot at primary will be there at
+        // this replica's snapshot also.
+        // TODO - Check for the perf impact here. The Start Flush marker cell are send under the
+        // writes been locked at the primary. This wait will make that wait for longer period. If this is a
+        // bigger issue, we can have smarter ways to solve it. As of now let it be this way as it is
+        // most simple
+        writeEntry = this.mvcc.begin(flushOpSeqId);
+        this.mvcc.completeAndWait(writeEntry);
       }
 
       for (HStore s : storesToFlush) {
@@ -4486,7 +4496,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   private void doBatchOpForMemstoreReplication(NavigableMap<byte[], List<Cell>> familyMap,
-      long[] seqIds) throws IOException {
+     long[] seqIds) throws IOException {
     startRegionOperation(Operation.REPLAY_BATCH_MUTATE);
     try {
       // TODO We will be in replay mode. This will never happen. Do we need to check this for
@@ -4506,9 +4516,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       lock(this.updatesLock.readLock(), familyMap.size());
       WriteEntry[] writeEntries = new WriteEntry[seqIds.length];
       for (int i = 0; i < seqIds.length; i++) {
-        writeEntries[i] = this.mvcc.begin(seqIds[i]);
+        if (seqIds[i] != -1) {
+          writeEntries[i] = this.mvcc.begin(seqIds[i]);
+        }
       }
-
       MemStoreAsyncAddHandler handler = new MemStoreAsyncAddHandler(this, writeEntries);
       try {
         for (Map.Entry<byte[], List<Cell>> e : familyMap.entrySet()) {
@@ -4522,14 +4533,13 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       } finally {
         this.updatesLock.readLock().unlock();
       }
-      handler.run();
-      // Submitting this as an async activity creates an issue.
       // Since we create cells out of the MSLAB copy and then add them asynchronously, parallely there could a flush request
       // and as part of which we prepare a snapshot and the same is cleared off on receiving a COMMIT marker. On returning
       // the snapshot as part of close() those MSLABs are ready to be used by other new writes so the underlying cells created
       // out of this MSLAB are corrupted. Hence we have an issue with the memstore size and we get huge numbers and the
-      // memstore gets blocked.
-      //this.executor.submit(handler);
+      // memstore gets blocked. TO workaround see the change in HRegion#internalPrepareFlushCache where we wait for
+      // the async handlers to catch up.
+      this.executor.submit(handler);
     } finally {
       closeRegionOperation(Operation.REPLAY_BATCH_MUTATE);
       // TODO metrics should be updated but need a new one.. Should not directly affect the normal
@@ -4537,7 +4547,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
-  private long[] splitCells(ReplicateMemstoreRequest request, List<Cell> cells,
+  private  long[] splitCells(ReplicateMemstoreRequest request, List<Cell> cells,
       NavigableMap<byte[], List<Cell>> familyMap, int replicasOffered) throws IOException {
     List<MemstoreReplicationEntry> entries = request.getEntryList();
     long[] seqIds = new long[entries.size()];
@@ -4553,7 +4563,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
         }
         if (CellUtil.matchingFamily(cell, WALEdit.METAFAMILY)) {
-           handleMetaMarkerCell(cell, replicasOffered, entry.getSequenceId());
+          boolean mvccBegin = handleMetaMarkerCell(cell, replicasOffered, entry.getSequenceId());
+          if (mvccBegin) {
+            seqIds[entryCounter - 1] = -1;
+          }
         } else {
           byte[] fam = CellUtil.cloneFamily(cell);
           List<Cell> list = familyMap.get(fam);
@@ -4570,7 +4583,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return seqIds;
   }
 
-  private void handleMetaMarkerCell(Cell cell, int replicasOffered, long seqId)
+  private boolean handleMetaMarkerCell(Cell cell, int replicasOffered, long seqId)
       throws IOException {
     CompactionDescriptor compactionDesc = WALEdit.getCompaction(cell);
     if (compactionDesc != null) {
@@ -4581,6 +4594,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(cell);
       if (flushDesc != null) {
         replayWALFlushMarker(flushDesc, seqId, replicasOffered);
+        FlushAction action = flushDesc.getAction();
+        if (action == FlushAction.START_FLUSH) {
+          return true;
+        }
       } else {
         // TODO region open and close events not been RPCed into replicas now. This can help?
         RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(cell);
@@ -4595,6 +4612,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         }
       }
     }
+    return false;
   }
 
   /**

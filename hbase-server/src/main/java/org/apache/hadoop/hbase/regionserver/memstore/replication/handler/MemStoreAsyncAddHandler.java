@@ -49,11 +49,14 @@ public class MemStoreAsyncAddHandler extends EventHandler {
   public void process() throws IOException {
     for (Pair<AbstractMemStore, List<Cell>> pair : allCell) {
       for (Cell cell : pair.getSecond()) {
+        // at any point of time if we can check that we have cells that are smaller than the flushed seqId. We return.
         pair.getFirst().internalAdd(cell, memstoreSizing);
       }
     }
     for (WriteEntry writeEntry : writeEntries) {
-      this.hRegion.getMVCC().complete(writeEntry);
+      if (writeEntry != null) {
+        this.hRegion.getMVCC().complete(writeEntry);
+      }
     }
     this.hRegion.incMemStoreSize(memstoreSizing);
   }
