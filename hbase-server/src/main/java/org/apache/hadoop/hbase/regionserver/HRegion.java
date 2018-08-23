@@ -958,28 +958,18 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     long maxSeqId = initializeStores(reporter, status);
     this.mvcc.advanceTo(maxSeqId);
     // Replay cells from durable chunk
-    if (this.getRegionServerServices() != null) {
-      // TODO :In real cluster how to avoid the parsing of the existing chunks when a new RS comes up but is 
-      // a normal fail over case??
-      LOG.trace("Retrieving the data for region " + this.getRegionInfo() + " from chunk retriever");
-      DurableChunkRetriever chunkRetriever =
-          ((HRegionServer) this.getRegionServerServices()).getChunkRetriever();
+    if (this.getRegionServerServices() != null
+        && ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
+      LOG.debug("Retrieving the data for region " + this.getRegionInfo() + " from chunk retriever");
+      DurableChunkRetrieverV2 chunkRetriever = DurableChunkRetrieverV2.getInstance();
       if (chunkRetriever != null) {
         for (HStore store : this.stores.values()) {
-          List<Cell> regionChunk =
-              chunkRetriever.getCellsPerFamily(Bytes.toString(this.getRegionInfo().getRegionName()),
-                store.getColumnFamilyDescriptor().getNameAsString());
-          // }
+          byte[] regionName = this.getRegionInfo().getRegionName();
+          CellScanner cellScanner = chunkRetriever.getCellScanner(regionName,
+              store.getColumnFamilyDescriptor().getName());
           Exception e = null;
           try {
-            if (regionChunk != null) {
-              LOG.debug("Fetching cells for the region "
-                  + this.getRegionInfo().getRegionNameAsString() + " " + regionChunk.size());
-            }
-            if (regionChunk != null) {
-              // this will get excption
-              maxSeqId = Math.max(maxSeqId, replayCellsFromDurableChunk(maxSeqId, regionChunk, store));
-            }
+              maxSeqId = Math.max(maxSeqId, replayCellsFromDurableChunk(maxSeqId, cellScanner, store));
             // advance to the new maxSeqId
             this.mvcc.advanceTo(maxSeqId);
           } catch (Exception ex) {
@@ -987,8 +977,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           } finally {
             if (e == null) {
               // TODO : If there is an error here. Better throw error outside.
-              chunkRetriever.clearRegionChunk(this.getRegionInfo().getRegionNameAsString(),
-                store.getColumnFamilyName());
+              chunkRetriever.finishRegionReplay(regionName);
             }
           }
         }
@@ -1068,16 +1057,15 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return nextSeqId;
   }
 
-  private long replayCellsFromDurableChunk(long maxSeqIdInStoreFiles, List<Cell> cells,
+  private long replayCellsFromDurableChunk(long maxSeqIdInStoreFiles, CellScanner cellScanner,
       HStore store) throws IOException {
     MemStoreSizing memstoreSize = new MemStoreSizing();
-    LOG.debug("Applying " + cells.size() + " cells from durable chunk to the region "
-        + this.getRegionInfo());
     MonitoredTask status = TaskMonitor.get().createStatus("Replaying from durable chunk");
     long maxSeqId = -1;
     boolean flush = false;
     long curSeqId = -1;
-    for (Cell cell : cells) {
+    while (cellScanner.advance()) {
+      Cell cell = cellScanner.current();
       if (cell.getSequenceId() >= maxSeqIdInStoreFiles) {
         if (cell.getSequenceId() > maxSeqId) {
           maxSeqId = cell.getSequenceId();
@@ -1088,7 +1076,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         //continue;
       }
       if (cell.getSequenceId() != curSeqId) {
-        store.add(cells, memstoreSize);
+        store.add(cell, memstoreSize);
         curSeqId = cell.getSequenceId();
       }
     }

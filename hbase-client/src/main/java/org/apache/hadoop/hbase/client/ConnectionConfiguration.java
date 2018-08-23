@@ -85,7 +85,6 @@ public class ConnectionConfiguration {
         conf.getLong(HConstants.HBASE_CLIENT_SCANNER_MAX_RESULT_SIZE_KEY,
             HConstants.DEFAULT_HBASE_CLIENT_SCANNER_MAX_RESULT_SIZE);
 
-    // TODO : Make this 2 secs
     this.primaryCallTimeoutMicroSecond =
         conf.getInt("hbase.client.primaryCallTimeout.get", 10000); // 10ms
 

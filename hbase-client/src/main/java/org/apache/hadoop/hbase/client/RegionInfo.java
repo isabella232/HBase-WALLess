@@ -662,6 +662,16 @@ public interface RegionInfo {
   }
 
   /**
+   * Convert given regionName (of any replica) into the primary replica region name. 
+   */
+  static byte[] toPrimaryRegionName(byte[] regionName) throws IOException {
+    byte[][] parsed = parseRegionName(regionName);
+    byte[] primaryRegionName = createRegionName(TableName.valueOf(parsed[0]), parsed[1], parsed[2],
+        true);
+    return primaryRegionName;
+  }
+
+  /**
    * Serializes given RegionInfo's as a byte array. Use this instead of
    * {@link RegionInfo#toByteArray(RegionInfo)} when
    * writing to a stream and you want to use the pb mergeDelimitedFrom (w/o the delimiter, pb reads

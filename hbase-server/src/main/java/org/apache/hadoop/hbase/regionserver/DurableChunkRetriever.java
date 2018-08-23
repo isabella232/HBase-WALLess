@@ -44,6 +44,7 @@ import org.apache.mnemonic.Reclaim;
 import org.apache.mnemonic.Utils;
 import org.apache.yetus.audience.InterfaceAudience;
 
+// TODO Remove this and then rename DurableChunkRetrieverV2 to DurableChunkRetriever.
 @InterfaceAudience.Private
 public class DurableChunkRetriever {
   private Map<Pair<String, String>, Map<Short, ByteBuffer>> regionFamilyChunks =

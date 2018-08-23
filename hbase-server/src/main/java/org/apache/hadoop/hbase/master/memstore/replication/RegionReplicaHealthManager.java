@@ -46,6 +46,8 @@ public class RegionReplicaHealthManager extends ScheduledChore {
     super("RegionReplicaHealthManagerChore", master, period);
     this.master = master;
     this.badRegions = new HashMap<>();
+    // TODO on start up read META and get all BAD health regions at that time. This is needed for HM
+    // restarts/HM secondary become primary cases
   }
 
   @Override

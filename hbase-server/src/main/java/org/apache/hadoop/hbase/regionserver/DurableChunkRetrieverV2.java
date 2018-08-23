@@ -30,6 +30,7 @@ import java.util.TreeSet;
 
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellScanner;
+import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.regionserver.DurableChunkCreator.DurableMemStoreChunkPool;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
@@ -56,12 +57,18 @@ public class DurableChunkRetrieverV2 {
   };
 
   private DurableMemStoreChunkPool pool;
+  // TODO need some chore service which will check against HM whether now these kept chunks can be
+  // released. It can so happen that the replica regions are there many RS which all restarted. The
+  // primary replica will get opened in one of the RS. Then in other RS also the chunks can be
+  // released. Chore will check to HM whether the primary is up and Good. If so release chunks.
   private NavigableMap<byte[], NavigableMap<byte[], List<DurableSlicedChunk>>> chunks =
       new TreeMap<>(Bytes.BYTES_COMPARATOR);
   private NavigableSet<byte[]> regionsToIgnore = new TreeSet<>(Bytes.BYTES_COMPARATOR);
+  private HRegionServer hrs;
 
-  public static synchronized DurableChunkRetrieverV2 init (DurableMemStoreChunkPool pool){
-    INSTANCE = new DurableChunkRetrieverV2(pool);
+  public static synchronized DurableChunkRetrieverV2 init(DurableMemStoreChunkPool pool,
+      HRegionServer hrs) {
+    INSTANCE = new DurableChunkRetrieverV2(pool, hrs);
     return INSTANCE;
   }
 
@@ -72,30 +79,38 @@ public class DurableChunkRetrieverV2 {
     return INSTANCE;
   }
 
-  private DurableChunkRetrieverV2(DurableMemStoreChunkPool pool) {
+  private DurableChunkRetrieverV2(DurableMemStoreChunkPool pool, HRegionServer hrs) {
     this.pool = pool;
+    this.hrs = hrs;
   }
 
   public boolean appendChunk(Pair<byte[], byte[]> regionStore, DurableSlicedChunk chunk) {
+    byte[] primaryRegionName = null;
+    try {
+      primaryRegionName = RegionInfo.toPrimaryRegionName(regionStore.getFirst());
+    } catch (IOException e) {
+      // Do not expect this to happen.
+    }
     NavigableMap<byte[], List<DurableSlicedChunk>> storeVsChunks = this.chunks
-        .get(regionStore.getFirst());
+        .get(primaryRegionName);
     if (storeVsChunks != null) {
       // Already we know this region is not online in other servers. Means we need to keep it for
       // later replay!
       addChunkUnderStore(regionStore.getSecond(), chunk, storeVsChunks);
     } else {
-      if (this.regionsToIgnore.contains(regionStore.getFirst())) {
+      if (this.regionsToIgnore.contains(primaryRegionName)) {
         // We already checked abt this region and see it is already online in another RS. So just
         // ignore this chunk. It can be used by any one now.
         return false;
       } else {
-        boolean toBeKept = true; // TODO Make RPC to check whether this region is online any where
+        boolean toBeKept = (this.hrs != null) ? !(this.hrs.atleastOneReplicaGood(primaryRegionName))
+            : true;
         if (toBeKept) {
           storeVsChunks = new TreeMap<>(Bytes.BYTES_COMPARATOR);
-          this.chunks.put(regionStore.getFirst(), storeVsChunks);
+          this.chunks.put(primaryRegionName, storeVsChunks);
           addChunkUnderStore(regionStore.getSecond(), chunk, storeVsChunks);
         } else {
-          this.regionsToIgnore.add(regionStore.getFirst());
+          this.regionsToIgnore.add(primaryRegionName);
           return false;
         }
       }
@@ -113,7 +128,6 @@ public class DurableChunkRetrieverV2 {
     storeChunks.add(chunk);
   }
 
-  // TODO use this while Region replay
   public CellScanner getCellScanner(byte[] region, byte[] store) {
     List<DurableSlicedChunk> storeChunks = getSortedChunks(region, store);
     if (storeChunks.isEmpty()) {
@@ -173,7 +187,6 @@ public class DurableChunkRetrieverV2 {
     return storeChunks;
   }
 
-  // TODO use this.
   public void finishRegionReplay(byte[] region) {
     for (List<DurableSlicedChunk> storeChunks : this.chunks.get(region).values()) {
       for (DurableSlicedChunk chunk : storeChunks) {

@@ -332,6 +332,16 @@ public class MetaTableAccessor {
       : locations.getRegionLocation(parsedInfo == null ? 0 : parsedInfo.getReplicaId());
   }
 
+  public static RegionLocations getRegionLocations(Connection connection, byte[] regionName)
+      throws IOException {
+    RegionInfo parsedInfo = parseRegionInfoFromRegionName(regionName);
+    byte[] row = getMetaKeyForRegion(parsedInfo);
+    Get get = new Get(row);
+    get.addFamily(HConstants.CATALOG_FAMILY);
+    Result r = get(getMetaHTable(connection), get);
+    return getRegionLocations(r);
+  }
+
   /**
    * Returns the HRegionLocation from meta for the given region
    * @param connection connection we're using

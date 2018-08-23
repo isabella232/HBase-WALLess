@@ -34,8 +34,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.ClusterMetricsBuilder;
 import org.apache.hadoop.hbase.DoNotRetryIOException;
 import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.MetaTableAccessor;
 import org.apache.hadoop.hbase.NamespaceDescriptor;
+import org.apache.hadoop.hbase.RegionLocations;
 import org.apache.hadoop.hbase.Server;
 import org.apache.hadoop.hbase.ServerMetrics;
 import org.apache.hadoop.hbase.ServerMetricsBuilder;
@@ -117,6 +119,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.Reg
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.NameStringPair;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ProcedureDescription;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionSpecifier.RegionSpecifierType;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.LockServiceProtos.LockHeartbeatRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.LockServiceProtos.LockHeartbeatResponse;
@@ -125,6 +128,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.LockServiceProtos.LockR
 import org.apache.hadoop.hbase.shaded.protobuf.generated.LockServiceProtos.LockService;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaRegionHealthService;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaStatusResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProtos.AbortProcedureRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProtos.AbortProcedureResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProtos.AddColumnRequest;
@@ -2288,5 +2292,25 @@ public class MasterRpcServices extends RSRpcServices
       throw new ServiceException(e);
     }
     return RegionReplicaHealthChangeResponse.newBuilder().build();
+  }
+
+  @Override
+  public ReplicaStatusResponse atleastOneReplicaGood(RpcController controller,
+      RegionSpecifier request) throws ServiceException {
+    ReplicaStatusResponse.Builder builder = ReplicaStatusResponse.newBuilder();
+    assert request.getType() == RegionSpecifierType.REGION_NAME;
+    byte[] regionName = request.getValue().toByteArray();
+    RegionLocations locations;
+    try {
+      locations = MetaTableAccessor.getRegionLocations(this.master.getConnection(), regionName);
+    } catch (IOException e) {
+      throw new ServiceException(e);
+    }
+    for (HRegionLocation location : locations.getRegionLocations()) {
+      if (location.isGood()) {
+        return builder.setStatus(true).build();
+      }
+    }
+    return builder.setStatus(false).build();
   }
 }

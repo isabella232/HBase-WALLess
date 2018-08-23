@@ -46,7 +46,13 @@ message RegionReplicaHealthChangeResponse {
 
 }
 
+message ReplicaStatusResponse {
+  required bool status = 1;
+}
+
 service ReplicaRegionHealthService {
   rpc HealthChange(HMRegionReplicaHealthChangeRequest)
     returns(RegionReplicaHealthChangeResponse);
+  rpc AtleastOneReplicaGood(RegionSpecifier)
+    returns(ReplicaStatusResponse);
 }

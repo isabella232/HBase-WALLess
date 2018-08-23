@@ -67,12 +67,11 @@ public class DurableChunkCreator extends ChunkCreator {
 
   @Override
   protected void initializePools(int chunkSize, long globalMemStoreSize, float poolSizePercentage,
-      float indexChunkSizePercentage, float initialCountPercentage,
-      HeapMemoryManager heapMemoryManager) {
+      float indexChunkSizePercentage, float initialCountPercentage, HRegionServer hrs) {
     super.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage,
-        indexChunkSizePercentage, initialCountPercentage, heapMemoryManager);
+        indexChunkSizePercentage, initialCountPercentage, hrs);
     // TODO we need to deal with index chunks and pool also.
-    retriever = DurableChunkRetrieverV2.init((DurableMemStoreChunkPool) this.dataChunksPool);
+    retriever = DurableChunkRetrieverV2.init((DurableMemStoreChunkPool) this.dataChunksPool, hrs);
   }
 
   @Override

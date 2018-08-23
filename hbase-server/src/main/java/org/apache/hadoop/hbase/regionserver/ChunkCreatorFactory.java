@@ -34,7 +34,7 @@ public class ChunkCreatorFactory {
       justification = "Method is called by single thread at the starting of RS")
   public synchronized static void createChunkCreator(int chunkSize, boolean offheap,
       long globalMemStoreSize, float poolSizePercentage, float initialCountPercentage,
-      HeapMemoryManager heapMemoryManager, String durablePath) {
+      HRegionServer hrs, String durablePath) {
     if (durablePath != null) {
       assert offheap;// When working with Durbale chunks, it has to be marked as off heap.
       if (poolSizePercentage != 1.0 || initialCountPercentage != 1.0) {
@@ -46,6 +46,7 @@ public class ChunkCreatorFactory {
       }
       chunkCreator = new DurableChunkCreator(chunkSize, globalMemStoreSize, durablePath);
     } else {
+      HeapMemoryManager heapMemoryManager = (hrs == null) ? null : hrs.getHeapMemoryManager();
       chunkCreator = new ChunkCreator(chunkSize, offheap, globalMemStoreSize, poolSizePercentage,
           initialCountPercentage, heapMemoryManager,
           MemStoreLABImpl.INDEX_CHUNK_PERCENTAGE_DEFAULT);
@@ -55,7 +56,7 @@ public class ChunkCreatorFactory {
       MemStoreLABImpl.INDEX_CHUNK_PERCENTAGE_DEFAULT, initialCountPercentage, heapMemoryManager);*/
     // TODO the index chunk size % is passed as 0. We should allow configuring this.
     chunkCreator.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage, 0,
-        initialCountPercentage, heapMemoryManager);
+        initialCountPercentage, hrs);
     ChunkCreator.instance = chunkCreator;
   }
 

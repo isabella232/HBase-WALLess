@@ -221,6 +221,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.HMRegionReplicaHealthChangeRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaRegionHealthService;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaStatusResponse;
 
 /**
  * HRegionServer makes a set of HRegions available to clients. It checks in with
@@ -1592,28 +1593,7 @@ public class HRegionServer extends HasThread implements
       // init the chunkCreator
       String durablePath = conf.get(ChunkCreatorFactory.MSLAB_DURABLE_PATH_KEY, null);
       ChunkCreatorFactory.createChunkCreator(chunkSize, offheap, globalMemStoreSize,
-          poolSizePercentage, initialCountPercentage, this.hMemManager, durablePath);
-    }
-  }
-
-  protected void initializeMemstoreChunkRetriever() {
-    if (MemStoreLAB.isEnabled(conf)) {
-      Pair<Long, MemoryType> pair = MemorySizeUtil.getGlobalMemStoreSize(conf);
-      long globalMemStoreSize = pair.getFirst();
-      boolean offheap = this.regionServerAccounting.isOffheap();
-      // When off heap memstore in use, take full area for chunk pool.
-      float poolSizePercentage = offheap ? 1.0F
-          : conf.getFloat(MemStoreLAB.CHUNK_POOL_MAXSIZE_KEY, MemStoreLAB.POOL_MAX_SIZE_DEFAULT);
-      float initialCountPercentage = conf.getFloat(MemStoreLAB.CHUNK_POOL_INITIALSIZE_KEY,
-        MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT);
-      int chunkSize = conf.getInt(MemStoreLAB.CHUNK_SIZE_KEY, MemStoreLAB.CHUNK_SIZE_DEFAULT);
-      // init the chunkCreator
-      String durablePath = conf.get("hbase.memstore.mslab.durable.path");
-      if (durablePath != null) {
-        // In the actual case when a RS comes up in the same node the INSTANCE will also be null
-        DurableChunkRetriever.initialize(durablePath, chunkSize,
-          (int) (globalMemStoreSize * poolSizePercentage / chunkSize));
-      }
+          poolSizePercentage, initialCountPercentage, this, durablePath);
     }
   }
 
@@ -2001,8 +1981,6 @@ public class HRegionServer extends HasThread implements
     if (!(this instanceof MasterServices)) {
       // TODO : for tests. In real case this is not needed. Find a better way to do this
       ChunkCreator.resetInstance();
-      DurableChunkRetriever.resetInstance();
-      initializeMemstoreChunkRetriever();
       initializeMemStoreChunkCreator();
     }
   }
@@ -2557,6 +2535,7 @@ public class HRegionServer extends HasThread implements
     long previousLogTime = 0;
     RegionServerStatusService.BlockingInterface intRssStub = null;
     LockService.BlockingInterface intLockStub = null;
+    ReplicaRegionHealthService.BlockingInterface intRrssStub = null;
     boolean interrupted = false;
     try {
       while (keepLooping()) {
@@ -2582,6 +2561,7 @@ public class HRegionServer extends HasThread implements
         if (this instanceof HMaster && sn.equals(getServerName())) {
           intRssStub = ((HMaster)this).getMasterRpcServices();
           intLockStub = ((HMaster)this).getMasterRpcServices();
+          intRrssStub = ((HMaster)this).getMasterRpcServices();
           break;
         }
         try {
@@ -2590,6 +2570,7 @@ public class HRegionServer extends HasThread implements
               shortOperationTimeout);
           intRssStub = RegionServerStatusService.newBlockingStub(channel);
           intLockStub = LockService.newBlockingStub(channel);
+          intRrssStub = ReplicaRegionHealthService.newBlockingStub(channel);
           break;
         } catch (IOException e) {
           if (System.currentTimeMillis() > (previousLogTime + 1000)) {
@@ -2614,6 +2595,7 @@ public class HRegionServer extends HasThread implements
     }
     this.rssStub = intRssStub;
     this.lockStub = intLockStub;
+    this.rrssStub = intRrssStub;
     return sn;
   }
 
@@ -3403,10 +3385,6 @@ public class HRegionServer extends HasThread implements
     return this.fsOk;
   }
 
-  public DurableChunkRetriever getChunkRetriever() {
-    return DurableChunkRetriever.getInstance();
-  }
-
   @Override
   public void updateRegionFavoredNodesMapping(String encodedRegionName,
       List<org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.ServerName> favoredNodes) {
@@ -3873,5 +3851,19 @@ public class HRegionServer extends HasThread implements
   public void reportReplicaRegionHealthGood(RegionInfo replicaRegion, HRegion primaryRegion) {
     this.executorService
         .submit(new ReplicaGoodStateMarkerHandler(this, replicaRegion, primaryRegion));
+  }
+
+  public boolean atleastOneReplicaGood(byte[] regionName) {
+    if (this.rrssStub == null) return false;
+    RegionSpecifier region = RequestConverter.buildRegionSpecifier(RegionSpecifierType.REGION_NAME,
+        regionName);
+    ReplicaStatusResponse response;
+    try {
+      response = this.rrssStub.atleastOneReplicaGood(null, region);
+    } catch (ServiceException e) {
+      LOG.error("Exception ReplicaRegionHealthService#atleastOneReplicaGood", e);
+      return false;
+    }
+    return response.getStatus();
   }
 }

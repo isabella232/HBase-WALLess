@@ -94,8 +94,8 @@ public class ChunkCreator {
   @VisibleForTesting
   protected void initializePools(int chunkSize, long globalMemStoreSize,
                                float poolSizePercentage, float indexChunkSizePercentage,
-                               float initialCountPercentage,
-                               HeapMemoryManager heapMemoryManager) {
+                               float initialCountPercentage, HRegionServer hrs) {
+    HeapMemoryManager heapMemoryManager = (hrs == null) ? null : hrs.getHeapMemoryManager();
     this.dataChunksPool = initializePool("data", globalMemStoreSize,
             (1 - indexChunkSizePercentage) * poolSizePercentage,
             initialCountPercentage, chunkSize, heapMemoryManager);
