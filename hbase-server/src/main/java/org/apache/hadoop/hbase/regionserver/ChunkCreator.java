@@ -81,7 +81,7 @@ public class ChunkCreator {
   static boolean chunkPoolDisabled = false;
   protected MemStoreChunkPool dataChunksPool;
   private int chunkSize;
-  private MemStoreChunkPool indexChunksPool;
+  protected MemStoreChunkPool indexChunksPool;
 
   @VisibleForTesting
   ChunkCreator(int chunkSize, boolean offheap, long globalMemStoreSize, float poolSizePercentage,

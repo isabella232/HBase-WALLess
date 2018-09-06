@@ -142,6 +142,7 @@ import org.apache.hadoop.hbase.ipc.RpcServer;
 import org.apache.hadoop.hbase.monitoring.MonitoredTask;
 import org.apache.hadoop.hbase.monitoring.TaskMonitor;
 import org.apache.hadoop.hbase.quotas.RegionServerSpaceQuotaManager;
+import org.apache.hadoop.hbase.regionserver.ChunkCreator.MemStoreChunkPool;
 import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
 import org.apache.hadoop.hbase.regionserver.ScannerContext.LimitScope;
 import org.apache.hadoop.hbase.regionserver.ScannerContext.NextState;
@@ -962,6 +963,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         && ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
       LOG.debug("Retrieving the data for region " + this.getRegionInfo() + " from chunk retriever");
       DurableChunkRetrieverV2 chunkRetriever = DurableChunkRetrieverV2.getInstance();
+      MemStoreChunkPool dataPool =
+          ((DurableChunkCreator) DurableChunkCreator.getInstance()).getDataPool();
       if (chunkRetriever != null) {
         for (HStore store : this.stores.values()) {
           byte[] regionName = this.getRegionInfo().getRegionName();
@@ -977,7 +980,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           } finally {
             if (e == null) {
               // TODO : If there is an error here. Better throw error outside.
-              chunkRetriever.finishRegionReplay(regionName);
+              chunkRetriever.finishRegionReplay(regionName, dataPool);
             }
           }
         }

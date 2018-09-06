@@ -31,7 +31,7 @@ import java.util.TreeSet;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.client.RegionInfo;
-import org.apache.hadoop.hbase.regionserver.DurableChunkCreator.DurableMemStoreChunkPool;
+import org.apache.hadoop.hbase.regionserver.ChunkCreator.MemStoreChunkPool;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -56,7 +56,6 @@ public class DurableChunkRetrieverV2 {
     }
   };
 
-  private DurableMemStoreChunkPool pool;
   // TODO need some chore service which will check against HM whether now these kept chunks can be
   // released. It can so happen that the replica regions are there many RS which all restarted. The
   // primary replica will get opened in one of the RS. Then in other RS also the chunks can be
@@ -66,9 +65,8 @@ public class DurableChunkRetrieverV2 {
   private NavigableSet<byte[]> regionsToIgnore = new TreeSet<>(Bytes.BYTES_COMPARATOR);
   private HRegionServer hrs;
 
-  public static synchronized DurableChunkRetrieverV2 init(DurableMemStoreChunkPool pool,
-      HRegionServer hrs) {
-    INSTANCE = new DurableChunkRetrieverV2(pool, hrs);
+  public static synchronized DurableChunkRetrieverV2 init(HRegionServer hrs) {
+    INSTANCE = new DurableChunkRetrieverV2(hrs);
     return INSTANCE;
   }
 
@@ -79,8 +77,7 @@ public class DurableChunkRetrieverV2 {
     return INSTANCE;
   }
 
-  private DurableChunkRetrieverV2(DurableMemStoreChunkPool pool, HRegionServer hrs) {
-    this.pool = pool;
+  private DurableChunkRetrieverV2(HRegionServer hrs) {
     this.hrs = hrs;
   }
 
@@ -103,6 +100,8 @@ public class DurableChunkRetrieverV2 {
         // ignore this chunk. It can be used by any one now.
         return false;
       } else {
+        // TODO: We are doing for every region. Should we read through all the chunks and collect the
+        // region names and then issue one shot to the master?
         boolean toBeKept = (this.hrs != null) ? !(this.hrs.atleastOneReplicaGood(primaryRegionName))
             : true;
         if (toBeKept) {
@@ -187,10 +186,10 @@ public class DurableChunkRetrieverV2 {
     return storeChunks;
   }
 
-  public void finishRegionReplay(byte[] region) {
+  public void finishRegionReplay(byte[] region, MemStoreChunkPool dataPool) {
     for (List<DurableSlicedChunk> storeChunks : this.chunks.get(region).values()) {
       for (DurableSlicedChunk chunk : storeChunks) {
-        this.pool.putbackChunks(chunk);
+        dataPool.putbackChunks(chunk);
       }
     }
   }

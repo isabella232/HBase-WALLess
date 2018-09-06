@@ -19,6 +19,7 @@ package org.apache.hadoop.hbase.regionserver;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.hadoop.hbase.regionserver.ChunkCreator.MemStoreChunkPool;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.mnemonic.DurableChunk;
 import org.apache.mnemonic.NonVolatileMemAllocator;
@@ -68,10 +69,10 @@ public class DurableChunkCreator extends ChunkCreator {
   @Override
   protected void initializePools(int chunkSize, long globalMemStoreSize, float poolSizePercentage,
       float indexChunkSizePercentage, float initialCountPercentage, HRegionServer hrs) {
+    // TODO we need to deal with index chunks and pool also.
+    retriever = DurableChunkRetrieverV2.init(hrs);
     super.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage,
         indexChunkSizePercentage, initialCountPercentage, hrs);
-    // TODO we need to deal with index chunks and pool also.
-    retriever = DurableChunkRetrieverV2.init((DurableMemStoreChunkPool) this.dataChunksPool, hrs);
   }
 
   @Override
@@ -108,6 +109,14 @@ public class DurableChunkCreator extends ChunkCreator {
         poolSizePercentage);
   }
 
+  MemStoreChunkPool getDataPool() {
+    return this.dataChunksPool;
+  }
+
+  MemStoreChunkPool getIndexPool() {
+    return this.indexChunksPool;
+  }
+
   class DurableMemStoreChunkPool extends MemStoreChunkPool {
 
     DurableMemStoreChunkPool(String label, int chunkSize, int maxCount, int initialCount,
@@ -122,7 +131,10 @@ public class DurableChunkCreator extends ChunkCreator {
             chunkSize);
         chunk.init();
         Pair<byte[], byte[]> ownerRegionStore = chunk.getOwnerRegionStore();
+        // retriver will be null here.
         if (ownerRegionStore == null || !(retriever.appendChunk(ownerRegionStore, chunk))) {
+          // prepopulation to be done here.
+          chunk.prepopulateChunk();
           reclaimedChunks.add(chunk);
         }
       }

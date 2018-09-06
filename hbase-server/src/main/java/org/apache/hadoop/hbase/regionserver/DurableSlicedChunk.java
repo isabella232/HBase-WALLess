@@ -88,11 +88,6 @@ public class DurableSlicedChunk extends Chunk {
       chunkBuffer = durableChunk.getChunkBuffer(offset, size);
       data = chunkBuffer.get();
       data.putInt(0, this.getId());// Write the chunk ID
-      // We have observed that the write perf of the persistent memory is much higher when the chunk
-      // area is prepopulated with data. So this hack!
-      LOG.info("Prepopulating the chunk");
-      ByteBufferUtils.copyFromArrayToBuffer(data, Bytes.SIZEOF_INT, dummy, 0,
-          (size - Bytes.SIZEOF_INT));
     }
     // createBuffer.cancelAutoReclaim(); this causes NPE
     // fill the data here
@@ -118,6 +113,14 @@ public class DurableSlicedChunk extends Chunk {
       chunkBuffer.syncToLocal(OFFSET_TO_REGION_IDENTIFIER, (offset - OFFSET_TO_REGION_IDENTIFIER));
     }
     return offset;
+  }
+
+  void prepopulateChunk() {
+    // We have observed that the write perf of the persistent memory is much higher when the chunk
+    // area is prepopulated with data. So this hack!
+    LOG.info("Prepopulating the chunk");
+    ByteBufferUtils.copyFromArrayToBuffer(data, Bytes.SIZEOF_INT, dummy, 0,
+        (size - Bytes.SIZEOF_INT));
   }
 
   /**
