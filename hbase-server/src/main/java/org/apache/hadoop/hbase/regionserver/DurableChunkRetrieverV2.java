@@ -187,9 +187,11 @@ public class DurableChunkRetrieverV2 {
   }
 
   public void finishRegionReplay(byte[] region, MemStoreChunkPool dataPool) {
-    for (List<DurableSlicedChunk> storeChunks : this.chunks.get(region).values()) {
-      for (DurableSlicedChunk chunk : storeChunks) {
-        dataPool.putbackChunks(chunk);
+    if (chunks != null && this.chunks.get(region) != null) {
+      for (List<DurableSlicedChunk> storeChunks : this.chunks.get(region).values()) {
+        for (DurableSlicedChunk chunk : storeChunks) {
+          dataPool.putbackChunks(chunk);
+        }
       }
     }
   }

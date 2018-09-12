@@ -44,7 +44,8 @@ public class ChunkCreatorFactory {
             "When Durable chunks in place, we need to have the entire global memstore size has"
                 + " to be from pool");
       }
-      chunkCreator = new DurableChunkCreator(chunkSize, globalMemStoreSize, durablePath);
+      chunkCreator = new DurableChunkCreator(hrs.getConfiguration(), chunkSize, globalMemStoreSize,
+          durablePath);
     } else {
       HeapMemoryManager heapMemoryManager = (hrs == null) ? null : hrs.getHeapMemoryManager();
       chunkCreator = new ChunkCreator(chunkSize, offheap, globalMemStoreSize, poolSizePercentage,
