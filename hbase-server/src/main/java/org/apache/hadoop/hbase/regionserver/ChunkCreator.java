@@ -45,7 +45,7 @@ import org.apache.hbase.thirdparty.com.google.common.util.concurrent.ThreadFacto
  */
 @InterfaceAudience.Private
 public class ChunkCreator {
-  protected static final Logger LOG = LoggerFactory.getLogger(ChunkCreator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ChunkCreator.class);
   // monotonically increasing chunkid
   protected AtomicInteger chunkID = new AtomicInteger(1);
   // maps the chunk against the monotonically increasing chunk id. We need to preserve the

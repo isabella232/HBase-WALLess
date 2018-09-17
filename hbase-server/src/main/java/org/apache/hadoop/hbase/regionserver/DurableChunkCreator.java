@@ -17,8 +17,6 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.mnemonic.DurableChunk;
@@ -26,26 +24,32 @@ import org.apache.mnemonic.NonVolatileMemAllocator;
 import org.apache.mnemonic.Reclaim;
 import org.apache.mnemonic.Utils;
 import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @InterfaceAudience.Private
 public class DurableChunkCreator extends ChunkCreator {
 
+  private static final Logger LOG = LoggerFactory.getLogger(DurableChunkCreator.class);
+  // Size for one durable chunk been created over the pmem.
+  static final String DURABLECHUNK_SIZE = "hbase.durablechunk.size";
+  private static final long DEFAULT_DURABLECHUNK_SIZE = 8L * 1024 * 1024 * 1024;// 8 GB
+
   private DurableChunk<NonVolatileMemAllocator> durableBigChunk[];
   // Offset to track the allocation inside the bigChunk.
-  private AtomicLong offset = new AtomicLong(0);
+  private long offsetInCurChunk = 0;
   // if we have a bigger value this does not work. So creating some random value for now
   // as in mnemonic's ChunkBufferNGTest
   // Test this new unique Ids concepts.
   private NonVolatileMemAllocator allocator;
   private DurableChunkRetrieverV2 retriever = null;
-  private long memstoreSizeFactor;
-  private int curChunk = 0;
+  private long durableBigChunkSize;
+  private int curChunkIndex = 0;
 
   DurableChunkCreator(Configuration config, int chunkSize, long globalMemStoreSize, String durablePath) {
     super(chunkSize, true, globalMemStoreSize, 1.0F, 1.0F, null, 0);// TODO what should be last arg?
     // This config is used for easy testing. Once we get a sweet spot we can remove this - I
     // believe, if at all we get one
-    int memstoreSize = config.getInt("hbase.memstoresize.factor", 8);
     // Do validation. but for now creating max sized allocator
     allocator = new NonVolatileMemAllocator(
       // creating twice the size of the configured memory. This works for now
@@ -61,11 +65,11 @@ public class DurableChunkCreator extends ChunkCreator {
     });
     // This does not work with > 15G
     // so let us create multiple smaller chunks based on the memstoreSizeFactor
-    memstoreSizeFactor = memstoreSize * 1024l * 1024l * 1024l;
-    int numOfChunks = (int)(globalMemStoreSize/memstoreSizeFactor);
-    long remainingChunksLen = (globalMemStoreSize%memstoreSizeFactor);
-    LOG.info("The memstoreSizeFactor is " + memstoreSizeFactor + " the numOfchunks " + numOfChunks
-        + " remaining " + remainingChunksLen);
+    durableBigChunkSize = config.getLong(DURABLECHUNK_SIZE, DEFAULT_DURABLECHUNK_SIZE);
+    int numOfChunks = (int) (globalMemStoreSize / durableBigChunkSize);
+    long remainingChunksLen = (globalMemStoreSize % durableBigChunkSize);
+    LOG.info("Size of a durable chunk : " + durableBigChunkSize + ", Full size chunks : "
+        + numOfChunks + ", Remaining size : " + remainingChunksLen);
    // create as many chunks needed.
     durableBigChunk =
         remainingChunksLen > 0 ? new DurableChunk[numOfChunks + 1] : new DurableChunk[numOfChunks];
@@ -75,7 +79,7 @@ public class DurableChunkCreator extends ChunkCreator {
     // On testing, with a memstore global size as around 33G we get around 4 chunks each of size 8G.
     // It takes around 112 secs on startup. We should find a sweet spot if at all it exists 
     for (int i = 0; i < numOfChunks; i++) {
-      durableBigChunk[i] = allocator.createChunk(memstoreSizeFactor);
+      durableBigChunk[i] = allocator.createChunk(durableBigChunkSize);
       if (durableBigChunk[i] == null) {
         throw new RuntimeException("Not able to create a durable chunk");
       }
@@ -86,9 +90,6 @@ public class DurableChunkCreator extends ChunkCreator {
      //    }
       allocator.setHandler(uniqueId++, durableBigChunk[i].getHandler());
     }
-    LOG.info("the time taken to create " + numOfChunks + " chunks is "
-        + (System.currentTimeMillis() - now));
-    now = System.currentTimeMillis();
     if (remainingChunksLen > 0) {
       durableBigChunk[durableBigChunk.length - 1] = allocator.createChunk(remainingChunksLen);
       if (durableBigChunk[durableBigChunk.length - 1] == null) {
@@ -96,8 +97,7 @@ public class DurableChunkCreator extends ChunkCreator {
       }
       allocator.setHandler(uniqueId++, durableBigChunk[durableBigChunk.length - 1].getHandler());
     }
-    LOG.info("the time taken to create the last chunk " + " chunks is "
-        + (System.currentTimeMillis() - now));
+    LOG.info("Time taken to create all chunks : " + (System.currentTimeMillis() - now) + "ms");
   }
 
   @Override
@@ -121,22 +121,27 @@ public class DurableChunkCreator extends ChunkCreator {
     int id = chunkID.getAndIncrement();
 
     assert id > 0;
-    for (; curChunk < durableBigChunk.length;) {
-      DurableChunk<NonVolatileMemAllocator> tempChunk = this.durableBigChunk[curChunk];
-      if ((long) (offset.get() + size) > this.memstoreSizeFactor) {
+    // We don't expect this to be called in a multi threaded way. For Durable Chunks, all the chunks
+    // will be created at the starting of RS itself and will get pooled. We have check to make sure
+    // this. So not handling the multi thread here intentionally.
+    for (; curChunkIndex < durableBigChunk.length;) {
+      DurableChunk<NonVolatileMemAllocator> tempChunk = this.durableBigChunk[curChunkIndex];
+      // TODO we should align the memstoreSizeFactor and chunkSize. There should not be any memory
+      // waste from a DurableChunk.
+      if (offsetInCurChunk + size > tempChunk.getSize()) {
         // once we reach the max of one durable chunk, go to the next durable chunk and allocate
-        // buffers out of it. note that once agian the offset will start from 0.
-        this.offset.set(0);
-        curChunk++;
+        // buffers out of it.
+        curChunkIndex++;
+        this.offsetInCurChunk = 0;
         continue;
       }
-      long offsetToUse = this.offset.getAndAdd(size);
-      DurableSlicedChunk chunk = new DurableSlicedChunk(id, tempChunk, offsetToUse, size);
+      DurableSlicedChunk chunk = new DurableSlicedChunk(id, tempChunk, this.offsetInCurChunk, size);
       addToChunkMap(chunk);
+      this.offsetInCurChunk += size;
       return chunk;
     }
     // Ideally this should never happen
-    LOG.error("there is an issue. Should never happen ");
+    LOG.error("There is an issue. Should never happen!");
     return null;
   }
 
