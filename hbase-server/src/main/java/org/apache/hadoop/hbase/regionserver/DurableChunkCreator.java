@@ -103,7 +103,6 @@ public class DurableChunkCreator extends ChunkCreator {
   @Override
   protected void initializePools(int chunkSize, long globalMemStoreSize, float poolSizePercentage,
       float indexChunkSizePercentage, float initialCountPercentage, HRegionServer hrs) {
-    // TODO we need to deal with index chunks and pool also.
     retriever = DurableChunkRetrieverV2.init(hrs);
     super.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage,
         indexChunkSizePercentage, initialCountPercentage, hrs);
@@ -158,16 +157,14 @@ public class DurableChunkCreator extends ChunkCreator {
   @Override
   protected MemStoreChunkPool createMemStoreChunkPool(String label, float poolSizePercentage,
       int chunkSize, int maxCount, int initialCount) {
+    // TODO Index chunk pool need not be in Durable area. Handle. As of now we have hard coded the
+    // index pool size % to be 0 so no impact.
     return new DurableMemStoreChunkPool(label, chunkSize, maxCount, initialCount,
         poolSizePercentage);
   }
 
   MemStoreChunkPool getDataPool() {
     return this.dataChunksPool;
-  }
-
-  MemStoreChunkPool getIndexPool() {
-    return this.indexChunksPool;
   }
 
   class DurableMemStoreChunkPool extends MemStoreChunkPool {
@@ -184,9 +181,7 @@ public class DurableChunkCreator extends ChunkCreator {
             chunkSize);
         chunk.init();
         Pair<byte[], byte[]> ownerRegionStore = chunk.getOwnerRegionStore();
-        // retriver will be null here.
         if (ownerRegionStore == null || !(retriever.appendChunk(ownerRegionStore, chunk))) {
-          // prepopulation to be done here.
           chunk.prepopulateChunk();
           reclaimedChunks.add(chunk);
         }
