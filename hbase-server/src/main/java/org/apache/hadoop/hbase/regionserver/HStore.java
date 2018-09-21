@@ -351,6 +351,9 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
     }
     switch (inMemoryCompaction) {
       case NONE:
+        // TODO : always write the primary region name into the chunks??. So that on a failover of 
+        // a replica to primary we still have the correct info in the chunk? The retriever any way needs to
+        // check based on primary region info name only if there are any other replicas available.
         ms = ReflectionUtils.newInstance(DefaultMemStore.class, new Object[] {
           this.getRegionInfo().getRegionName(), this.family.getName(), conf, this.comparator });
         break;
