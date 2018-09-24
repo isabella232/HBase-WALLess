@@ -59,6 +59,7 @@ public class DurableChunkCreator extends ChunkCreator {
     }
     long allocatorSize = (long) ((2 * globalMemStoreSize));
     if (exists) {
+      // capacity is not used when we want to get back the data. only on creation it is needed.
       allocatorSize = 1l;
     }
     allocator = new NonVolatileMemAllocator(
@@ -89,7 +90,7 @@ public class DurableChunkCreator extends ChunkCreator {
     // It takes around 112 secs on startup. We should find a sweet spot if at all it exists
     for (int i = 0; i < numOfChunks; i++) {
       if (exists) {
-        // Retrieve the chunk here
+        // retrieve the last chunk. TODO : check if we need to set the handler again
         durableBigChunk[i] = allocator.retrieveChunk(allocator.getHandler(uniqueId++));
         if (durableBigChunk[i] == null) {
           LOG.warn("The chunk is null");
@@ -111,6 +112,7 @@ public class DurableChunkCreator extends ChunkCreator {
     }
     if (remainingChunksLen > 0) {
       if (exists) {
+        // retrieve the last chunk. TODO : check if we need to set the handler again
         durableBigChunk[durableBigChunk.length - 1] =
             allocator.retrieveChunk(allocator.getHandler(uniqueId));
       } else {
@@ -205,6 +207,7 @@ public class DurableChunkCreator extends ChunkCreator {
             chunkSize);
         chunk.init();
         Pair<byte[], byte[]> ownerRegionStore = chunk.getOwnerRegionStore();
+        // Still I see that on RS coming back the namespace and meta are not coming back online. Need to fix or see if any config issue
         if (ownerRegionStore == null || !(retriever.appendChunk(ownerRegionStore, chunk))) {
           chunk.prepopulateChunk();
           reclaimedChunks.add(chunk);
