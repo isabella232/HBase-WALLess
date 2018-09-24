@@ -54,6 +54,9 @@ public class DurableChunkCreator extends ChunkCreator {
     // believe, if at all we get one
     // Do validation. but for now creating max sized allocator
     boolean exists = new File(durablePath).exists();
+    if (exists) {
+      LOG.info("Durable memstore backed file found. Hence retrieving data from it");
+    }
     long allocatorSize = (long) ((2 * globalMemStoreSize));
     if (exists) {
       allocatorSize = 1l;
@@ -61,7 +64,7 @@ public class DurableChunkCreator extends ChunkCreator {
     allocator = new NonVolatileMemAllocator(
         // creating twice the size of the configured memory. This works for now
         Utils.getNonVolatileMemoryAllocatorService("pmem"), allocatorSize, // TODO this 2x is not needed. Give correctvalue.
-        durablePath, exists);
+        durablePath, !exists);
     // TODO : Understand what is this
     allocator.setChunkReclaimer(new Reclaim<Long>() {
       @Override
@@ -96,23 +99,26 @@ public class DurableChunkCreator extends ChunkCreator {
         if (durableBigChunk[i] == null) {
           throw new RuntimeException("Not able to create a durable chunk");
         }
+        LOG.info("the size of the chunk is " + durableBigChunk[i].getSize());
         // TODO : See if we are able to retrieve back all the chunks with the uniqueId
         // Internally the native code does this
-        //   if (key < MAX_HANDLER_STORE_LEN && key >= 0) {
-        //    D_RW(root)->hdl_buf[key] = value; // -> see the array here. so this should work ideally
-        //    }
+        // if (key < MAX_HANDLER_STORE_LEN && key >= 0) {
+        // D_RW(root)->hdl_buf[key] = value; // -> see the array here. so this should work ideally
+        // }
         allocator.setHandler(uniqueId++, durableBigChunk[i].getHandler());
+
       }
     }
     if (remainingChunksLen > 0) {
       if (exists) {
-        durableBigChunk[durableBigChunk.length - 1] = allocator.retrieveChunk(allocator.getHandler(uniqueId));
+        durableBigChunk[durableBigChunk.length - 1] =
+            allocator.retrieveChunk(allocator.getHandler(uniqueId));
       } else {
         durableBigChunk[durableBigChunk.length - 1] = allocator.createChunk(remainingChunksLen);
         if (durableBigChunk[durableBigChunk.length - 1] == null) {
           throw new RuntimeException("Not able to create that extra chunk durable chunk");
         }
-        allocator.setHandler(uniqueId++, durableBigChunk[durableBigChunk.length - 1].getHandler());
+        allocator.setHandler(uniqueId, durableBigChunk[durableBigChunk.length - 1].getHandler());
       }
     }
     LOG.info("Time taken to create all chunks : " + (System.currentTimeMillis() - now) + "ms");

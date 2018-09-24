@@ -148,7 +148,7 @@ public class TestDurableChunkRetrieval {
     }
     // start new region server.
     // If i move the sleep to after the start of new RS then it is creating lot of issues.  Need to debug
-    Thread.sleep(5000);
+    Thread.sleep(15000);
     HTU.getHBaseCluster().startRegionServer();
     Thread.sleep(5000);
     s = new Scan();
