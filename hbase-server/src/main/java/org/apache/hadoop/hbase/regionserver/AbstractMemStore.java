@@ -375,4 +375,7 @@ public abstract class AbstractMemStore implements MemStore {
    */
   protected abstract List<Segment> getSegments() throws IOException;
 
+  public byte[] getFamilyName() {
+    return this.cfName;
+  }
 }

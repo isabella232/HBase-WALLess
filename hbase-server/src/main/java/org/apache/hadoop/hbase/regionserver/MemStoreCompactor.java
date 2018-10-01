@@ -76,7 +76,7 @@ public class MemStoreCompactor {
     this.compactionKVMax = compactingMemStore.getConfiguration()
         .getInt(HConstants.COMPACTION_KV_MAX, HConstants.COMPACTION_KV_MAX_DEFAULT);
     initiateCompactionStrategy(compactionPolicy, compactingMemStore.getConfiguration(),
-        compactingMemStore.getFamilyName());
+        compactingMemStore.getFamilyNameString());
   }
 
   @Override
@@ -183,7 +183,7 @@ public class MemStoreCompactor {
       }
     } catch (IOException e) {
       LOG.trace("Interrupting in-memory compaction for store={}",
-          compactingMemStore.getFamilyName());
+          compactingMemStore.getFamilyNameString());
       Thread.currentThread().interrupt();
     } finally {
       // For the MERGE case, if the result was created, but swap didn't happen,

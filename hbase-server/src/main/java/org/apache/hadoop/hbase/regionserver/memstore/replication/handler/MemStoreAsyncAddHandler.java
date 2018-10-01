@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.executor.EventHandler;
 import org.apache.hadoop.hbase.executor.EventType;
@@ -28,37 +30,53 @@ import org.apache.hadoop.hbase.regionserver.AbstractMemStore;
 import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.regionserver.MemStoreSizing;
 import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaStoreCordinator;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
 
 @InterfaceAudience.Private
 public class MemStoreAsyncAddHandler extends EventHandler {
+  private static final Log LOG = LogFactory.getLog(MemStoreAsyncAddHandler.class);
 
   private final MemStoreSizing memstoreSizing = new MemStoreSizing();
   private final List<Pair<AbstractMemStore, List<Cell>>> allCell = new ArrayList<>();
   private final WriteEntry[] writeEntries;
   private final HRegion hRegion;
+  private final RegionReplicaReplicator regionReplicator;
+  private final long maxSeqId;
 
-  public MemStoreAsyncAddHandler(HRegion hRegion, WriteEntry[] seqIds) {
+  public MemStoreAsyncAddHandler(HRegion hRegion, RegionReplicaReplicator regionReplicator,
+      WriteEntry[] writeEntries, long maxSeqId) {
     super(null, EventType.RS_REGION_REPLICA_MEMSTORE_ASYNC_ADD);
     this.hRegion = hRegion;
-    this.writeEntries = seqIds;
+    this.regionReplicator = regionReplicator;
+    this.writeEntries = writeEntries;
+    this.maxSeqId = maxSeqId;
   }
 
   @Override
   public void process() throws IOException {
     for (Pair<AbstractMemStore, List<Cell>> pair : allCell) {
-      for (Cell cell : pair.getSecond()) {
-        // at any point of time if we can check that we have cells that are smaller than the flushed seqId. We return.
-        pair.getFirst().internalAdd(cell, memstoreSizing);
+      RegionReplicaStoreCordinator storeCordinator = this.regionReplicator
+          .getStoreCordinator(pair.getFirst().getFamilyName());
+      if (storeCordinator.shouldAddCells(this.maxSeqId)) {
+        for (Cell cell : pair.getSecond()) {
+          // at any point of time if we can check that we have cells that are smaller than the
+          // flushed seqId. We return.
+          pair.getFirst().internalAdd(cell, memstoreSizing);
+        }
+        this.hRegion.incMemStoreSize(memstoreSizing);
+      } else {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Dropping cells from adding to Memstore as these cells are already flushed"
+              + " in primary region. Max seqId of cells : " + this.maxSeqId);
+        }
       }
     }
     for (WriteEntry writeEntry : writeEntries) {
-      if (writeEntry != null) {
-        this.hRegion.getMVCC().complete(writeEntry);
-      }
+      this.hRegion.getMVCC().complete(writeEntry);
     }
-    this.hRegion.incMemStoreSize(memstoreSizing);
   }
 
   public void append(AbstractMemStore memstore, List<Cell> cells) {

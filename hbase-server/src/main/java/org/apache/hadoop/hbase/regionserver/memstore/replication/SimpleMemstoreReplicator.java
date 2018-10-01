@@ -112,9 +112,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   @Override
   public ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
-      MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicator) throws IOException {
+      MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicator, boolean metaMarkerReq)
+      throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future =
-        offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicator, true);
+        offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicator, metaMarkerReq);
     try {
       return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
@@ -126,20 +127,21 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   private CompletableFuture<ReplicateMemstoreResponse> offerForReplicate(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaReplicator regionReplicator, boolean beginMvcc) throws IOException {
+      RegionReplicaReplicator regionReplicator, boolean metaMarkerReq) throws IOException {
     MemstoreReplicationEntry entry = new MemstoreReplicationEntry(memstoreReplicationKey,
-        memstoreEdits);
+        memstoreEdits, metaMarkerReq);
     CompletableFuture<ReplicateMemstoreResponse> future = regionReplicator.append(entry);
-    offer(regionReplicator, entry, beginMvcc);
+    offer(regionReplicator, entry);
     return future;
   }
 
   @Override
   public CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaReplicator regionReplicaReplicator) throws IOException {
+      RegionReplicaReplicator regionReplicaReplicator, boolean metaMarkerReq) throws IOException {
     // ideally the same should be done for both async and sync case. But it does not work so.
-    return offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator, false);
+    return offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator,
+        metaMarkerReq);
   }
 
   @Override
@@ -164,26 +166,11 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     }
   }
 
-  public void offer(RegionReplicaReplicator replicator, MemstoreReplicationEntry entry,
-      boolean beginMvcc) {
+  public void offer(RegionReplicaReplicator replicator, MemstoreReplicationEntry entry) {
     int index = replicator.getReplicationThreadIndex();
     // beginMvcc 'false' indicates it is for Async
-    this.replicationThreads[index].regionQueue.offer(new Entry(replicator, entry.getSeq(), !beginMvcc));
-    if (!beginMvcc) {
-      synchronized (this.replicationThreads[index].lock) {
-        while (!this.replicationThreads[index].regionQueue.isEmpty()) {
-          try {
-            // We are ensuring that this entry added to the regionqueue is taken up by the thread.
-            // this ensures that we are not allowing any other upates to be part of it.
-            // This should not be so long as waiting for the future itself. that is still async.
-            this.replicationThreads[index].lock.wait(1);
-          } catch (InterruptedException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-          }
-        }
-      }
-    }
+    this.replicationThreads[index].regionQueue
+        .offer(new Entry(replicator, entry.getSeq(), entry.isMetaMarkerReq()));
   }
 
   // called only when the region replicator is created
@@ -288,12 +275,12 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private class Entry {
     private final RegionReplicaReplicator replicator;
     private final long seq;
-    private final boolean specialCell;
+    private final boolean metaMarkerReq;
 
-    Entry(RegionReplicaReplicator replicator, long seq, boolean specialCell) {
+    Entry(RegionReplicaReplicator replicator, long seq, boolean metaMarkerReq) {
       this.replicator = replicator;
       this.seq = seq;
-      this.specialCell = specialCell;
+      this.metaMarkerReq = metaMarkerReq;
     }
   }
 
@@ -301,7 +288,6 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     
     private volatile boolean closed = false;
     private final BlockingQueue<Entry> regionQueue;
-    private final Object lock = new Object();
     
     // TODO : create thread affinity here.
     public ReplicationThread() {
@@ -315,12 +301,6 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
           Entry entry = regionQueue.take();// TODO Check whether this call
                                            // will make the thread under wait
                                            // or whether consume CPU
-          if (entry.specialCell) {
-            synchronized (this.lock) {
-              // Only works for flush.
-              this.lock.notifyAll();
-            }
-          }
           replicate(entry);
         } catch (InterruptedException e) {
           e.printStackTrace();
@@ -335,7 +315,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       if (entries == null || entries.isEmpty()) {
         return;
       }
-      SimpleMemstoreReplicator.this.replicate(null, entries, replicator, entry.specialCell);
+      SimpleMemstoreReplicator.this.replicate(null, entries, replicator, entry.metaMarkerReq);
     }
  
     public void stop() {

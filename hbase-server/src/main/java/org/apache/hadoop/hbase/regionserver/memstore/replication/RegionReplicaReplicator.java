@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
@@ -47,6 +48,7 @@ import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl;
 import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
 import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
 
@@ -98,12 +100,13 @@ import org.apache.yetus.audience.InterfaceAudience;
  */
 @InterfaceAudience.Private
 public class RegionReplicaReplicator {
+  private static final Log LOG = LogFactory.getLog(RegionReplicaReplicator.class);
   private static final long UNSET = -1L;
   private final Configuration conf;
   private RegionInfo curRegion;
   private final int minNonPrimaryWriteReplicas;
   private volatile HRegionLocation[] regionLocations;
-  private volatile List<MemstoreReplicationEntry> entryBuffer = new ArrayList<>();
+  private volatile ArrayList<MemstoreReplicationEntry> entryBuffer = new ArrayList<>();
   private volatile long nextSeq = 1;
   private volatile long curMaxConsumedSeq = 0;
   private int replicationThreadIndex;
@@ -119,11 +122,13 @@ public class RegionReplicaReplicator {
   private MultiVersionConcurrencyControl mvcc;
   private volatile long badReplicaInProgressTs = UNSET;
   private int tableReplication;
-  private static final Log LOG = LogFactory.getLog(RegionReplicaReplicator.class);
+
+  private NavigableMap<byte[], RegionReplicaStoreCordinator> storeCordinators = new TreeMap<>(
+      Bytes.BYTES_COMPARATOR);
 
   public RegionReplicaReplicator(Configuration conf, RegionInfo currentRegion,
-      MultiVersionConcurrencyControl mvcc, int minWriteReplicas, int replicationThreadIndex,
-      int tableReplication) {
+      MultiVersionConcurrencyControl mvcc, Set<byte[]> families, int minWriteReplicas,
+      int replicationThreadIndex, int tableReplication) {
     this.conf = conf;
     this.curRegion = currentRegion;
     this.mvcc = mvcc;
@@ -134,6 +139,13 @@ public class RegionReplicaReplicator {
       badReplicas = new HashSet<>();
       badReplicasInMeta = new HashSet<>();
     }
+    for (byte[] family : families) {
+      this.storeCordinators.put(family, new RegionReplicaStoreCordinator());
+    }
+  }
+
+  public RegionReplicaStoreCordinator getStoreCordinator(byte[] store) {
+    return this.storeCordinators.get(store);
   }
 
   public CompletableFuture<ReplicateMemstoreResponse> append(MemstoreReplicationEntry entry)
@@ -163,10 +175,30 @@ public class RegionReplicaReplicator {
     if (this.curMaxConsumedSeq >= minSeq) {
       return null;
     }
-    List<MemstoreReplicationEntry> local = this.entryBuffer;
-    this.entryBuffer = new ArrayList<MemstoreReplicationEntry>();
-    this.curMaxConsumedSeq = this.nextSeq - 1;
-    return local;
+    ArrayList<MemstoreReplicationEntry> local = this.entryBuffer;
+    ArrayList<MemstoreReplicationEntry> toReturn = local;
+    this.entryBuffer = new ArrayList<>();
+    long maxConsumedSeq = 0;
+    int entryCount = 0;
+    for (MemstoreReplicationEntry entry : local) {
+      if (entry.isMetaMarkerReq()) {
+        toReturn = new ArrayList<MemstoreReplicationEntry>();
+        if (entryCount == 0) {
+          toReturn.add(entry);
+          this.entryBuffer.addAll(local.subList(1, local.size() - 1));
+          maxConsumedSeq = entry.getSeq();
+        } else {
+          toReturn.addAll(local.subList(0, entryCount - 1));
+          this.entryBuffer.addAll(local.subList(entryCount, local.size() - 1));
+          maxConsumedSeq = entry.getSeq() - 1;
+        }
+        break;
+      }
+      entryCount++;
+      maxConsumedSeq = entry.getSeq();
+    }
+    this.curMaxConsumedSeq = maxConsumedSeq;
+    return toReturn;
   }
 
   public HRegionLocation getRegionLocation(int replicaId) {

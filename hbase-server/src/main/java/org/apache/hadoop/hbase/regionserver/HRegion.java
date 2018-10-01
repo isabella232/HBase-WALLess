@@ -404,7 +404,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private volatile Long timeoutForWriteLock = null;
 
   private MemstoreReplicator memstoreReplicator;
-  volatile RegionReplicaReplicator regionReplicator;
+  RegionReplicaReplicator regionReplicator;
   private org.apache.hadoop.hbase.executor.ExecutorService executor;
   // Used in Replica regions where we add Cells to CSLM in an async way. Once the cells are copied
   // to MSLAB, we consider it as success addition and reply back to caller. The actual addition to
@@ -1196,8 +1196,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     this.memstoreReplicator = rsServices.getMemstoreReplicator();
     int replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
     this.regionReplicator = new RegionReplicaReplicator(this.conf, this.getRegionInfo(), this.mvcc,
-        this.htableDescriptor.getMinRegionReplication(), replicationThreadIndex,
-        this.getTableDescriptor().getRegionReplication());
+        this.stores.keySet(), this.htableDescriptor.getMinRegionReplication(),
+        replicationThreadIndex, this.getTableDescriptor().getRegionReplication());
   }
 
   /**
@@ -2645,16 +2645,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       } else {
         // use the provided sequence Id as WAL is not being used for this flush.
         flushedSeqId = flushOpSeqId = myseqid;
-        // if we begin here can we complete it in commit_flush marker??
-        // Making sure that all the previous Async handlers doing the cell addition, are done with
-        // their work. Then only all the cells which are there in the snapshot at primary will be there at
-        // this replica's snapshot also.
-        // TODO - Check for the perf impact here. The Start Flush marker cell are send under the
-        // writes been locked at the primary. This wait will make that wait for longer period. If this is a
-        // bigger issue, we can have smarter ways to solve it. As of now let it be this way as it is
-        // most simple
-        writeEntry = this.mvcc.begin(flushOpSeqId);
-        this.mvcc.completeAndWait(writeEntry);
       }
 
       for (HStore s : storesToFlush) {
@@ -2741,12 +2731,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
       if (async) {
         res.setFirst(this.memstoreReplicator.replicateAsync(memstoreReplicationKey, memstoreEdits,
-          regionReplicator));
+          regionReplicator, true));
         // Anoop : TODO No need to check response.getFailedReplicasCount here?
         return res;
       }
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
-        memstoreEdits, regionReplicator);
+        memstoreEdits, regionReplicator, true);
       res.setSecond(memstoreReplicationKey.getWriteEntry());
       if (response.getFailedReplicasCount() > 0) {
         // this failedReplicas cannot be modified. So better
@@ -2768,8 +2758,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           this.getRegionInfo().getEncodedNameAsBytes(), replicaOffered);
       MemstoreEdits memstoreEdits = new MemstoreEdits();
       memstoreEdits.add(kv);
+      // TODO this is meta marker cell only. But the special treatment might not be needed here. As
+      // of now leave it this way.
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
-          memstoreEdits, regionReplicator);
+          memstoreEdits, regionReplicator, true);
       writeNum = memstoreReplicationKey.getWriteEntry();
       if (response.getFailedReplicasCount() > 0) {
         List<Integer> failedReplicas = response.getFailedReplicasList();
@@ -4380,7 +4372,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // ensure that we do things in order (probably easier for flush special entry? We need
       // that to be done.)
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
-          memstoreEdits, regionReplicator);
+          memstoreEdits, regionReplicator, false);
       checkIfMinWriteReplicSatisfied(response);
       // TODO : need to handle all exceptions - make things synchronous in terms of
       // replication to all the replicas. End the mvcc in case of exception
@@ -4507,11 +4499,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       lock(this.updatesLock.readLock(), familyMap.size());
       WriteEntry[] writeEntries = new WriteEntry[seqIds.length];
       for (int i = 0; i < seqIds.length; i++) {
-        if (seqIds[i] != -1) {
-          writeEntries[i] = this.mvcc.begin(seqIds[i]);
-        }
+        writeEntries[i] = this.mvcc.begin(seqIds[i]);
       }
-      MemStoreAsyncAddHandler handler = new MemStoreAsyncAddHandler(this, writeEntries);
+      long maxSeqId = seqIds[seqIds.length -1];
+      MemStoreAsyncAddHandler handler = new MemStoreAsyncAddHandler(this, regionReplicator,
+          writeEntries, maxSeqId);
       try {
         for (Map.Entry<byte[], List<Cell>> e : familyMap.entrySet()) {
           HStore store = this.getStore(e.getKey());
@@ -4519,17 +4511,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           store.addAsync(e.getValue(), handler);
         }
         // Update the currentMaxSeqId
-        long maxSeqId = seqIds[seqIds.length -1];
         this.currentMaxSeqId.getAndAccumulate(maxSeqId, (x, y) -> Math.max(x, y));
       } finally {
         this.updatesLock.readLock().unlock();
       }
-      // Since we create cells out of the MSLAB copy and then add them asynchronously, parallely there could a flush request
-      // and as part of which we prepare a snapshot and the same is cleared off on receiving a COMMIT marker. On returning
-      // the snapshot as part of close() those MSLABs are ready to be used by other new writes so the underlying cells created
-      // out of this MSLAB are corrupted. Hence we have an issue with the memstore size and we get huge numbers and the
-      // memstore gets blocked. TO workaround see the change in HRegion#internalPrepareFlushCache where we wait for
-      // the async handlers to catch up.
       this.executor.submit(handler);
     } finally {
       closeRegionOperation(Operation.REPLAY_BATCH_MUTATE);
@@ -4554,10 +4539,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
         }
         if (CellUtil.matchingFamily(cell, WALEdit.METAFAMILY)) {
-          boolean mvccBegin = handleMetaMarkerCell(cell, replicasOffered, entry.getSequenceId());
-          if (mvccBegin) {
-            seqIds[entryCounter - 1] = -1;
-          }
+          handleMetaMarkerCell(cell, replicasOffered, entry.getSequenceId());
         } else {
           byte[] fam = CellUtil.cloneFamily(cell);
           List<Cell> list = familyMap.get(fam);
@@ -4574,7 +4556,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return seqIds;
   }
 
-  private boolean handleMetaMarkerCell(Cell cell, int replicasOffered, long seqId)
+  private void handleMetaMarkerCell(Cell cell, int replicasOffered, long seqId)
       throws IOException {
     CompactionDescriptor compactionDesc = WALEdit.getCompaction(cell);
     if (compactionDesc != null) {
@@ -4585,10 +4567,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       FlushDescriptor flushDesc = WALEdit.getFlushDescriptor(cell);
       if (flushDesc != null) {
         replayWALFlushMarker(flushDesc, seqId, replicasOffered);
-        FlushAction action = flushDesc.getAction();
-        if (action == FlushAction.START_FLUSH) {
-          return true;
-        }
       } else {
         // TODO region open and close events not been RPCed into replicas now. This can help?
         RegionEventDescriptor regionEvent = WALEdit.getRegionEventDescriptor(cell);
@@ -4603,7 +4581,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         }
       }
     }
-    return false;
   }
 
   /**
@@ -5417,7 +5394,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       throws IOException {
     checkTargetRegion(flush.getEncodedRegionName().toByteArray(),
       "Flush marker from WAL ", flush);
-
     if (ServerRegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
       return; // if primary nothing to do
     }
@@ -5432,7 +5408,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       FlushAction action = flush.getAction();
       switch (action) {
       case START_FLUSH:
-        replayWALFlushStartMarker(flush, replicasOffered);
+        replayWALFlushStartMarker(flush, replaySeqId, replicasOffered);
         break;
       case COMMIT_FLUSH:
         replayWALFlushCommitMarker(flush);
@@ -5464,7 +5440,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   // TODO : change all these names as there is no WAL marker. They are all direct cells sent
   // via RPCs
   PrepareFlushResult replayWALFlushStartMarker(FlushDescriptor flush) throws IOException {
-    return replayWALFlushStartMarker(flush, 1);
+    return replayWALFlushStartMarker(flush, 0, 1);
   }
   
   /** Replay the flush marker from primary region by creating a corresponding snapshot of
@@ -5475,8 +5451,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   @VisibleForTesting
   // TODO : change all these names as there is no WAL marker. They are all direct cells sent
   // via RPCs
-  PrepareFlushResult replayWALFlushStartMarker(FlushDescriptor flush, int replicasOffered)
-      throws IOException {
+  PrepareFlushResult replayWALFlushStartMarker(FlushDescriptor flush, long replaySeqId,
+      int replicasOffered) throws IOException {
     long flushSeqId = flush.getFlushSequenceNumber();
 
     HashSet<HStore> storesToFlush = new HashSet<>();
@@ -5490,6 +5466,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         continue;
       }
       storesToFlush.add(store);
+      this.regionReplicator.getStoreCordinator(family).setLatestFlushSeqId(replaySeqId);
     }
 
     MonitoredTask status = TaskMonitor.get().createStatus("Preparing flush " + this);
@@ -5753,6 +5730,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
       // Record latest flush time
       this.lastStoreFlushTimeMap.put(store, startTime);
+      if (dropMemstoreSnapshot) {
+        this.regionReplicator.getStoreCordinator(family).setLatestFlushCommitted();
+      }
     }
   }
 

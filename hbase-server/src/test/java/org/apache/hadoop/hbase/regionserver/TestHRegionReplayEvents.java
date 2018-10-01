@@ -278,7 +278,7 @@ public class TestHRegionReplayEvents {
       if (flushDesc != null) {
         if (flushDesc.getAction() == FlushAction.START_FLUSH) {
           LOG.info("-- Replaying flush start in secondary");
-          secondaryRegion.replayWALFlushStartMarker(flushDesc, 1);
+          secondaryRegion.replayWALFlushStartMarker(flushDesc);
         } else if (flushDesc.getAction() == FlushAction.COMMIT_FLUSH) {
           LOG.info("-- NOT Replaying flush commit in secondary");
         }
@@ -373,7 +373,7 @@ public class TestHRegionReplayEvents {
         long storeSizeUncompressed = store.getStoreSizeUncompressed();
         if (flushDesc.getAction() == FlushAction.START_FLUSH) {
           LOG.info("-- Replaying flush start in secondary");
-          PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(flushDesc, 1);
+          PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(flushDesc);
           assertNull(result.result);
           assertEquals(result.flushOpSeqId, flushDesc.getFlushSequenceNumber());
 
@@ -472,7 +472,7 @@ public class TestHRegionReplayEvents {
         if (flushDesc.getAction() == FlushAction.START_FLUSH) {
           startFlushDesc = flushDesc;
           LOG.info("-- Replaying flush start in secondary");
-          PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc, 1);
+          PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc);
           assertNull(result.result);
           assertEquals(result.flushOpSeqId, startFlushDesc.getFlushSequenceNumber());
           assertTrue(regionMemstoreSize > 0);
@@ -500,7 +500,7 @@ public class TestHRegionReplayEvents {
 
     // Test case 1: replay the same flush start marker again
     LOG.info("-- Replaying same flush start in secondary again");
-    PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc, 1);
+    PrepareFlushResult result = secondaryRegion.replayWALFlushStartMarker(startFlushDesc);
     assertNull(result); // this should return null. Ignoring the flush start marker
     // assert that we still have prepared flush with the previous setup.
     assertNotNull(secondaryRegion.getPrepareFlushResult());

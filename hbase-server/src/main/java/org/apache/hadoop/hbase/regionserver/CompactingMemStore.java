@@ -201,7 +201,7 @@ public class CompactingMemStore extends AbstractMemStore {
           "Doing nothing. Another ongoing flush or did we fail last attempt?");
     } else {
       LOG.debug("FLUSHING TO DISK {}, store={}",
-            getRegionServices().getRegionInfo().getEncodedName(), getFamilyName());
+            getRegionServices().getRegionInfo().getEncodedName(), getFamilyNameString());
       stopCompaction();
       pushActiveToPipeline(this.active);
       snapshotId = EnvironmentEdgeManager.currentTime();
@@ -349,7 +349,7 @@ public class CompactingMemStore extends AbstractMemStore {
     return store;
   }
 
-  public String getFamilyName() {
+  public String getFamilyNameString() {
     return Bytes.toString(getFamilyNameInBytes());
   }
 
@@ -423,7 +423,7 @@ public class CompactingMemStore extends AbstractMemStore {
         compactor.start();
       } catch (IOException e) {
         LOG.warn("Unable to run in-memory compaction on {}/{}; exception={}",
-            getRegionServices().getRegionInfo().getEncodedName(), getFamilyName(), e);
+            getRegionServices().getRegionInfo().getEncodedName(), getFamilyNameString(), e);
       }
     } finally {
       inMemoryFlushInProgress.set(false);
@@ -536,7 +536,7 @@ public class CompactingMemStore extends AbstractMemStore {
       } catch (IOException e) {
         LOG.warn("Unable to run memstore compaction. region "
             + getRegionServices().getRegionInfo().getRegionNameAsString()
-            + "store: "+ getFamilyName(), e);
+            + "store: "+ getFamilyNameString(), e);
       }
     }
   }

@@ -28,11 +28,13 @@ public class MemstoreReplicationEntry {
   private final MemstoreEdits memstoreEdits;
   private CompletableFuture<ReplicateMemstoreResponse> future;
   private long seq;
+  private boolean metaMarkerReq;
 
   public MemstoreReplicationEntry(MemstoreReplicationKey memstoreRepKey,
-      MemstoreEdits memstoreEdits) {
+      MemstoreEdits memstoreEdits, boolean metaMarkerReq) {
     this.memstoreReplicationKey = memstoreRepKey;
     this.memstoreEdits = memstoreEdits;
+    this.metaMarkerReq = metaMarkerReq;
   }
 
   public MemstoreReplicationKey getMemstoreReplicationKey() {
@@ -54,5 +56,9 @@ public class MemstoreReplicationEntry {
 
   public long getSeq() {
     return this.seq;
+  }
+
+  public boolean isMetaMarkerReq() {
+    return this.metaMarkerReq;
   }
 }

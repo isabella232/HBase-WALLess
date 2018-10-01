@@ -1,5 +1,4 @@
 /**
- *
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,51 +17,27 @@
  */
 package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
-import java.util.ArrayList;
-
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.CellUtil;
 import org.apache.yetus.audience.InterfaceAudience;
-import org.apache.hadoop.hbase.util.ClassSize;
 
-/**
- * This is similar to WALEdit, but mainly encapsulates all the cells corresponding to a transaction
- * that goes into the memstore. TODO : USe this for now
- */
 @InterfaceAudience.Private
-public class MemstoreEdits {
-  private ArrayList<Cell> cells = null;
+public class RegionReplicaStoreCordinator {
 
-  public MemstoreEdits(int cellCount) {
-    cells = new ArrayList<>(cellCount);
+  private volatile long latestFlushSeqId;
+  private volatile boolean latestFlushCommitted;
+
+  public synchronized void setLatestFlushSeqId(long latestFlushSeqId) {
+    this.latestFlushSeqId = latestFlushSeqId;
+    this.latestFlushCommitted = false;
   }
 
-  public MemstoreEdits() {
-    cells = new ArrayList<>();
+  public synchronized void setLatestFlushCommitted() {
+    this.latestFlushCommitted = true;
   }
 
-  public MemstoreEdits add(Cell cell) {
-    this.cells.add(cell);
-    return this;
-  }
-
-  public boolean isEmpty() {
-    return cells.isEmpty();
-  }
-
-  public int size() {
-    return cells.size();
-  }
-
-  public ArrayList<Cell> getCells() {
-    return cells;
-  }
-
-  public long heapSize() {
-    long ret = ClassSize.ARRAYLIST;
-    for (Cell cell : cells) {
-      ret += CellUtil.estimatedHeapSizeOf(cell);
+  public synchronized boolean shouldAddCells(long maxSeqId) {
+    if (this.latestFlushCommitted) {
+      return this.latestFlushSeqId >= maxSeqId;
     }
-    return ret;
+    return true;
   }
 }
