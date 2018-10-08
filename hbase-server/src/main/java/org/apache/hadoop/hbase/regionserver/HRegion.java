@@ -858,7 +858,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       this.coprocessorHost = new RegionCoprocessorHost(this, rsServices, conf);
       this.metricsRegionWrapper = new MetricsRegionWrapperImpl(this);
       this.metricsRegion = new MetricsRegion(this.metricsRegionWrapper);
-      initMemstoreReplication(rsServices);
+      initMemstoreReplication(rsServices, families);
       this.executor = this.rsServices.getExecutorService();
     } else {
       this.metricsRegionWrapper = null;
@@ -1192,11 +1192,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     }
   }
 
-  private void initMemstoreReplication(RegionServerServices rsServices) {
+  private void initMemstoreReplication(RegionServerServices rsServices, Set<byte[]> families) {
     this.memstoreReplicator = rsServices.getMemstoreReplicator();
     int replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
     this.regionReplicator = new RegionReplicaReplicator(this.conf, this.getRegionInfo(), this.mvcc,
-        this.stores.keySet(), this.htableDescriptor.getMinRegionReplication(),
+        families, this.htableDescriptor.getMinRegionReplication(),
         replicationThreadIndex, this.getTableDescriptor().getRegionReplication());
   }
 

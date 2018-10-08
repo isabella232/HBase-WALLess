@@ -185,11 +185,11 @@ public class RegionReplicaReplicator {
         toReturn = new ArrayList<MemstoreReplicationEntry>();
         if (entryCount == 0) {
           toReturn.add(entry);
-          this.entryBuffer.addAll(local.subList(1, local.size() - 1));
+          this.entryBuffer.addAll(local.subList(1, local.size()));
           maxConsumedSeq = entry.getSeq();
         } else {
-          toReturn.addAll(local.subList(0, entryCount - 1));
-          this.entryBuffer.addAll(local.subList(entryCount, local.size() - 1));
+          toReturn.addAll(local.subList(0, entryCount));
+          this.entryBuffer.addAll(local.subList(entryCount, local.size()));
           maxConsumedSeq = entry.getSeq() - 1;
         }
         break;

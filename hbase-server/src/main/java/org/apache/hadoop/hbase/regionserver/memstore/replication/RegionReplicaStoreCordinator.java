@@ -36,7 +36,7 @@ public class RegionReplicaStoreCordinator {
 
   public synchronized boolean shouldAddCells(long maxSeqId) {
     if (this.latestFlushCommitted) {
-      return this.latestFlushSeqId >= maxSeqId;
+      return this.latestFlushSeqId < maxSeqId;
     }
     return true;
   }
