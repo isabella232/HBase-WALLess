@@ -62,8 +62,6 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private static final String MEMSTORE_REPLICATION_THREAD_COUNT = 
       "hbase.regionserver.memstore.replication.threads";
   private final Configuration conf;
-  // TODO this is a global level Q for all the ReplicationThreads? Should we have individual Qs for
-  // each of the Threads. Discuss pros and cons and arrive
   private ClusterConnection connection;
   private final int operationTimeout;
   private final ReplicationThread[] replicationThreads;
@@ -81,21 +79,21 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     // fails. Adding a new config may be needed. As of now just making this to 2. And the multiplier to 1.
     this.conf.setInt("hbase.client.serverside.retries.multiplier", 1);
     this.conf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, 2);
-    //Not needed. We have the seqId passed via the Memstore replication key only.
-    // Not only that KVCodecWithSeqId impl has issues.
-//    this.conf.set(HConstants.RPC_CODEC_CONF_KEY, KVCodecWithSeqId.class.getCanonicalName());
 
     // TODO : Better math considering Regions count also? As per the cur parallel model, this is enough
     // use the regular RPC timeout for replica replication RPC's
     this.operationTimeout = this.conf.getInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT,
       HConstants.DEFAULT_HBASE_CLIENT_OPERATION_TIMEOUT);
-    
+
+    // TODO As of now using the same config and default value as for WAL sync timeout. Better to
+    // have a new config.
     this.replicationTimeout = this.conf.getLong("hbase.regionserver.mutations.sync.timeout",
         DEFAULT_WAL_SYNC_TIMEOUT_MS);
 
     try {
       this.connection = (ClusterConnection) ConnectionFactory.createConnection(this.conf);
     } catch (IOException ex) {
+      throw new RuntimeException("Exception while creating SimpleMemstoreReplicator", ex);
     }
     int numWriterThreads = this.conf.getInt(MEMSTORE_REPLICATION_THREAD_COUNT,
         HConstants.DEFAULT_REGION_SERVER_HANDLER_COUNT);
@@ -168,9 +166,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   public void offer(RegionReplicaReplicator replicator, MemstoreReplicationEntry entry) {
     int index = replicator.getReplicationThreadIndex();
-    // beginMvcc 'false' indicates it is for Async
     this.replicationThreads[index].regionQueue
-        .offer(new Entry(replicator, entry.getSeq(), entry.isMetaMarkerReq()));
+        .offer(new RegionQueueEntry(replicator, entry.getSeq(), entry.isMetaMarkerReq()));
   }
 
   // called only when the region replicator is created
@@ -199,7 +196,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
           request.request.getLocationsList());
       }
     } catch (PipelineException e) {
-      // TODO mark the future with Exception.
+      for (MemstoreReplicationEntry entry : replicationEntries) {
+        entry.markException(e);
+      }
     }
     ReplicateMemstoreResponse.Builder builder = ReplicateMemstoreResponse.newBuilder();
     builder.setReplicasCommitted(1);
@@ -272,12 +271,12 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       }
     }
   }
-  private class Entry {
+  private class RegionQueueEntry {
     private final RegionReplicaReplicator replicator;
     private final long seq;
     private final boolean metaMarkerReq;
 
-    Entry(RegionReplicaReplicator replicator, long seq, boolean metaMarkerReq) {
+    RegionQueueEntry(RegionReplicaReplicator replicator, long seq, boolean metaMarkerReq) {
       this.replicator = replicator;
       this.seq = seq;
       this.metaMarkerReq = metaMarkerReq;
@@ -287,7 +286,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private class ReplicationThread extends HasThread {
     
     private volatile boolean closed = false;
-    private final BlockingQueue<Entry> regionQueue;
+    private final BlockingQueue<RegionQueueEntry> regionQueue;
     
     // TODO : create thread affinity here.
     public ReplicationThread() {
@@ -298,7 +297,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     public void run() {
       while (!this.closed) {
         try {
-          Entry entry = regionQueue.take();// TODO Check whether this call
+          RegionQueueEntry entry = regionQueue.take();// TODO Check whether this call
                                            // will make the thread under wait
                                            // or whether consume CPU
           replicate(entry);
@@ -308,7 +307,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       }
     }
 
-    private void replicate(Entry entry) {
+    private void replicate(RegionQueueEntry entry) {
       // TODO : Handle requests directly that comes for replica regions
       RegionReplicaReplicator replicator = entry.replicator;
       List<MemstoreReplicationEntry> entries = replicator.pullEntries(entry.seq);

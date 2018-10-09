@@ -895,6 +895,8 @@ public class HMaster extends HRegionServer implements MasterServices {
     String statusStr = "Wait for region servers to report in";
     status.setStatus(statusStr);
     LOG.info(Objects.toString(status));
+    // TODO in case of WALLess, there should be at least min replication #RSs in cluster for
+    // startup. Handle that in actual wait area
     waitForRegionServers(status);
 
     if (this.balancer instanceof FavoredNodesPromoter) {

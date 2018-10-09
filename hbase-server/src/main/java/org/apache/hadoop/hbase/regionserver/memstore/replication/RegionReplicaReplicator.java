@@ -366,7 +366,7 @@ public class RegionReplicaReplicator {
     // replica as good and that might get selected as new primary. Then we might loose some data!
     // How ever still there is a chance that before this count is updated we will have pending writes already
     // in process. That will still go on. So any temp glitch will make writes successful.
-    if (this.badCountToBeCommittedInMeta.get() != 0) {
+    if (this.badCountToBeCommittedInMeta.get() != 0 && !specialCell) {
       throw new PipelineException();
     }
     // Early out. Already there are not enough replicas for making the write as successful. Why to

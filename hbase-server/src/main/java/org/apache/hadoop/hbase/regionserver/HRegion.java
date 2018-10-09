@@ -2722,9 +2722,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       if (writeEntry != null) memstoreReplicationKey.setWriteEntry(writeEntry);
       MemstoreEdits memstoreEdits = new MemstoreEdits();
       memstoreEdits.add(kv);
-      if (requestingReplica && replicaRegionLocation != null) {
+      if (requestingReplica && replicaRegionLocation != null && action == FlushAction.START_FLUSH) {
         // Resetting region locations
-        LOG.debug("Resetting reigon location in flush flow" + this.getRegionInfo());
+        LOG.debug("Resetting region location in flush flow" + this.getRegionInfo());
         // regionReplicator.resetRegionLocations();
         regionReplicator.updateRegionLocations(replicaRegionLocation);
       }

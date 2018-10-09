@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.yetus.audience.InterfaceAudience;
@@ -52,6 +53,10 @@ public class MemstoreReplicationEntry {
 
   public void markResponse(ReplicateMemstoreResponse response) {
     this.future.complete(response);
+  }
+
+  public void markException(IOException e) {
+    this.future.completeExceptionally(e);
   }
 
   public long getSeq() {
