@@ -881,6 +881,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     this.maxCellSize = conf.getLong(HBASE_MAX_CELL_SIZE_KEY, DEFAULT_MAX_CELL_SIZE);
     this.miniBatchSize = conf.getInt(HBASE_REGIONSERVER_MINIBATCH_SIZE,
         DEFAULT_HBASE_REGIONSERVER_MINIBATCH_SIZE);
+    // Setting for debugging. Can be removed later.
+    mvcc.setRegion(this.getRegionInfo());
   }
 
   void setHTableSpecificConf() {

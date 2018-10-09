@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ClassSize;
 
@@ -55,6 +56,8 @@ public class MultiVersionConcurrencyControl {
   // This could be equal to the number of handlers + a small number.
   // TODO: St.Ack 20150903 Sounds good to me.
   private final LinkedList<WriteEntry> writeQueue = new LinkedList<>();
+
+  private RegionInfo regionInfo;
 
   public MultiVersionConcurrencyControl() {
     super();
@@ -151,7 +154,7 @@ public class MultiVersionConcurrencyControl {
       // to set the write point as part of memstore complet or advance (in other words after
       // the operation is successful).
       if (writeNumber <= writePoint.get()) {
-        throw new IllegalStateException();
+        throw new IllegalStateException("the state is "+writeNumber+ " "+writePoint.get()+ " "+this.regionInfo);
       }
       writePoint.set(writeNumber);
       WriteEntry e = new WriteEntry(writeNumber);
@@ -246,7 +249,9 @@ public class MultiVersionConcurrencyControl {
     synchronized (readWaiters) {
       while (readPoint.get() < pnt) {
         if (count % 100 == 0 && count > 0) {
-          LOG.warn("STUCK: " + this);
+          // helps to log more info about where exactly it is hanging
+          LOG.warn(
+            "STUCK: " + this + " the current read pt is " + pnt + " region is " + this.regionInfo);
         }
         count++;
         try {
@@ -315,4 +320,10 @@ public class MultiVersionConcurrencyControl {
       ClassSize.OBJECT +
       2 * Bytes.SIZEOF_LONG +
       2 * ClassSize.REFERENCE);
+
+  @VisibleForTesting
+  void setRegion(RegionInfo regionInfo) {
+    // TODO Auto-generated method stub
+    this.regionInfo = regionInfo;
+  }
 }

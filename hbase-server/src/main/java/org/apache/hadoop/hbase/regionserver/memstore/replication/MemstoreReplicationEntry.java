@@ -19,12 +19,16 @@ package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.apache.hadoop.hbase.util.Bytes;
 
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 
 @InterfaceAudience.Private
 public class MemstoreReplicationEntry {
+  private static final Logger LOG = LoggerFactory.getLogger(MemstoreReplicationEntry.class);
   private final MemstoreReplicationKey memstoreReplicationKey;
   private final MemstoreEdits memstoreEdits;
   private CompletableFuture<ReplicateMemstoreResponse> future;
@@ -52,7 +56,11 @@ public class MemstoreReplicationEntry {
   }
 
   public void markResponse(ReplicateMemstoreResponse response) {
-    this.future.complete(response);
+    boolean ret = this.future.complete(response);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Marking the response for the seqID " + seq + " "
+          + Bytes.toString(this.memstoreReplicationKey.getEncodedRegionName()) + " " + ret);
+    }
   }
 
   public void markException(IOException e) {

@@ -107,7 +107,6 @@ public class RegionReplicaReplicator {
   private final int minNonPrimaryWriteReplicas;
   private volatile HRegionLocation[] regionLocations;
   private volatile ArrayList<MemstoreReplicationEntry> entryBuffer = new ArrayList<>();
-  private volatile long nextSeq = 1;
   private volatile long curMaxConsumedSeq = 0;
   private int replicationThreadIndex;
   // Those replicas whose health is marked as BAD already in this primary
@@ -159,7 +158,10 @@ public class RegionReplicaReplicator {
         // attach the seqId here. Ensures strict order then
         entry.getMemstoreReplicationKey().setWriteEntry(we);
       }
-      entry.attachFuture(future, nextSeq++);
+      // Pass the mvcc's write number only to the future so that we have a unified number
+      // based on which we can ensure that the response is marked complete per future
+      // and the waiting write thread in the HRegion comes out after waiting for the future.
+      entry.attachFuture(future, entry.getMemstoreReplicationKey().getSequenceId());
       this.entryBuffer.add(entry);
     }
     return future;
@@ -309,6 +311,7 @@ public class RegionReplicaReplicator {
       if (pipeline != null) {
         Pair<ServerName, Boolean> pair = this.pipeline.get(replica);
         // update the bad replica to good. so that on next pipeline only this new updated location is obtained.
+        // TODO : This is null now.
         this.pipeline.put(replica, new Pair<ServerName, Boolean>(pair.getFirst(), true));
         for (HRegionLocation loc : this.regionLocations) {
           if (loc != null && loc.getRegion().getReplicaId() == replica) {

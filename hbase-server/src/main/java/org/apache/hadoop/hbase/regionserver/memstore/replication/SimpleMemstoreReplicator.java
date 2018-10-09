@@ -28,8 +28,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
@@ -58,7 +58,7 @@ import org.apache.yetus.audience.InterfaceAudience;
 
 @InterfaceAudience.Private
 public class SimpleMemstoreReplicator implements MemstoreReplicator {
-  private static final Log LOG = LogFactory.getLog(SimpleMemstoreReplicator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SimpleMemstoreReplicator.class);
   private static final String MEMSTORE_REPLICATION_THREAD_COUNT = 
       "hbase.regionserver.memstore.replication.threads";
   private final Configuration conf;
@@ -115,11 +115,17 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     CompletableFuture<ReplicateMemstoreResponse> future =
         offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicator, metaMarkerReq);
     try {
-      return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
+      ReplicateMemstoreResponse replicateMemstoreResponse = future.get(replicationTimeout, TimeUnit.MILLISECONDS);
+      return replicateMemstoreResponse;
     } catch (TimeoutException e) {
+      LOG.error("This exception is caused by " + regionReplicator.getRegionInfo(), e);
       throw new TimeoutIOException(e);
     } catch (InterruptedException | ExecutionException e) {
+      LOG.error("This exception is caused by " + regionReplicator.getRegionInfo(), e);
       throw new IOException(e);
+    } catch (Exception e) {
+      LOG.error("This exception is caused by " + regionReplicator.getRegionInfo(), e);
+      throw e;
     }
   }
 
@@ -147,7 +153,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   public ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
       RegionReplicaReplicator replicator) throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future = new CompletableFuture<>(); 
-    replicate(new RequestEntryHolder(request, allCells, future), null, replicator, false);
+    replicate(new RequestEntryHolder(request, allCells, future), null, replicator, false, -1);
     try {
       return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
@@ -185,7 +191,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
    * For primary, make up the pipeline here.
    */
   void replicate(RequestEntryHolder request, List<MemstoreReplicationEntry> replicationEntries,
-      RegionReplicaReplicator replicator, boolean specialCell) {
+      RegionReplicaReplicator replicator, boolean specialCell, long seq) {
     int curRegionReplicaId = replicator.getCurRegionReplicaId();
     List<Pair<Integer, ServerName>> pipeline = null;
     try {
@@ -249,6 +255,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
             }
             break;// Break the inner for loop
           } catch (IOException | RuntimeException e) {
+            LOG.error("The exception is " + replicator.getRegionInfo() + " " + seq, e);
             // There may be other parallel handlers also trying to write to that replica.
             builder.addFailedReplicas(replica.getFirst());
             // We should mark the future with exception only after retrying with the other Replicas
@@ -257,12 +264,13 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         }
       }
     } finally {
-      markResponse(request, replicationEntries, builder.build());
+      markResponse(request, replicationEntries, builder.build(), replicator);
     }
   }
 
   private void markResponse(RequestEntryHolder request,
-      List<MemstoreReplicationEntry> replicationEntries, ReplicateMemstoreResponse response) {
+      List<MemstoreReplicationEntry> replicationEntries, ReplicateMemstoreResponse response,
+      RegionReplicaReplicator replicator) {
     if (request != null) {
       request.markResponse(response);
     } else {
@@ -314,7 +322,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       if (entries == null || entries.isEmpty()) {
         return;
       }
-      SimpleMemstoreReplicator.this.replicate(null, entries, replicator, entry.metaMarkerReq);
+      SimpleMemstoreReplicator.this.replicate(null, entries, replicator, entry.metaMarkerReq,
+        entry.seq);
     }
  
     public void stop() {
