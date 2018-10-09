@@ -437,6 +437,9 @@ public class MasterRpcServices extends RSRpcServices
       RegionServerStatusService.BlockingInterface.class));
     bssi.add(new BlockingServiceAndInterface(LockService.newReflectiveBlockingService(this),
         LockService.BlockingInterface.class));
+    bssi.add(
+      new BlockingServiceAndInterface(ReplicaRegionHealthService.newReflectiveBlockingService(this),
+          ReplicaRegionHealthService.BlockingInterface.class));
     bssi.addAll(super.getServices());
     return bssi;
   }
