@@ -110,48 +110,44 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   @Override
   public ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
-      MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicator, boolean metaMarkerReq)
+      MemstoreEdits memstoreEdits, RegionReplicaCordinator replicaCordinator, boolean metaMarkerReq)
       throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future =
-        offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicator, metaMarkerReq);
+        offerForReplicate(memstoreReplicationKey, memstoreEdits, replicaCordinator, metaMarkerReq);
     try {
-      ReplicateMemstoreResponse replicateMemstoreResponse = future.get(replicationTimeout, TimeUnit.MILLISECONDS);
-      return replicateMemstoreResponse;
+      return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
-      LOG.error("This exception is caused by " + regionReplicator.getRegionInfo(), e);
+      LOG.error("This exception is caused by " + replicaCordinator.getRegionInfo(), e);
       throw new TimeoutIOException(e);
     } catch (InterruptedException | ExecutionException e) {
-      LOG.error("This exception is caused by " + regionReplicator.getRegionInfo(), e);
+      LOG.error("This exception is caused by " + replicaCordinator.getRegionInfo(), e);
       throw new IOException(e);
-    } catch (Exception e) {
-      LOG.error("This exception is caused by " + regionReplicator.getRegionInfo(), e);
-      throw e;
     }
   }
 
   private CompletableFuture<ReplicateMemstoreResponse> offerForReplicate(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaReplicator regionReplicator, boolean metaMarkerReq) throws IOException {
+      RegionReplicaCordinator replicaCordinator, boolean metaMarkerReq) throws IOException {
     MemstoreReplicationEntry entry = new MemstoreReplicationEntry(memstoreReplicationKey,
         memstoreEdits, metaMarkerReq);
-    CompletableFuture<ReplicateMemstoreResponse> future = regionReplicator.append(entry);
-    offer(regionReplicator, entry);
+    CompletableFuture<ReplicateMemstoreResponse> future = replicaCordinator.append(entry);
+    offer(replicaCordinator, entry);
     return future;
   }
 
   @Override
   public CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaReplicator regionReplicaReplicator, boolean metaMarkerReq) throws IOException {
+      RegionReplicaCordinator replicaCordinator, boolean metaMarkerReq) throws IOException {
     // ideally the same should be done for both async and sync case. But it does not work so.
-    return offerForReplicate(memstoreReplicationKey, memstoreEdits, regionReplicaReplicator,
+    return offerForReplicate(memstoreReplicationKey, memstoreEdits, replicaCordinator,
         metaMarkerReq);
   }
 
   @Override
   // directly waiting on this? Is it better to go with the rep threads here too???
   public ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
-      RegionReplicaReplicator replicator) throws IOException {
+      RegionReplicaCordinator replicator) throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future = new CompletableFuture<>(); 
     replicate(new RequestEntryHolder(request, allCells, future), null, replicator, false, -1);
     try {
@@ -170,10 +166,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     }
   }
 
-  public void offer(RegionReplicaReplicator replicator, MemstoreReplicationEntry entry) {
-    int index = replicator.getReplicationThreadIndex();
+  public void offer(RegionReplicaCordinator replicaCordinator, MemstoreReplicationEntry entry) {
+    int index = replicaCordinator.getReplicationThreadIndex();
     this.replicationThreads[index].regionQueue
-        .offer(new RegionQueueEntry(replicator, entry.getSeq(), entry.isMetaMarkerReq()));
+        .offer(new RegionQueueEntry(replicaCordinator, entry.getSeq(), entry.isMetaMarkerReq()));
   }
 
   // called only when the region replicator is created
@@ -191,14 +187,14 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
    * For primary, make up the pipeline here.
    */
   void replicate(RequestEntryHolder request, List<MemstoreReplicationEntry> replicationEntries,
-      RegionReplicaReplicator replicator, boolean specialCell, long seq) {
-    int curRegionReplicaId = replicator.getCurRegionReplicaId();
+      RegionReplicaCordinator replicaCordinator, boolean specialCell, long seq) {
+    int curRegionReplicaId = replicaCordinator.getCurRegionReplicaId();
     List<Pair<Integer, ServerName>> pipeline = null;
     try {
       if (request == null) {
-        pipeline = replicator.createPipeline(specialCell);
+        pipeline = replicaCordinator.createPipeline(specialCell);
       } else {
-        pipeline = replicator.verifyPipeline(request.request.getReplicasList(),
+        pipeline = replicaCordinator.verifyPipeline(request.request.getReplicasList(),
           request.request.getLocationsList());
       }
     } catch (PipelineException e) {
@@ -217,16 +213,16 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       if (pipeline != null) {
         for (Pair<Integer, ServerName> replica : pipeline) {
           if (replica.getFirst() <= curRegionReplicaId) continue;
-          HRegionLocation nextRegionLocation = replicator.getRegionLocation(replica.getFirst());
+          HRegionLocation nextRegionLocation = replicaCordinator.getRegionLocation(replica.getFirst());
           if (nextRegionLocation == null) {
             // This can happen. Then we will have to reload from META.
             // TODO
             LOG.info("Next region location is null. So returning for replica " + replica + " "
-                + replicator.getRegionInfo() + " " + (request != null) + " "+pipeline);
+                + replicaCordinator.getRegionInfo() + " " + (request != null) + " "+pipeline);
             return;
           }
           if (LOG.isDebugEnabled()) {
-            LOG.debug("Replicating from region " + replicator.getRegionLocation(curRegionReplicaId)
+            LOG.debug("Replicating from region " + replicaCordinator.getRegionLocation(curRegionReplicaId)
                 + "  to the next replica " + nextRegionLocation);
           }
           // We were passing 'null' instead of the start key previously. In the latest code in
@@ -238,7 +234,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
           // Since we know the region and its start key it is ok to pass it here
           // 
           RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(connection,
-              rpcControllerFactory, replicator.getTableName(), nextRegionLocation,
+              rpcControllerFactory, replicaCordinator.getTableName(), nextRegionLocation,
               nextRegionLocation.getRegion(), nextRegionLocation.getRegion().getStartKey(),
               request, replicationEntries, pipeline, specialCell);
           try {
@@ -255,7 +251,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
             }
             break;// Break the inner for loop
           } catch (IOException | RuntimeException e) {
-            LOG.error("The exception is " + replicator.getRegionInfo() + " " + seq, e);
+            LOG.error("The exception is " + replicaCordinator.getRegionInfo() + " " + seq, e);
             // There may be other parallel handlers also trying to write to that replica.
             builder.addFailedReplicas(replica.getFirst());
             // We should mark the future with exception only after retrying with the other Replicas
@@ -264,13 +260,13 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         }
       }
     } finally {
-      markResponse(request, replicationEntries, builder.build(), replicator);
+      markResponse(request, replicationEntries, builder.build(), replicaCordinator);
     }
   }
 
   private void markResponse(RequestEntryHolder request,
       List<MemstoreReplicationEntry> replicationEntries, ReplicateMemstoreResponse response,
-      RegionReplicaReplicator replicator) {
+      RegionReplicaCordinator replicaCordinator) {
     if (request != null) {
       request.markResponse(response);
     } else {
@@ -280,12 +276,12 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     }
   }
   private class RegionQueueEntry {
-    private final RegionReplicaReplicator replicator;
+    private final RegionReplicaCordinator replicaCordinator;
     private final long seq;
     private final boolean metaMarkerReq;
 
-    RegionQueueEntry(RegionReplicaReplicator replicator, long seq, boolean metaMarkerReq) {
-      this.replicator = replicator;
+    RegionQueueEntry(RegionReplicaCordinator replicaCordinator, long seq, boolean metaMarkerReq) {
+      this.replicaCordinator = replicaCordinator;
       this.seq = seq;
       this.metaMarkerReq = metaMarkerReq;
     }
@@ -317,13 +313,12 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
     private void replicate(RegionQueueEntry entry) {
       // TODO : Handle requests directly that comes for replica regions
-      RegionReplicaReplicator replicator = entry.replicator;
-      List<MemstoreReplicationEntry> entries = replicator.pullEntries(entry.seq);
+      List<MemstoreReplicationEntry> entries = entry.replicaCordinator.pullEntries(entry.seq);
       if (entries == null || entries.isEmpty()) {
         return;
       }
-      SimpleMemstoreReplicator.this.replicate(null, entries, replicator, entry.metaMarkerReq,
-        entry.seq);
+      SimpleMemstoreReplicator.this.replicate(null, entries, entry.replicaCordinator,
+          entry.metaMarkerReq, entry.seq);
     }
  
     public void stop() {

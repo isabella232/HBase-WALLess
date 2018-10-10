@@ -30,7 +30,7 @@ import org.apache.hadoop.hbase.regionserver.AbstractMemStore;
 import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.regionserver.MemStoreSizing;
 import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaCordinator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaStoreCordinator;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -43,14 +43,14 @@ public class MemStoreAsyncAddHandler extends EventHandler {
   private final List<Pair<AbstractMemStore, List<Cell>>> allCell = new ArrayList<>();
   private final WriteEntry[] writeEntries;
   private final HRegion hRegion;
-  private final RegionReplicaReplicator regionReplicator;
+  private final RegionReplicaCordinator replicaCordinator;
   private final long maxSeqId;
 
-  public MemStoreAsyncAddHandler(HRegion hRegion, RegionReplicaReplicator regionReplicator,
+  public MemStoreAsyncAddHandler(HRegion hRegion, RegionReplicaCordinator replicaCordinator,
       WriteEntry[] writeEntries, long maxSeqId) {
     super(null, EventType.RS_REGION_REPLICA_MEMSTORE_ASYNC_ADD);
     this.hRegion = hRegion;
-    this.regionReplicator = regionReplicator;
+    this.replicaCordinator = replicaCordinator;
     this.writeEntries = writeEntries;
     this.maxSeqId = maxSeqId;
   }
@@ -58,7 +58,7 @@ public class MemStoreAsyncAddHandler extends EventHandler {
   @Override
   public void process() throws IOException {
     for (Pair<AbstractMemStore, List<Cell>> pair : allCell) {
-      RegionReplicaStoreCordinator storeCordinator = this.regionReplicator
+      RegionReplicaStoreCordinator storeCordinator = this.replicaCordinator
           .getStoreCordinator(pair.getFirst().getFamilyName());
       if (storeCordinator.shouldAddCells(this.maxSeqId)) {
         for (Cell cell : pair.getSecond()) {

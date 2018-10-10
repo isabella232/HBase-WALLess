@@ -36,7 +36,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 @Category({ RegionServerTests.class, SmallTests.class })
-public class TestRegionReplicaReplicator {
+public class TestRegionReplicaCordinator {
 
   private MultiVersionConcurrencyControl mvcc = new MultiVersionConcurrencyControl();
 
@@ -45,41 +45,41 @@ public class TestRegionReplicaReplicator {
     Set<byte[]> families = new HashSet<>();
     families.add(Bytes.toBytes("f1"));
     RegionInfo regionInfo = new HRegionInfo(1234, TableName.META_TABLE_NAME, 0);
-    RegionReplicaReplicator replicator = new RegionReplicaReplicator(null, regionInfo, mvcc,
+    RegionReplicaCordinator replicaCordinator = new RegionReplicaCordinator(null, regionInfo, mvcc,
         families, 1, 0, 3);
     MemstoreReplicationEntry e1 = createEntry(false);
     MemstoreReplicationEntry e2 = createEntry(false);
     MemstoreReplicationEntry e3 = createEntry(false);
-    replicator.append(e1);
-    replicator.append(e2);
-    replicator.append(e3);
-    List<MemstoreReplicationEntry> entries = replicator.pullEntries(1);
+    replicaCordinator.append(e1);
+    replicaCordinator.append(e2);
+    replicaCordinator.append(e3);
+    List<MemstoreReplicationEntry> entries = replicaCordinator.pullEntries(1);
     assertEquals(3, entries.size());
     assertEquals(e1, entries.get(0));
     assertEquals(e2, entries.get(1));
     assertEquals(e3, entries.get(2));
-    entries = replicator.pullEntries(2);
+    entries = replicaCordinator.pullEntries(2);
     assertNull(entries);
-    entries = replicator.pullEntries(3);
+    entries = replicaCordinator.pullEntries(3);
     assertNull(entries);
     MemstoreReplicationEntry e4 = createEntry(false);
     MemstoreReplicationEntry e5 = createEntry(false);
-    replicator.append(e4);
-    replicator.append(e5);
+    replicaCordinator.append(e4);
+    replicaCordinator.append(e5);
     MemstoreReplicationEntry e6 = createEntry(true);
-    replicator.append(e6);
+    replicaCordinator.append(e6);
     MemstoreReplicationEntry e7 = createEntry(false);
-    replicator.append(e7);
-    entries = replicator.pullEntries(4);
+    replicaCordinator.append(e7);
+    entries = replicaCordinator.pullEntries(4);
     assertEquals(2, entries.size());
     assertEquals(e4, entries.get(0));
     assertEquals(e5, entries.get(1));
-    entries = replicator.pullEntries(5);
+    entries = replicaCordinator.pullEntries(5);
     assertNull(entries);
-    entries = replicator.pullEntries(6);
+    entries = replicaCordinator.pullEntries(6);
     assertEquals(1, entries.size());
     assertEquals(e6, entries.get(0));
-    entries = replicator.pullEntries(7);
+    entries = replicaCordinator.pullEntries(7);
     assertEquals(1, entries.size());
     assertEquals(e7, entries.get(0));
   }

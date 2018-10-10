@@ -151,7 +151,7 @@ import org.apache.hadoop.hbase.regionserver.compactions.CompactionLifeCycleTrack
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaReplicator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaCordinator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.MemStoreAsyncAddHandler;
 import org.apache.hadoop.hbase.regionserver.throttle.CompactionThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.NoLimitThroughputController;
@@ -404,7 +404,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private volatile Long timeoutForWriteLock = null;
 
   private MemstoreReplicator memstoreReplicator;
-  RegionReplicaReplicator regionReplicator;
+  RegionReplicaCordinator replicaCordinator;
   private org.apache.hadoop.hbase.executor.ExecutorService executor;
   // Used in Replica regions where we add Cells to CSLM in an async way. Once the cells are copied
   // to MSLAB, we consider it as success addition and reply back to caller. The actual addition to
@@ -1197,7 +1197,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private void initMemstoreReplication(RegionServerServices rsServices, Set<byte[]> families) {
     this.memstoreReplicator = rsServices.getMemstoreReplicator();
     int replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
-    this.regionReplicator = new RegionReplicaReplicator(this.conf, this.getRegionInfo(), this.mvcc,
+    this.replicaCordinator = new RegionReplicaCordinator(this.conf, this.getRegionInfo(), this.mvcc,
         families, this.htableDescriptor.getMinRegionReplication(),
         replicationThreadIndex, this.getTableDescriptor().getRegionReplication());
   }
@@ -2728,17 +2728,17 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // Resetting region locations
         LOG.debug("Resetting region location in flush flow" + this.getRegionInfo());
         // regionReplicator.resetRegionLocations();
-        regionReplicator.updateRegionLocations(replicaRegionLocation);
+        replicaCordinator.updateRegionLocations(replicaRegionLocation);
       }
 
       if (async) {
         res.setFirst(this.memstoreReplicator.replicateAsync(memstoreReplicationKey, memstoreEdits,
-          regionReplicator, true));
+          replicaCordinator, true));
         // Anoop : TODO No need to check response.getFailedReplicasCount here?
         return res;
       }
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
-        memstoreEdits, regionReplicator, true);
+        memstoreEdits, replicaCordinator, true);
       res.setSecond(memstoreReplicationKey.getWriteEntry());
       if (response.getFailedReplicasCount() > 0) {
         // this failedReplicas cannot be modified. So better
@@ -2763,7 +2763,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // TODO this is meta marker cell only. But the special treatment might not be needed here. As
       // of now leave it this way.
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
-          memstoreEdits, regionReplicator, true);
+          memstoreEdits, replicaCordinator, true);
       writeNum = memstoreReplicationKey.getWriteEntry();
       if (response.getFailedReplicasCount() > 0) {
         List<Integer> failedReplicas = response.getFailedReplicasList();
@@ -4374,7 +4374,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // ensure that we do things in order (probably easier for flush special entry? We need
       // that to be done.)
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
-          memstoreEdits, regionReplicator, false);
+          memstoreEdits, replicaCordinator, false);
       checkIfMinWriteReplicSatisfied(response);
       // TODO : need to handle all exceptions - make things synchronous in terms of
       // replication to all the replicas. End the mvcc in case of exception
@@ -4393,14 +4393,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     if (response.getFailedReplicasCount() > 0) {
       //updateLocationOnException(response.getFailedReplicasList());
       List<Integer> failedReplicas = response.getFailedReplicasList();
-      List<Integer> newFailedReplicas = this.regionReplicator
+      List<Integer> newFailedReplicas = this.replicaCordinator
           .processBadReplicas(response.getFailedReplicasList());
       // only primary should do this
       if (RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
         if (newFailedReplicas.size() > 0) {
           // mark the replicas as bad in META
           if (markBadReplicasInMETA(newFailedReplicas)) {
-            this.regionReplicator.onReplicasBadInMeta(newFailedReplicas);
+            this.replicaCordinator.onReplicasBadInMeta(newFailedReplicas);
           }
         }
         // TODO ReplicasCommitted include this region write count also (?)
@@ -4410,7 +4410,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           throw new IOException("Minimum write replica not satisfied "
               + this.getTableDescriptor().getMinRegionReplication());
         }
-        if (!this.regionReplicator.isReplicasBadInMeta(failedReplicas)) {
+        if (!this.replicaCordinator.isReplicasBadInMeta(failedReplicas)) {
           throw new IOException();
         }
       }
@@ -4429,12 +4429,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   public void finishBadHealthProcessing() {
-    this.regionReplicator.finishBadHealthProcessing();
+    this.replicaCordinator.finishBadHealthProcessing();
   }
 
   public void markReplicaBackToGoodInMeta(RegionInfo replicaRegion) {
     LOG.info("Marking " + replicaRegion + " as GOOD health in META");
-    this.regionReplicator.removeFromBadReplicasInMeta(replicaRegion.getReplicaId());
+    this.replicaCordinator.removeFromBadReplicasInMeta(replicaRegion.getReplicaId());
   }
 
   /**
@@ -4444,7 +4444,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    */
   public boolean markBadHealthStatus(long processingTs) {
     assert !RegionReplicaUtil.isDefaultReplica(this.getRegionInfo());
-    if (this.regionReplicator.shouldProcessBadStatus(processingTs)) {
+    if (this.replicaCordinator.shouldProcessBadStatus(processingTs)) {
       LOG.info("Marking " + this.getRegionInfo() + " as BAD");
       return true;
     }
@@ -4456,7 +4456,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       List<Cell> allCells, int replicasOffered) throws IOException {
     ReplicateMemstoreResponse response;
     try {
-      response = this.memstoreReplicator.replicate(request, allCells, this.regionReplicator);
+      response = this.memstoreReplicator.replicate(request, allCells, this.replicaCordinator);
       if (response != null) {
         checkIfMinWriteReplicSatisfied(response);
       }
@@ -4504,7 +4504,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         writeEntries[i] = this.mvcc.begin(seqIds[i]);
       }
       long maxSeqId = seqIds[seqIds.length -1];
-      MemStoreAsyncAddHandler handler = new MemStoreAsyncAddHandler(this, regionReplicator,
+      MemStoreAsyncAddHandler handler = new MemStoreAsyncAddHandler(this, replicaCordinator,
           writeEntries, maxSeqId);
       try {
         for (Map.Entry<byte[], List<Cell>> e : familyMap.entrySet()) {
@@ -5468,7 +5468,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         continue;
       }
       storesToFlush.add(store);
-      this.regionReplicator.getStoreCordinator(family).setLatestFlushSeqId(replaySeqId);
+      this.replicaCordinator.getStoreCordinator(family).setLatestFlushSeqId(replaySeqId);
     }
 
     MonitoredTask status = TaskMonitor.get().createStatus("Preparing flush " + this);
@@ -5733,7 +5733,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // Record latest flush time
       this.lastStoreFlushTimeMap.put(store, startTime);
       if (dropMemstoreSnapshot) {
-        this.regionReplicator.getStoreCordinator(family).setLatestFlushCommitted();
+        this.replicaCordinator.getStoreCordinator(family).setLatestFlushCommitted();
       }
     }
   }
@@ -9160,7 +9160,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     this.fs.convertAsPrimaryRegion();
     this.writestate.setReadOnly(false);
     // convert the region as primary region
-    this.regionReplicator.convertAsPrimaryRegion(getRegionInfo());
+    this.replicaCordinator.convertAsPrimaryRegion(getRegionInfo());
   }
 
   @Override
@@ -9226,7 +9226,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   public List<Integer> getGoodReplicas() {
-    return this.regionReplicator.getCurrentPiplineForReads();
+    return this.replicaCordinator.getCurrentPiplineForReads();
   }
 
 }

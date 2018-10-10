@@ -53,7 +53,6 @@ import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
 
 // This is a per Region instance 
-//TODO better name
 /**
  * Notes : How the different data structures like regionLocations, badReplicas, pipeline work
  * altogether. regionLocations - Keep the replica Locations in an replicaId indexed array.
@@ -99,8 +98,8 @@ import org.apache.yetus.audience.InterfaceAudience;
  * will reload it from META.
  */
 @InterfaceAudience.Private
-public class RegionReplicaReplicator {
-  private static final Log LOG = LogFactory.getLog(RegionReplicaReplicator.class);
+public class RegionReplicaCordinator {
+  private static final Log LOG = LogFactory.getLog(RegionReplicaCordinator.class);
   private static final long UNSET = -1L;
   private final Configuration conf;
   private RegionInfo curRegion;
@@ -125,7 +124,7 @@ public class RegionReplicaReplicator {
   private NavigableMap<byte[], RegionReplicaStoreCordinator> storeCordinators = new TreeMap<>(
       Bytes.BYTES_COMPARATOR);
 
-  public RegionReplicaReplicator(Configuration conf, RegionInfo currentRegion,
+  public RegionReplicaCordinator(Configuration conf, RegionInfo currentRegion,
       MultiVersionConcurrencyControl mvcc, Set<byte[]> families, int minWriteReplicas,
       int replicationThreadIndex, int tableReplication) {
     this.conf = conf;

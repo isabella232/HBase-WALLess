@@ -34,7 +34,7 @@ public interface MemstoreReplicator {
    * Called by primary Region to replicate to its replicas. 
    */
   ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
-      MemstoreEdits memstoreEdits, RegionReplicaReplicator regionReplicaReplicator,
+      MemstoreEdits memstoreEdits, RegionReplicaCordinator replicaCordinator,
       boolean metaMarkerReq) throws IOException;
 
   /**
@@ -42,7 +42,7 @@ public interface MemstoreReplicator {
    * ReplicateMemstoreRequest request directly here not the Key and Edits as in above API.
    */
   ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
-      RegionReplicaReplicator regionReplicaReplicator) throws IOException;
+      RegionReplicaCordinator replicaCordinator) throws IOException;
 
   //TODO : Shall we return our own CompletedFuture here and wait on the Future explicitly??
   /**
@@ -57,7 +57,7 @@ public interface MemstoreReplicator {
   // Make this async version also to generate the mvcc within itself
   CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaReplicator regionReplicaReplicator, boolean metaMarkerReq) throws IOException;
+      RegionReplicaCordinator replicaCordinator, boolean metaMarkerReq) throws IOException;
 
   /**
    * Picks up the next replication thread available when requested by the caller

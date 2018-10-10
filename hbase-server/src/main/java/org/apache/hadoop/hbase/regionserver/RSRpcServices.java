@@ -1707,7 +1707,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
               FlushLifeCycleTracker.DUMMY, replicaRegionLocation);
         if (requestingReplica > 0) {
           // do this after we mark it as GOOD
-          ((HRegion) region).regionReplicator.removeFromBadReplicas(requestingReplica);
+          ((HRegion) region).replicaCordinator.removeFromBadReplicas(requestingReplica);
         }
         // on this call the loc should be updating the pipeline with good state
         reportReplicaGoodToMeta(region, requestingReplica, flushResult);
