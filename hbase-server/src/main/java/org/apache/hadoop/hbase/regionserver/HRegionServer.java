@@ -1936,6 +1936,8 @@ public class HRegionServer extends HasThread implements
       conf.getInt("hbase.regionserver.executor.refresh.peer.threads", 2));
     this.executorService.startExecutorService(ExecutorType.RS_REGION_REPLICA_MEMSTORE_ASYNC_ADD,
         conf.getInt("hbase.regionserver.memstore.replication.async.add.threads", 10));
+    this.executorService.startExecutorService(ExecutorType.RS_REGION_REPLICA_GOOD_HEALTH_MARKER_OPS,
+        3);// TODO to have a conf for the threads count.
 
     Threads.setDaemonThreadRunning(this.walRoller.getThread(), getName() + ".logRoller",
     uncaughtExceptionHandler);

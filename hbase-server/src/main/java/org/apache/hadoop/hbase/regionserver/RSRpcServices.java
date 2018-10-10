@@ -1733,17 +1733,21 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
     }
   }
 
-  private void reportReplicaGoodToMeta(HRegion region, int requestingReplica,
+  private void reportReplicaGoodToMeta(HRegion primaryRegion, int requestingReplica,
       HRegion.FlushResultImpl flushResult) {
-    // TODO : revisit. Something wrong here.
+    // TODO : revisit. Something wrong here. - Anoop is it solved now?
     if (flushResult != null) {
       if (flushResult.failedReplicas != null) {
         if (requestingReplica > 0 && (flushResult.failedReplicas.contains(requestingReplica))) {
+          // A new replica asked for flush but we failed to inform it that the flush is over! Might
+          // be it is again down? Do nothing here. Hope it will ask again for flush later
+          LOG.info(primaryRegion + " - Not making replica:" + requestingReplica
+              + " to Good state in META."
+              + " Flush finished message did not reach the replica. It is down again?!");
           return;
         }
-        this.regionServer.reportReplicaRegionHealthGood(
-          RegionReplicaUtil.getRegionInfoForReplica(region.getRegionInfo(), requestingReplica),
-          region);
+        this.regionServer.reportReplicaRegionHealthGood(RegionReplicaUtil.getRegionInfoForReplica(
+            primaryRegion.getRegionInfo(), requestingReplica), primaryRegion);
       }
     }
   }
