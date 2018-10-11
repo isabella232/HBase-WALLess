@@ -233,8 +233,8 @@ public class RegionReplicaCordinator {
 
   public List<Integer> processBadReplicas(List<Integer> replicas) {
     List<Integer> addedReplicas = new ArrayList<>(replicas.size());
-    Lock lock = this.lock.writeLock();
-    lock.lock();
+    Lock writeLock = this.lock.writeLock();
+    writeLock.lock();
     try {
       if (RegionReplicaUtil.isDefaultReplica(curRegion)) {
         for (Integer replica : replicas) {
@@ -258,7 +258,7 @@ public class RegionReplicaCordinator {
         }
       }
     } finally {
-      lock.unlock();
+      writeLock.unlock();
     }
     return addedReplicas;
   }
@@ -274,36 +274,36 @@ public class RegionReplicaCordinator {
   public void onReplicasBadInMeta(List<Integer> replicas) {
     // This should be called only when this is Primary Region
     assert RegionReplicaUtil.isDefaultReplica(curRegion);
-    Lock lock = this.lock.writeLock();
-    lock.lock();
+    Lock writeLock = this.lock.writeLock();
+    writeLock.lock();
     try {
       for (Integer replica : replicas) {
         this.badReplicasInMeta.add(replica);
       }
       this.badCountToBeCommittedInMeta.addAndGet(-1 * replicas.size());
     } finally {
-      lock.unlock();
+      writeLock.unlock();
     }
   }
 
   public boolean isReplicasBadInMeta(List<Integer> replicas) {
-    Lock lock = this.lock.readLock();
-    lock.lock();
+    Lock readLock = this.lock.readLock();
+    readLock.lock();
     try {
       for (Integer replica : replicas) {
         if (!this.badReplicasInMeta.contains(replica)) return false;
       }
       return true;
     } finally {
-      lock.unlock();
+      readLock.unlock();
     }
   }
   
   public boolean removeFromBadReplicas(Integer replica) throws PipelineException {
     // This should be called only when this is Primary Region
     assert RegionReplicaUtil.isDefaultReplica(curRegion);
-    Lock lock = this.lock.writeLock();
-    lock.lock();
+    Lock writeLock = this.lock.writeLock();
+    writeLock.lock();
     try {
       // when a replica region opens it makes a call for primary region flush.
       // there is no pipeline at that point of time. This Null checks helps avoid NPE
@@ -321,19 +321,19 @@ public class RegionReplicaCordinator {
       }
       return true;
     } finally {
-      lock.unlock();
+      writeLock.unlock();
     }
   }
 
   public boolean removeFromBadReplicasInMeta(Integer replica) {
     // This should be called only when this is Primary Region
     assert RegionReplicaUtil.isDefaultReplica(curRegion);
-    Lock lock = this.lock.writeLock();
-    lock.lock();
+    Lock writeLock = this.lock.writeLock();
+    writeLock.lock();
     try {
       return this.badReplicasInMeta.remove(replica);
     } finally {
-      lock.unlock();
+      writeLock.unlock();
     }
   }
 
@@ -342,8 +342,8 @@ public class RegionReplicaCordinator {
   // the flush request from a replica (after it is up again), then itself we will add that replica
   // into the pipeline. This is not yet ready for the reads. State is META is any way BAD still
   public List<Integer> getCurrentPiplineForReads() {
-    Lock lock = this.lock.readLock();
-    lock.lock();
+    Lock readLock = this.lock.readLock();
+    readLock.lock();
     try {
       if (pipeline != null) {
         return new ArrayList<>(this.pipeline.keySet());
@@ -351,7 +351,7 @@ public class RegionReplicaCordinator {
         return null;
       }
     } finally {
-      lock.unlock();
+      readLock.unlock();
     }
   }
   
@@ -359,42 +359,40 @@ public class RegionReplicaCordinator {
     // This should be called only when this is Primary Region
     assert RegionReplicaUtil.isDefaultReplica(curRegion);
     assert regionLocations != null;
-    Lock lock = this.lock.readLock();
-    lock.lock();
-    // When there are some pending updates to META for making replica region(s) as BAD, we should
-    // not allow writes to continue. The pipeline wont have those replicas any way and while the
-    // META is not yet updated, more writes might get committed. There is chance that this META
-    // update might not happen before this primary itself going down. Then META says a real BAD
-    // replica as good and that might get selected as new primary. Then we might loose some data!
-    // How ever still there is a chance that before this count is updated we will have pending writes already
-    // in process. That will still go on. So any temp glitch will make writes successful.
-    if (this.badCountToBeCommittedInMeta.get() != 0 && !specialCell) {
-      throw new PipelineException();
-    }
-    // Early out. Already there are not enough replicas for making the write as successful. Why to
-    // continue then? 
-    if(pipeline == null) {
-      // This happens only for the system tables. Ideally should solve in the caller place.
-      // Just leaving this for now. Because for META and namespace table we should still mark
-      // the special cells in WAL and handle it. That is yet to be done.
-      LOG.info("The pipeline is null "+specialCell+" "+this.curRegion);
-      return null;
-    }
-    if (this.pipeline.size() < this.minNonPrimaryWriteReplicas) {
-      throw new PipelineException();
-    }
+    Lock readLock = this.lock.readLock();
+    readLock.lock();
     try {
+      // When there are some pending updates to META for making replica region(s) as BAD, we should
+      // not allow writes to continue. The pipeline wont have those replicas any way and while the
+      // META is not yet updated, more writes might get committed. There is chance that this META
+      // update might not happen before this primary itself going down. Then META says a real BAD
+      // replica as good and that might get selected as new primary. Then we might loose some data!
+      // How ever still there is a chance that before this count is updated we will have pending
+      // writes already in process. That will still go on. So any temp glitch will make writes
+      // successful.
+      if (this.badCountToBeCommittedInMeta.get() != 0 && !specialCell) {
+        throw new PipelineException(
+            "Some replicas transitioning to BAD state in META. Till then writes are not allowed.");
+      }
+      if (pipeline == null) {
+        // TODO
+        // This happens only for the system tables. Ideally should solve in the caller place.
+        // Just leaving this for now. Because for META and namespace table we should still mark
+        // the special cells in WAL and handle it. That is yet to be done.
+        LOG.info("The pipeline is null " + specialCell + " " + this.curRegion);
+        return null;
+      }
+      // Early out. Already there are not enough replicas for making the write as successful. Why to
+      // continue then?
+      if (this.pipeline.size() < this.minNonPrimaryWriteReplicas) {
+        throw new PipelineException(this.minNonPrimaryWriteReplicas, this.pipeline.size());
+      }
       List<Pair<Integer, ServerName>> locPipeline = new ArrayList<Pair<Integer, ServerName>>();
       for (Entry<Integer, Pair<ServerName, Boolean>> pipe : this.pipeline.entrySet()) {
-        if (specialCell) {
-          // don't bother about the state. Just pass on the location for the pipeline creation.
+        // When it is a marker cell in the replication request, need to pass to all the replica.
+        // When it is normal mutations, pass only those locations which are in GOOD state.
+        if (specialCell || pipe.getValue().getSecond()) {
           locPipeline.add(new Pair<Integer, ServerName>(pipe.getKey(), pipe.getValue().getFirst()));
-        } else {
-          // pass only those locations which are in GOOD state.
-          if (pipe.getValue().getSecond()) {
-            locPipeline
-                .add(new Pair<Integer, ServerName>(pipe.getKey(), pipe.getValue().getFirst()));
-          }
         }
       }
       if (!specialCell && (locPipeline.size() < this.minNonPrimaryWriteReplicas)) {
@@ -404,7 +402,7 @@ public class RegionReplicaCordinator {
           + this.getRegionInfo());
       return locPipeline;
     } finally {
-      lock.unlock();
+      readLock.unlock();
     }
   }
 
@@ -514,12 +512,12 @@ public class RegionReplicaCordinator {
     if (regionLocations == null) {
       return;
     }
-    Lock lock = this.lock.writeLock();
-    lock.lock();
+    Lock writeLock = this.lock.writeLock();
+    writeLock.lock();
     try {
       this.regionLocations = null;
     } finally {
-      lock.unlock();
+      writeLock.unlock();
     }
   }
 
@@ -569,10 +567,10 @@ public class RegionReplicaCordinator {
   }
 
   public void convertAsPrimaryRegion(RegionInfo primaryRegion) {
-    Lock lock = this.lock.writeLock();
-    lock.lock();
     assert !(RegionReplicaUtil.isDefaultReplica(this.curRegion));
     assert RegionReplicaUtil.isDefaultReplica(primaryRegion);
+    Lock writeLock = this.lock.writeLock();
+    writeLock.lock();
     try {
       this.curRegion = primaryRegion;
       this.badReplicas = new HashSet<>();
@@ -580,7 +578,7 @@ public class RegionReplicaCordinator {
       this.regionLocations = null;// Lets reload location from META. Any way we have done changes to
                                   // the region replica ids.
     } finally {
-      lock.unlock();
+      writeLock.unlock();
     }
   }
 
@@ -607,8 +605,8 @@ public class RegionReplicaCordinator {
    * @throws PipelineException
    */
   public void updateRegionLocations(HRegionLocation replicaRegionLocation) throws PipelineException {
-    Lock lock = this.lock.writeLock();
-    lock.lock();
+    Lock writeLock = this.lock.writeLock();
+    writeLock.lock();
     // Now take the case where a region is newly opened. In create table case.
     // we may have one of the replica triggering a flush on the primary. In that case
     // create the pipeline with the replica location that is passed over here.
@@ -672,7 +670,7 @@ public class RegionReplicaCordinator {
             + this.getRegionInfo());
       }
     } finally {
-      lock.unlock();
+      writeLock.unlock();
     }
   }
 }

@@ -29,6 +29,10 @@ public class PipelineException extends HBaseIOException {
     super();
   }
 
+  public PipelineException(int minReplicas, int actualReplicas) {
+    this("Only " + actualReplicas + " are up. Min replicas :" + minReplicas);
+  }
+
   public PipelineException(String s) {
     super(s);
   }
