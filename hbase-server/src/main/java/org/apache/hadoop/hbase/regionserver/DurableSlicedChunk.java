@@ -182,7 +182,7 @@ public class DurableSlicedChunk extends Chunk {
   }
 
   Pair<Integer, Integer> getCellsOffsetMeta() {
-    if (this.getSeqId() != 1) {
+    if (this.getSeqId() == 0) {
       throw new IllegalStateException();
     }
     // TODO work with BBUtils?
