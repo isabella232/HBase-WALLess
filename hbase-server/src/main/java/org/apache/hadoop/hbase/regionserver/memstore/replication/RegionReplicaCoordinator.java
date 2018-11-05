@@ -98,8 +98,8 @@ import org.apache.yetus.audience.InterfaceAudience;
  * will reload it from META.
  */
 @InterfaceAudience.Private
-public class RegionReplicaCordinator {
-  private static final Log LOG = LogFactory.getLog(RegionReplicaCordinator.class);
+public class RegionReplicaCoordinator {
+  private static final Log LOG = LogFactory.getLog(RegionReplicaCoordinator.class);
   private static final long UNSET = -1L;
   private final Configuration conf;
   private RegionInfo curRegion;
@@ -124,7 +124,7 @@ public class RegionReplicaCordinator {
   private NavigableMap<byte[], RegionReplicaStoreCordinator> storeCordinators = new TreeMap<>(
       Bytes.BYTES_COMPARATOR);
 
-  public RegionReplicaCordinator(Configuration conf, RegionInfo currentRegion,
+  public RegionReplicaCoordinator(Configuration conf, RegionInfo currentRegion,
       MultiVersionConcurrencyControl mvcc, Set<byte[]> families, int minWriteReplicas,
       int replicationThreadIndex, int tableReplication) {
     this.conf = conf;

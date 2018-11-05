@@ -110,7 +110,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   @Override
   public ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
-      MemstoreEdits memstoreEdits, RegionReplicaCordinator replicaCordinator, boolean metaMarkerReq)
+      MemstoreEdits memstoreEdits, RegionReplicaCoordinator replicaCordinator, boolean metaMarkerReq)
       throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future =
         offerForReplicate(memstoreReplicationKey, memstoreEdits, replicaCordinator, metaMarkerReq);
@@ -127,7 +127,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   private CompletableFuture<ReplicateMemstoreResponse> offerForReplicate(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaCordinator replicaCordinator, boolean metaMarkerReq) throws IOException {
+      RegionReplicaCoordinator replicaCordinator, boolean metaMarkerReq) throws IOException {
     MemstoreReplicationEntry entry = new MemstoreReplicationEntry(memstoreReplicationKey,
         memstoreEdits, metaMarkerReq);
     CompletableFuture<ReplicateMemstoreResponse> future = replicaCordinator.append(entry);
@@ -138,7 +138,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   @Override
   public CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaCordinator replicaCordinator, boolean metaMarkerReq) throws IOException {
+      RegionReplicaCoordinator replicaCordinator, boolean metaMarkerReq) throws IOException {
     // ideally the same should be done for both async and sync case. But it does not work so.
     return offerForReplicate(memstoreReplicationKey, memstoreEdits, replicaCordinator,
         metaMarkerReq);
@@ -147,7 +147,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   @Override
   // directly waiting on this? Is it better to go with the rep threads here too???
   public ReplicateMemstoreResponse replicate(ReplicateMemstoreRequest request, List<Cell> allCells,
-      RegionReplicaCordinator replicator) throws IOException {
+      RegionReplicaCoordinator replicator) throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future = new CompletableFuture<>(); 
     replicate(new RequestEntryHolder(request, allCells, future), null, replicator, false, -1);
     try {
@@ -166,7 +166,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     }
   }
 
-  public void offer(RegionReplicaCordinator replicaCordinator, MemstoreReplicationEntry entry) {
+  public void offer(RegionReplicaCoordinator replicaCordinator, MemstoreReplicationEntry entry) {
     int index = replicaCordinator.getReplicationThreadIndex();
     this.replicationThreads[index].regionQueue
         .offer(new RegionQueueEntry(replicaCordinator, entry.getSeq(), entry.isMetaMarkerReq()));
@@ -187,7 +187,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
    * For primary, make up the pipeline here.
    */
   void replicate(RequestEntryHolder request, List<MemstoreReplicationEntry> replicationEntries,
-      RegionReplicaCordinator replicaCordinator, boolean specialCell, long seq) {
+      RegionReplicaCoordinator replicaCordinator, boolean specialCell, long seq) {
     int curRegionReplicaId = replicaCordinator.getCurRegionReplicaId();
     List<Pair<Integer, ServerName>> pipeline = null;
     try {
@@ -266,7 +266,7 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   private void markResponse(RequestEntryHolder request,
       List<MemstoreReplicationEntry> replicationEntries, ReplicateMemstoreResponse response,
-      RegionReplicaCordinator replicaCordinator) {
+      RegionReplicaCoordinator replicaCordinator) {
     if (request != null) {
       request.markResponse(response);
     } else {
@@ -276,11 +276,11 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     }
   }
   private class RegionQueueEntry {
-    private final RegionReplicaCordinator replicaCordinator;
+    private final RegionReplicaCoordinator replicaCordinator;
     private final long seq;
     private final boolean metaMarkerReq;
 
-    RegionQueueEntry(RegionReplicaCordinator replicaCordinator, long seq, boolean metaMarkerReq) {
+    RegionQueueEntry(RegionReplicaCoordinator replicaCordinator, long seq, boolean metaMarkerReq) {
       this.replicaCordinator = replicaCordinator;
       this.seq = seq;
       this.metaMarkerReq = metaMarkerReq;

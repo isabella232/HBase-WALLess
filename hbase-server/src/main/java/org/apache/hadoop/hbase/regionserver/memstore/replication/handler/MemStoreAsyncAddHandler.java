@@ -30,7 +30,7 @@ import org.apache.hadoop.hbase.regionserver.AbstractMemStore;
 import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.regionserver.MemStoreSizing;
 import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaCordinator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaCoordinator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaStoreCordinator;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -43,10 +43,10 @@ public class MemStoreAsyncAddHandler extends EventHandler {
   private final List<Pair<AbstractMemStore, List<Cell>>> allCell = new ArrayList<>();
   private final WriteEntry[] writeEntries;
   private final HRegion hRegion;
-  private final RegionReplicaCordinator replicaCordinator;
+  private final RegionReplicaCoordinator replicaCordinator;
   private final long maxSeqId;
 
-  public MemStoreAsyncAddHandler(HRegion hRegion, RegionReplicaCordinator replicaCordinator,
+  public MemStoreAsyncAddHandler(HRegion hRegion, RegionReplicaCoordinator replicaCordinator,
       WriteEntry[] writeEntries, long maxSeqId) {
     super(null, EventType.RS_REGION_REPLICA_MEMSTORE_ASYNC_ADD);
     this.hRegion = hRegion;

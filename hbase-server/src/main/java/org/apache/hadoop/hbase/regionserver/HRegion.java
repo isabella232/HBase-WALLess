@@ -151,7 +151,7 @@ import org.apache.hadoop.hbase.regionserver.compactions.CompactionLifeCycleTrack
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaCordinator;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaCoordinator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.MemStoreAsyncAddHandler;
 import org.apache.hadoop.hbase.regionserver.throttle.CompactionThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.NoLimitThroughputController;
@@ -404,7 +404,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private volatile Long timeoutForWriteLock = null;
 
   private MemstoreReplicator memstoreReplicator;
-  RegionReplicaCordinator replicaCordinator;
+  RegionReplicaCoordinator replicaCordinator;
   private org.apache.hadoop.hbase.executor.ExecutorService executor;
   // Used in Replica regions where we add Cells to CSLM in an async way. Once the cells are copied
   // to MSLAB, we consider it as success addition and reply back to caller. The actual addition to
@@ -1197,7 +1197,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private void initMemstoreReplication(RegionServerServices rsServices, Set<byte[]> families) {
     this.memstoreReplicator = rsServices.getMemstoreReplicator();
     int replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
-    this.replicaCordinator = new RegionReplicaCordinator(this.conf, this.getRegionInfo(), this.mvcc,
+    this.replicaCordinator = new RegionReplicaCoordinator(this.conf, this.getRegionInfo(), this.mvcc,
         families, this.htableDescriptor.getMinRegionReplication(),
         replicationThreadIndex, this.getTableDescriptor().getRegionReplication());
   }

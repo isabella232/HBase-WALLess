@@ -45,7 +45,7 @@ public class TestRegionReplicaCordinator {
     Set<byte[]> families = new HashSet<>();
     families.add(Bytes.toBytes("f1"));
     RegionInfo regionInfo = new HRegionInfo(1234, TableName.META_TABLE_NAME, 0);
-    RegionReplicaCordinator replicaCordinator = new RegionReplicaCordinator(null, regionInfo, mvcc,
+    RegionReplicaCoordinator replicaCordinator = new RegionReplicaCoordinator(null, regionInfo, mvcc,
         families, 1, 0, 3);
     MemstoreReplicationEntry e1 = createEntry(false);
     MemstoreReplicationEntry e2 = createEntry(false);
