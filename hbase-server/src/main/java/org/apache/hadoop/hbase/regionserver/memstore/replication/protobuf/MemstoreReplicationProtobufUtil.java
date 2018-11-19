@@ -39,7 +39,7 @@ import org.apache.yetus.audience.InterfaceAudience;
 public class MemstoreReplicationProtobufUtil {
 
   public static Pair<ReplicateMemstoreRequest, List<Cell>> buildReplicateMemstoreEntryRequest(
-      final MemstoreReplicationEntry[] entries, byte[] encodedRegionName,
+      final List<MemstoreReplicationEntry> entries, byte[] encodedRegionName,
       List<Pair<Integer, ServerName>> pipeline, boolean specialCell) {
     // Accumulate all the Cells seen in here.
     List<Cell> allCells = new ArrayList<>();

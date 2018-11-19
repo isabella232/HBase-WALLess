@@ -370,10 +370,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         primaryRegion = true;
         // only for primary regions we will have this
         if (entries != null && !entries.isEmpty()) {
-          MemstoreReplicationEntry[] entriesArray = new MemstoreReplicationEntry[entries.size()];
-          entriesArray = entries.toArray(entriesArray);
           Pair<ReplicateMemstoreRequest, List<Cell>> pair = MemstoreReplicationProtobufUtil
-              .buildReplicateMemstoreEntryRequest(entriesArray, initialEncodedRegionName, pipeline, specialCell);
+              .buildReplicateMemstoreEntryRequest(entries, initialEncodedRegionName, pipeline,
+                  specialCell);
           this.request = new RequestEntryHolder(pair.getFirst(), pair.getSecond(), null);
         }
       }
