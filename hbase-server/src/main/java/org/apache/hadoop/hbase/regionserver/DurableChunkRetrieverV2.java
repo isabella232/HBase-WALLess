@@ -42,7 +42,6 @@ import org.slf4j.LoggerFactory;
 public class DurableChunkRetrieverV2 {
 
   private static final Logger LOG = LoggerFactory.getLogger(DurableChunkRetrieverV2.class);
-  private static DurableChunkRetrieverV2 INSTANCE = null;
 
   private static final CellScanner EMPTY_SCANNER = new CellScanner() {
     @Override
@@ -65,22 +64,10 @@ public class DurableChunkRetrieverV2 {
   private NavigableSet<byte[]> regionsToIgnore = new TreeSet<>(Bytes.BYTES_COMPARATOR);
   private HRegionServer hrs;
 
-  public static synchronized DurableChunkRetrieverV2 init(HRegionServer hrs) {
-    INSTANCE = new DurableChunkRetrieverV2(hrs);
-    return INSTANCE;
-  }
-
-  public static synchronized DurableChunkRetrieverV2 getInstance() {
-    if (INSTANCE == null) {
-      throw new IllegalStateException();
-    }
-    return INSTANCE;
-  }
-
-  private DurableChunkRetrieverV2(HRegionServer hrs) {
+  public DurableChunkRetrieverV2(HRegionServer hrs) {
     this.hrs = hrs;
   }
-
+ 
   public boolean appendChunk(Pair<byte[], byte[]> regionStore, DurableSlicedChunk chunk) {
     byte[] primaryRegionName = null;
     try {

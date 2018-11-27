@@ -480,6 +480,9 @@ public class HRegionServer extends HasThread implements
   private RegionServerRpcQuotaManager rsQuotaManager;
   private RegionServerSpaceQuotaManager rsSpaceQuotaManager;
 
+  // TODO : Better way. for now allowing to be set in the region server direclty
+  private DurableChunkRetrieverV2 retriever;
+
   /**
    * Nonce manager. Nonces are used to make operations like increment and append idempotent
    * in the case where client doesn't receive the response from a successful operation and
@@ -3867,5 +3870,13 @@ public class HRegionServer extends HasThread implements
       return false;
     }
     return response.getStatus();
+  }
+
+  public void setRetriever(DurableChunkRetrieverV2 retriever) {
+    this.retriever = retriever;
+  }
+
+  public DurableChunkRetrieverV2 getRetriver() {
+    return this.retriever;
   }
 }

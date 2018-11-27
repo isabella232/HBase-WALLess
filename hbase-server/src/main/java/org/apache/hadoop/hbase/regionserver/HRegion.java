@@ -964,7 +964,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     if (this.getRegionServerServices() != null
         && ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
       LOG.debug("Retrieving the data for region " + this.getRegionInfo() + " from chunk retriever");
-      DurableChunkRetrieverV2 chunkRetriever = DurableChunkRetrieverV2.getInstance();
+      DurableChunkRetrieverV2 chunkRetriever =
+          ((HRegionServer) this.getRegionServerServices()).getRetriver();
       MemStoreChunkPool dataPool =
           ((DurableChunkCreator) DurableChunkCreator.getInstance()).getDataPool();
       if (chunkRetriever != null) {

@@ -129,9 +129,10 @@ public class DurableChunkCreator extends ChunkCreator {
   @Override
   protected void initializePools(int chunkSize, long globalMemStoreSize, float poolSizePercentage,
       float indexChunkSizePercentage, float initialCountPercentage, HRegionServer hrs) {
-    retriever = DurableChunkRetrieverV2.init(hrs);
+    retriever = new DurableChunkRetrieverV2(hrs);
+    hrs.setRetriever(retriever);
     super.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage,
-        indexChunkSizePercentage, initialCountPercentage, hrs);
+      indexChunkSizePercentage, initialCountPercentage, hrs);
   }
 
   @Override
