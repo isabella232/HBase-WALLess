@@ -288,7 +288,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     // Add seqId into this chunk
     // We call this under lock. So the seqId need not be a thread safe state.
     // TODO check why write using BBUtils not working in some cases. May be some Endian issues?
-    c.data.putInt(DurableSlicedChunk.OFFSET_TO_SEQID, chunkSeqId++);
+    ByteBufferUtils.putInt(c.data, DurableSlicedChunk.OFFSET_TO_SEQID, chunkSeqId++);
     assert c instanceof DurableSlicedChunk;
     ((DurableSlicedChunk) c).persist(DurableSlicedChunk.OFFSET_TO_SEQID,
         DurableSlicedChunk.SIZE_OF_SEQID);

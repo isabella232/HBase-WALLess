@@ -89,8 +89,8 @@ public class DurableChunkRetrieverV2 {
       } else {
         // TODO: We are doing for every region. Should we read through all the chunks and collect the
         // region names and then issue one shot to the master?
-        boolean toBeKept = (this.hrs != null) ? !(this.hrs.atleastOneReplicaGood(primaryRegionName))
-            : true;
+        boolean toBeKept =
+            (this.hrs != null) ? !(this.hrs.atleastOneReplicaGood(regionStore.getFirst())) : true;
         if (toBeKept) {
           storeVsChunks = new TreeMap<>(Bytes.BYTES_COMPARATOR);
           this.chunks.put(primaryRegionName, storeVsChunks);
@@ -126,7 +126,7 @@ public class DurableChunkRetrieverV2 {
         Bytes.toStringBinary(store), cellsOffsetMeta);
     CellScanner scanner = new CellScanner() {
       private CellScanner curChunkCellScanner = firstChunk
-          .getCellScanner(getCellsOffsetForChunk(firstChunk));
+          .getCellScanner(Optional.of(cellsOffsetMeta.getSecond()));
 
       @Override
       public Cell current() {
@@ -144,7 +144,13 @@ public class DurableChunkRetrieverV2 {
             chunk = null;
           }
           if (chunk == null) break;
-          this.curChunkCellScanner = chunk.getCellScanner(getCellsOffsetForChunk(chunk));
+          Optional<Integer> cellsOffsetForChunk = getCellsOffsetForChunk(chunk);
+          if (cellsOffsetForChunk != null) {
+            this.curChunkCellScanner = chunk.getCellScanner(cellsOffsetForChunk);
+          } else {
+            break;
+          }
+          // we have reached the last cell scanner
         }
         return false;
       }

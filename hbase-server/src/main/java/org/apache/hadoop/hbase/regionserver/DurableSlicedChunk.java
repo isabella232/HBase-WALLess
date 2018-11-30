@@ -87,7 +87,7 @@ public class DurableSlicedChunk extends Chunk {
     if (data == null) {
       chunkBuffer = durableChunk.getChunkBuffer(offset, size);
       data = chunkBuffer.get();
-      data.putInt(0, this.getId());// Write the chunk ID
+      ByteBufferUtils.putInt(data, 0, this.getId());// Write the chunk ID
     }
     // createBuffer.cancelAutoReclaim(); this causes NPE
     // fill the data here
@@ -102,11 +102,11 @@ public class DurableSlicedChunk extends Chunk {
     int offset = OFFSET_TO_REGION_IDENTIFIER;
     if (regionName != null) {
       assert cfName != null;
-      data.putInt(offset, regionName.length);// Write regionName
+      ByteBufferUtils.putInt(data, offset, regionName.length);// Write regionName
       offset += Bytes.SIZEOF_INT;
       ByteBufferUtils.copyFromArrayToBuffer(this.data, offset, regionName, 0, regionName.length);
       offset += regionName.length;
-      data.putInt(offset, cfName.length);// Write cfName
+      ByteBufferUtils.putInt(data, offset, cfName.length);// Write cfName
       offset += Bytes.SIZEOF_INT;
       ByteBufferUtils.copyFromArrayToBuffer(this.data, offset, cfName, 0, cfName.length);
       offset += cfName.length;
@@ -118,7 +118,7 @@ public class DurableSlicedChunk extends Chunk {
   void prepopulateChunk() {
     // We have observed that the write perf of the persistent memory is much higher when the chunk
     // area is prepopulated with data. So this hack!
-    LOG.info("Prepopulating the chunk");
+    //LOG.info("Prepopulating the chunk");
     ByteBufferUtils.copyFromArrayToBuffer(data, Bytes.SIZEOF_INT, dummy, 0,
         (size - Bytes.SIZEOF_INT));
   }
@@ -129,18 +129,18 @@ public class DurableSlicedChunk extends Chunk {
    */
   // TODO use BBUtils
   Pair<byte[], byte[]> getOwnerRegionStore() {
-    int seqId = this.data.getInt(OFFSET_TO_SEQID);
+    int seqId = ByteBufferUtils.toInt(data, OFFSET_TO_SEQID);
     // TODO On a fresh file based chunk area, chances of we getting a >0 integer is likely. We need
     // a better way to know whether this is a fresh file open or second time. A file level meta data
     // will work? 
     if (seqId > UNUSED_SEQID) {
       int offset = OFFSET_TO_REGION_IDENTIFIER;
-      int regionNameLen = this.data.getInt(offset);
+      int regionNameLen = ByteBufferUtils.toInt(data, offset);
       byte[] regionName =  new byte[regionNameLen];
       offset += Bytes.SIZEOF_INT;
       ByteBufferUtils.copyFromBufferToArray(regionName, this.data, offset, 0, regionNameLen);
       offset += regionNameLen;
-      int cfNameLen = this.data.getInt(offset);
+      int cfNameLen = ByteBufferUtils.toInt(data, offset);
       byte[] cfName =  new byte[cfNameLen];
       offset += Bytes.SIZEOF_INT;
       ByteBufferUtils.copyFromBufferToArray(cfName, this.data, offset, 0, cfNameLen);
@@ -152,7 +152,7 @@ public class DurableSlicedChunk extends Chunk {
   @Override
   public void prePutbackToPool() {
     // TODO check why write using BBUtils not working in some cases.
-    data.putInt(OFFSET_TO_SEQID, UNUSED_SEQID);
+    ByteBufferUtils.putInt(data, OFFSET_TO_SEQID, UNUSED_SEQID);
     chunkBuffer.syncToLocal(OFFSET_TO_SEQID, SIZE_OF_SEQID);
   }
 
@@ -178,7 +178,7 @@ public class DurableSlicedChunk extends Chunk {
 
   int getSeqId() {
     // TODO work with BBUtils?
-    return this.data.getInt(OFFSET_TO_SEQID);
+    return ByteBufferUtils.toInt(data, OFFSET_TO_SEQID);
   }
 
   Pair<Integer, Integer> getCellsOffsetMeta() {
@@ -186,7 +186,7 @@ public class DurableSlicedChunk extends Chunk {
       throw new IllegalStateException();
     }
     // TODO work with BBUtils?
-    long meta = this.data.getLong(OFFSET_TO_OFFSETMETA);
+    long meta = ByteBufferUtils.toLong(data, OFFSET_TO_OFFSETMETA);
     int endOffset = (int) (Bytes.MASK_FOR_LOWER_INT_IN_LONG ^ meta);
     int lastChunkSeqId = (int) (meta >> Integer.SIZE);
     return new Pair<Integer, Integer>(lastChunkSeqId, endOffset);
@@ -197,7 +197,7 @@ public class DurableSlicedChunk extends Chunk {
     long meta = lastChunkSeqId;
     meta = (meta << Integer.SIZE) + lastOffset;
     // TODO check why write using BBUtils not working in some cases. May be some Endian issues?
-    this.data.putLong(OFFSET_TO_OFFSETMETA, meta);
+    ByteBufferUtils.putLong(data, OFFSET_TO_OFFSETMETA, meta);
     this.persist(OFFSET_TO_OFFSETMETA, SIZE_OF_OFFSETMETA);
   }
 
@@ -217,15 +217,16 @@ public class DurableSlicedChunk extends Chunk {
         int keyLen, valLen, tagsLen;
         if (endOffset.isPresent() && this.offset >= endOffset.get()) return false;
         int offsetTmp = this.offset;
-        keyLen = data.getInt(offsetTmp);
+        keyLen = ByteBufferUtils.toInt(data, offsetTmp);
         if (keyLen == EO_CELLS) return false;
         offsetTmp += KeyValue.KEY_LENGTH_SIZE;
-        valLen = data.getInt(offsetTmp);
-        offsetTmp += (KeyValue.KEY_LENGTH_SIZE + keyLen + valLen);
+        valLen = ByteBufferUtils.toInt(data, offsetTmp);
+        offsetTmp += keyLen + valLen + Bytes.SIZEOF_INT;
         // Read tags
-        tagsLen = ByteBufferUtils.readAsInt(data, offsetTmp, Tag.TAG_LENGTH_SIZE);
-        offsetTmp += (Tag.TAG_LENGTH_SIZE + tagsLen);
-        long seqId = data.getLong(offsetTmp);
+        // TODO : Revisit this
+        /*tagsLen = ByteBufferUtils.readAsInt(data, offsetTmp, Tag.TAG_LENGTH_SIZE);
+        offsetTmp += (Tag.TAG_LENGTH_SIZE + tagsLen);*/
+        long seqId = ByteBufferUtils.toLong(data, offsetTmp);
         this.curCell = new ByteBufferKeyValue(data, this.offset, offsetTmp - this.offset, seqId);
         this.offset = offsetTmp + SIZE_OF_CELL_SEQ_ID;
         return true;
@@ -236,9 +237,9 @@ public class DurableSlicedChunk extends Chunk {
 
   private int getCellOffset() {
     int offset = OFFSET_TO_REGION_IDENTIFIER;
-    int regionNameLen = this.data.getInt(offset);
-    offset += regionNameLen;
-    int cfNameLen = this.data.getInt(offset);
-    return offset + cfNameLen;
+    int regionNameLen = ByteBufferUtils.toInt(data, offset);
+    offset += regionNameLen + Bytes.SIZEOF_INT;
+    int cfNameLen = ByteBufferUtils.toInt(data, offset);
+    return offset + cfNameLen + Bytes.SIZEOF_INT;
   }
 }
