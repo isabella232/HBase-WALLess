@@ -285,6 +285,7 @@ message ServerCrashStateData {
   repeated RegionInfo regions_assigned = 4;
   optional bool carrying_meta = 5;
   optional bool should_split_wal = 6 [default = true];
+  optional bool master_restart = 7 [default = false];
 }
 
 message RecoverMetaStateData {
@@ -332,7 +333,7 @@ message AssignReplicaRegionAsPrimaryStateData {
 	required RegionInfo region_info = 2;
 	optional bool force_new_plan = 3 [default = false];
 	optional ServerName target_server = 4;
-	required RegionInfo destination_region = 5;
+	optional RegionInfo destination_region = 5;
 }
 
 message UnassignRegionStateData {

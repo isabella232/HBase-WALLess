@@ -19,6 +19,7 @@
 
 package org.apache.hadoop.hbase.master.assignment;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -106,6 +107,7 @@ public class RegionStates {
     private volatile RegionTransitionProcedure procedure = null;
     private volatile ServerName regionLocation = null;
     private volatile ServerName lastHost = null;
+    private volatile boolean retainAssignmentFailed = false;
     /**
      * A Region-in-Transition (RIT) moves through states.
      * See {@link State} for complete list. A Region that
@@ -299,6 +301,14 @@ public class RegionStates {
       return String.format("%s, table=%s, region=%s",
         toShortString(), getTable(), getRegionInfo().getEncodedName());
     }
+
+    public void setRetainAssignmentFailed(boolean retainAssignmentFailed) {
+      this.retainAssignmentFailed = retainAssignmentFailed;
+    }
+
+    public boolean getRetainAssignmentFailed() {
+      return this.retainAssignmentFailed;
+    }
   }
 
   // This comparator sorts the RegionStates by time stamp then Region name.
@@ -434,6 +444,10 @@ public class RegionStates {
 
   private final ConcurrentHashMap<ServerName, ServerStateNode> serverMap =
       new ConcurrentHashMap<ServerName, ServerStateNode>();
+  
+  // Better name
+   final ConcurrentSkipListMap<byte[], ServerName> newServersWithOldAEPFiles =
+      new ConcurrentSkipListMap<byte[], ServerName>(Bytes.BYTES_COMPARATOR);
 
   public RegionStates() { }
 
@@ -442,6 +456,7 @@ public class RegionStates {
     regionInTransition.clear();
     regionOffline.clear();
     serverMap.clear();
+    newServersWithOldAEPFiles.clear();
   }
 
   @VisibleForTesting
@@ -991,6 +1006,19 @@ public class RegionStates {
       node = oldNode != null ? oldNode : node;
     }
     return node;
+  }
+
+  public void addToNewRequestingServer(final byte[] info, final ServerName serverName) {
+    this.newServersWithOldAEPFiles.put(info, serverName);
+    LOG.info("New region info added "+ this.newServersWithOldAEPFiles.size());
+  }
+
+  public void removeFromNewRequestingServer(final byte[] info) {
+    this.newServersWithOldAEPFiles.remove(info);
+  }
+
+  public ServerName getNewRequestingServerName(final byte[] info) {
+    return this.newServersWithOldAEPFiles.get(info);
   }
 
   public void removeServer(final ServerName serverName) {

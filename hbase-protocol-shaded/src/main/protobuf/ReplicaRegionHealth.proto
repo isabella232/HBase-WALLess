@@ -42,6 +42,11 @@ message RegionNameMasterProcessingTimePair {
   required uint64 master_ts = 2; 
 }
 
+message RegionReplicaHealthChangeRequest {
+   required RegionSpecifier specifier = 1;
+   required ServerName requestingServer = 2;
+}
+
 message RegionReplicaHealthChangeResponse {
 
 }
@@ -53,6 +58,6 @@ message ReplicaStatusResponse {
 service ReplicaRegionHealthService {
   rpc HealthChange(HMRegionReplicaHealthChangeRequest)
     returns(RegionReplicaHealthChangeResponse);
-  rpc AtleastOneReplicaGood(RegionSpecifier)
+  rpc AtleastOneReplicaGood(RegionReplicaHealthChangeRequest)
     returns(ReplicaStatusResponse);
 }

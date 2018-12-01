@@ -220,6 +220,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.HMRegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaRegionHealthService;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.ReplicaStatusResponse;
 
@@ -1148,7 +1149,7 @@ public class HRegionServer extends HasThread implements
     }
 
     // close the DurableChunk-if there is any
-    ChunkCreator.shutdown();
+    ChunkCreator.shutdown(this.conf.get(ChunkCreatorFactory.MSLAB_DURABLE_PATH_KEY, null));
     if (this.rpcServices != null) {
       this.rpcServices.stop();
     }
@@ -1985,7 +1986,7 @@ public class HRegionServer extends HasThread implements
     // Call it after starting HeapMemoryManager.
     if (!(this instanceof MasterServices)) {
       // TODO : for tests. In real case this is not needed. Find a better way to do this
-      ChunkCreator.resetInstance();
+      //ChunkCreator.resetInstance(conf.get(ChunkCreatorFactory.MSLAB_DURABLE_PATH_KEY, null));
       initializeMemStoreChunkCreator();
     }
   }
@@ -3860,11 +3861,17 @@ public class HRegionServer extends HasThread implements
 
   public boolean atleastOneReplicaGood(byte[] regionName) {
     if (this.rrssStub == null) return false;
-    RegionSpecifier region = RequestConverter.buildRegionSpecifier(RegionSpecifierType.REGION_NAME,
-        regionName);
+    RegionSpecifier region =
+        RequestConverter.buildRegionSpecifier(RegionSpecifierType.REGION_NAME, regionName);
+    org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeRequest.Builder newBuilder =
+        RegionReplicaHealthChangeRequest.newBuilder();
+    LOG.info("New requesting server " + this.getServerName());
+    newBuilder.setRequestingServer(ProtobufUtil.toServerName(this.getServerName()));
+    newBuilder.setSpecifier(region);
+    RegionReplicaHealthChangeRequest request = newBuilder.build();
     ReplicaStatusResponse response;
     try {
-      response = this.rrssStub.atleastOneReplicaGood(null, region);
+      response = this.rrssStub.atleastOneReplicaGood(null, request);
     } catch (ServiceException e) {
       LOG.error("Exception ReplicaRegionHealthService#atleastOneReplicaGood", e);
       return false;

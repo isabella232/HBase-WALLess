@@ -1262,6 +1262,17 @@ public class AssignmentManager implements ServerListener {
     final RegionStateNode regionNode = regionStates.getRegionStateNode(regionInfo);
     //if (regionNode.isStuck()) {
     LOG.warn("STUCK Region-In-Transition {}", regionNode);
+    final ProcedureEvent[] events = new ProcedureEvent[1];
+    // the retain assignmet has failed. Now lets see if it has got the new server.
+    // the bad thing is this - check of new server has to be done in every place. We should try to minimise this
+    ServerName serverName =
+        regionStates.getNewRequestingServerName(regionNode.getRegionInfo().getRegionName());
+    LOG.info(
+      "Got a new server for the RIT region " + regionNode.getRegionInfo() + " " + serverName);
+    regionNode.setRegionLocation(serverName);
+    events[0] = regionNode.getProcedureEvent();
+    // Wake up the event
+    ProcedureEvent.wakeEvents(getProcedureScheduler(), events);
   }
 
   // ============================================================================================
@@ -1459,13 +1470,17 @@ public class AssignmentManager implements ServerListener {
     return 0;
   }
 
-  public void submitServerCrash(final ServerName serverName, final boolean shouldSplitWal) {
+  public void submitServerCrash(final ServerName serverName, final boolean shouldSplitWal, final boolean masterRestart) {
     boolean carryingMeta = isCarryingMeta(serverName);
     ProcedureExecutor<MasterProcedureEnv> procExec = this.master.getMasterProcedureExecutor();
     procExec.submitProcedure(new ServerCrashProcedure(procExec.getEnvironment(), serverName,
-      shouldSplitWal, carryingMeta));
+      shouldSplitWal, carryingMeta, masterRestart));
     LOG.debug("Added=" + serverName +
       " to dead servers, submitted shutdown handler to be executed meta=" + carryingMeta);
+  }
+
+  public void submitServerCrash(final ServerName serverName, final boolean shouldSplitWal) {
+    submitServerCrash(serverName, shouldSplitWal, false);
   }
 
   public void offlineRegion(final RegionInfo regionInfo) {
@@ -1601,6 +1616,7 @@ public class AssignmentManager implements ServerListener {
       // That is a lot of hbase:meta writing.
       regionStateStore.updateRegionLocation(regionNode);
       sendRegionOpenedNotification(hri, regionNode.getRegionLocation());
+      regionNode.setRetainAssignmentFailed(false);
     }
   }
 
@@ -1861,10 +1877,14 @@ public class AssignmentManager implements ServerListener {
         LOG.trace("retain assign regions=" + retainMap);
       }
       try {
-        acceptPlan(regions, balancer.retainAssignment(retainMap, servers));
+        List<RegionInfo> pendingAssignments =
+            acceptPlan(regions, balancer.retainAssignment(retainMap, servers));
+        if (!pendingAssignments.isEmpty()) {
+          addToPendingAssignment(regions, pendingAssignments, true);
+        }
       } catch (HBaseIOException e) {
         LOG.warn("unable to retain assignment", e);
-        addToPendingAssignment(regions, retainMap.keySet());
+        addToPendingAssignment(regions, retainMap.keySet(), true);
       }
     }
 
@@ -1876,15 +1896,19 @@ public class AssignmentManager implements ServerListener {
         LOG.trace("round robin regions=" + hris);
       }
       try {
-        acceptPlan(regions, balancer.roundRobinAssignment(hris, servers));
+        List<RegionInfo> pendingAssignments =
+            acceptPlan(regions, balancer.roundRobinAssignment(hris, servers));
+        if (!pendingAssignments.isEmpty()) {
+          addToPendingAssignment(regions, pendingAssignments, true);
+        }
       } catch (HBaseIOException e) {
         LOG.warn("unable to round-robin assignment", e);
-        addToPendingAssignment(regions, hris);
+        addToPendingAssignment(regions, hris, true);
       }
     }
   }
 
-  private void acceptPlan(final HashMap<RegionInfo, RegionStateNode> regions,
+  private List<RegionInfo> acceptPlan(final HashMap<RegionInfo, RegionStateNode> regions,
       final Map<ServerName, List<RegionInfo>> plan) throws HBaseIOException {
     final ProcedureEvent[] events = new ProcedureEvent[regions.size()];
     final long st = System.currentTimeMillis();
@@ -1893,13 +1917,29 @@ public class AssignmentManager implements ServerListener {
       throw new HBaseIOException("unable to compute plans for regions=" + regions.size());
     }
 
-    if (plan.isEmpty()) return;
+    List<RegionInfo> pendingAssignents = new ArrayList<RegionInfo>(regions.size());
+    if (plan.isEmpty()) return pendingAssignents ;
 
     int evcount = 0;
     for (Map.Entry<ServerName, List<RegionInfo>> entry: plan.entrySet()) {
-      final ServerName server = entry.getKey();
-      for (RegionInfo hri: entry.getValue()) {
+     ServerName server = entry.getKey();
+      for (RegionInfo hri : entry.getValue()) {
         final RegionStateNode regionNode = regions.get(hri);
+        // A case where the retain assignment was not able to find a plan. Even without this it may
+        // work but it will take some time to again try the assignment. Found from test cases and testing
+        boolean retainFailed = regionNode.getRetainAssignmentFailed();
+        if (server == null || !this.master.getServerManager().isServerOnline(server)) {
+          if (retainFailed) {
+            // Do not wake up. Expectation is that we can try after the region server with the new
+            // name actually checks in
+            if (getRegionStates().getNewRequestingServerName(hri.getRegionName()) == null) {
+              pendingAssignents.add(hri);
+              continue;
+            }
+            LOG.info("Found the location for the region " + hri);
+            server = getRegionStates().getNewRequestingServerName(hri.getRegionName());
+          }
+        }
         regionNode.setRegionLocation(server);
         events[evcount++] = regionNode.getProcedureEvent();
       }
@@ -1911,14 +1951,22 @@ public class AssignmentManager implements ServerListener {
       LOG.trace("ASSIGN ACCEPT " + events.length + " -> " +
           StringUtils.humanTimeDiff(et - st));
     }
+    return pendingAssignents;
   }
 
   private void addToPendingAssignment(final HashMap<RegionInfo, RegionStateNode> regions,
-      final Collection<RegionInfo> pendingRegions) {
+      final Collection<RegionInfo> pendingRegions, boolean retainAssignmentFailed) {
     assignQueueLock.lock();
     try {
-      for (RegionInfo hri: pendingRegions) {
-        pendingAssignQueue.add(regions.get(hri));
+      if (retainAssignmentFailed) {
+        for (RegionStateNode node : regions.values()) {
+          // mark all as retain assignment failed case.
+          node.setRetainAssignmentFailed(retainAssignmentFailed);
+        }
+      }
+      for (RegionInfo hri : pendingRegions) {
+        RegionStateNode regionStateNode = regions.get(hri);
+        pendingAssignQueue.add(regionStateNode);
       }
     } finally {
       assignQueueLock.unlock();
@@ -1979,7 +2027,7 @@ public class AssignmentManager implements ServerListener {
     for (RegionStateNode regionNode: serverNode.getRegions()) {
       regionNode.offline();
     }*/
-    master.getServerManager().expireServer(serverNode.getServerName());
+    master.getServerManager().expireServer(serverNode.getServerName(), true);
   }
 
   public void updateReplicaRegionHealth(List<RegionInfo> regions, boolean goodState)

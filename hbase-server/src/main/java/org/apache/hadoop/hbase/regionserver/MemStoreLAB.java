@@ -116,9 +116,10 @@ public interface MemStoreLAB {
   static MemStoreLAB newInstance(byte[] regionName, byte[] cfName, Configuration conf) {
     MemStoreLAB memStoreLAB = null;
     if (isEnabled(conf)) {
+      String path = conf.get("hbase.memstore.mslab.durable.path");
       // TODO Default MSLAB to be old impl class only. Some way using which we can change this auto
       // in code rather than asking user to change?
-      if (DurableMemStoreLABImpl.useDurableMemstore) {
+      if (path != null) {
         String className = conf.get(MSLAB_CLASS_NAME, DurableMemStoreLABImpl.class.getName());
         memStoreLAB = ReflectionUtils.instantiateWithCustomCtor(className,
           new Class[] { byte[].class, byte[].class, Configuration.class },

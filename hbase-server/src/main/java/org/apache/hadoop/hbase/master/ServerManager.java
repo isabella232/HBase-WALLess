@@ -559,6 +559,15 @@ public class ServerManager {
    * shutdown processing.
    */
   public synchronized void expireServer(final ServerName serverName) {
+    expireServer(serverName, false);
+  }
+
+  /*
+   * Expire the passed server.  Add it to list of dead servers and queue a
+   * shutdown processing.
+   */
+  public synchronized void expireServer(final ServerName serverName,
+      boolean expireOnMasterRestart) {
     if (serverName.equals(master.getServerName())) {
       if (!(master.isAborted() || master.isStopped())) {
         master.stop("We lost our znode?");
@@ -593,8 +602,9 @@ public class ServerManager {
       }
       return;
     }
-    LOG.info("Processing expiration of " + serverName + " on " + this.master.getServerName());
-    master.getAssignmentManager().submitServerCrash(serverName, true);
+    LOG.info("Processing expiration of " + serverName + " on " + this.master.getServerName()
+        + " expire on master restart " + expireOnMasterRestart);
+    master.getAssignmentManager().submitServerCrash(serverName, true, expireOnMasterRestart);
 
     // Tell our listeners that a server was removed
     if (!this.listeners.isEmpty()) {

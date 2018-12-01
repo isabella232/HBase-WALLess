@@ -76,6 +76,7 @@ implements ServerProcedureInterface {
 
   private boolean carryingMeta = false;
   private boolean shouldSplitWal;
+  private boolean masterRestart = false;
 
   /**
    * Call this constructor queuing up a Procedure.
@@ -88,9 +89,25 @@ implements ServerProcedureInterface {
       final ServerName serverName,
       final boolean shouldSplitWal,
       final boolean carryingMeta) {
+    this(env, serverName, shouldSplitWal, carryingMeta, false);
+  }
+  
+  /**
+   * Call this constructor queuing up a Procedure.
+   * @param serverName Name of the crashed server.
+   * @param shouldSplitWal True if we should split WALs as part of crashed server processing.
+   * @param carryingMeta True if carrying hbase:meta table region.
+   * @param masterRestart True if the procedure was started by a master noticing that a server was down
+   */
+  public ServerCrashProcedure(
+      final MasterProcedureEnv env,
+      final ServerName serverName,
+      final boolean shouldSplitWal,
+      final boolean carryingMeta, final boolean masterRestart) {
     this.serverName = serverName;
     this.shouldSplitWal = shouldSplitWal;
     this.carryingMeta = carryingMeta;
+    this.masterRestart = masterRestart;
     this.setOwner(env.getRequestUser());
   }
 
@@ -167,7 +184,11 @@ implements ServerProcedureInterface {
             List<RegionInfo> toAssign = handleRIT(env, regionsOnCrashedServer);
             AssignmentManager am = env.getAssignmentManager();
             // CreateAssignProcedure will try to use the old location for the region deploy.
-            addChildProcedure(am.createAssignProcedures(toAssign, true));
+            boolean assignReplicaAsPrimary = true;
+            if (this.masterRestart) {
+              assignReplicaAsPrimary = false;
+            }
+            addChildProcedure(am.createAssignProcedures(toAssign, assignReplicaAsPrimary));
             setNextState(ServerCrashState.SERVER_CRASH_HANDLE_RIT2);
           } else {
             setNextState(ServerCrashState.SERVER_CRASH_FINISH);
@@ -308,7 +329,8 @@ implements ServerProcedureInterface {
       MasterProcedureProtos.ServerCrashStateData.newBuilder().
       setServerName(ProtobufUtil.toServerName(this.serverName)).
       setCarryingMeta(this.carryingMeta).
-      setShouldSplitWal(this.shouldSplitWal);
+      setShouldSplitWal(this.shouldSplitWal).
+      setMasterRestart(this.masterRestart);
     if (this.regionsOnCrashedServer != null && !this.regionsOnCrashedServer.isEmpty()) {
       for (RegionInfo hri: this.regionsOnCrashedServer) {
         state.addRegionsOnCrashedServer(ProtobufUtil.toRegionInfo(hri));
@@ -328,10 +350,12 @@ implements ServerProcedureInterface {
     this.carryingMeta = state.hasCarryingMeta()? state.getCarryingMeta(): false;
     // shouldSplitWAL has a default over in pb so this invocation will always work.
     this.shouldSplitWal = state.getShouldSplitWal();
+    this.masterRestart = state.getMasterRestart();
     int size = state.getRegionsOnCrashedServerCount();
     if (size > 0) {
       this.regionsOnCrashedServer = new ArrayList<>(size);
-      for (org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo ri: state.getRegionsOnCrashedServerList()) {
+      for (org.apache.hadoop.hbase.shaded.protobuf.generated.HBaseProtos.RegionInfo ri : state
+          .getRegionsOnCrashedServerList()) {
         this.regionsOnCrashedServer.add(ProtobufUtil.toRegionInfo(ri));
       }
     }

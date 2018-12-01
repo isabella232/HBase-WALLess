@@ -131,7 +131,17 @@ public abstract class AbstractMemStore implements MemStore {
 
   @Override
   public void add(Cell cell, MemStoreSizing memstoreSizing) {
-    Cell toAdd = maybeCloneWithAllocator(cell, false);
+    add(cell, memstoreSizing, true);
+  }
+  
+  @Override
+  public void add(Cell cell, MemStoreSizing memstoreSizing, boolean copyToMsLab) {
+    Cell toAdd;
+    if (copyToMsLab) {
+      toAdd = maybeCloneWithAllocator(cell, false);
+    } else {
+      toAdd = cell;
+    }
     boolean mslabUsed = (toAdd != cell);
     // This cell data is backed by the same byte[] where we read request in RPC(See HBASE-15180). By
     // default MSLAB is ON and we might have copied cell to MSLAB area. If not we must do below deep
@@ -143,6 +153,7 @@ public abstract class AbstractMemStore implements MemStore {
     // "hbase.hregion.memstore.mslab.max.allocation". This defaults to 256 KB
     // 3. When cells are from Append/Increment operation.
     if (!mslabUsed) {
+      // This needs tweaking
       toAdd = deepCopyIfNeeded(toAdd);
     }
     internalAdd(toAdd, mslabUsed, memstoreSizing);

@@ -960,14 +960,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     status.setStatus("Initializing all the Stores");
     long maxSeqId = initializeStores(reporter, status);
     this.mvcc.advanceTo(maxSeqId);
+    DurableChunkRetrieverV2 chunkRetriever = null;
+    MemStoreChunkPool dataPool = null;
     // Replay cells from durable chunk
+    if (this.getRegionServerServices() != null) {
+      chunkRetriever = ((HRegionServer) this.getRegionServerServices()).getRetriver();
+      dataPool = ((DurableChunkCreator) DurableChunkCreator.getInstance()).getDataPool();
+    }
     if (this.getRegionServerServices() != null
         && ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
       LOG.debug("Retrieving the data for region " + this.getRegionInfo() + " from chunk retriever");
-      DurableChunkRetrieverV2 chunkRetriever =
-          ((HRegionServer) this.getRegionServerServices()).getRetriver();
-      MemStoreChunkPool dataPool =
-          ((DurableChunkCreator) DurableChunkCreator.getInstance()).getDataPool();
       if (chunkRetriever != null) {
         for (HStore store : this.stores.values()) {
           byte[] regionName = this.getRegionInfo().getRegionName();
@@ -980,6 +982,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
             this.mvcc.advanceTo(maxSeqId);
           } catch (Exception ex) {
             e = ex;
+            LOG.error("The error is ", ex);
           } finally {
             if (e == null) {
               // TODO : If there is an error here. Better throw error outside.
@@ -988,6 +991,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           }
         }
       }
+    } else if (this.getRegionServerServices() != null) {
+      // the case where a replica region is being opened and we have collected the chunks for it
+      // from the retriever. We need
+      // to return back the chunks. If at all a primary assignment also comes here then it is an
+      // assignment bug : How to solve that will be a TODO. Otherwise
+      // there is no way to clear the chunks and it won't be given back to the pool.
+      chunkRetriever.finishRegionReplay(
+        RegionInfo.toPrimaryRegionName(this.getRegionInfo().getRegionName()), dataPool);
     }
     if (ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
       // TODO this should not be commented out ideally. We should make the memstore replication as a
@@ -1070,8 +1081,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     long maxSeqId = -1;
     boolean flush = false;
     long curSeqId = -1;
+    int count = 0;
     while (cellScanner.advance()) {
       Cell cell = cellScanner.current();
+      count++;
       if (cell.getSequenceId() >= maxSeqIdInStoreFiles) {
         if (cell.getSequenceId() > maxSeqId) {
           maxSeqId = cell.getSequenceId();
@@ -1079,14 +1092,18 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       } else {
         LOG.debug("Skipping cell " + cell + " as already available in file");
         // TODO : this has to be there. check what is happening if I uncomment this
+        // Ideally we should not be getting this at all if at all we are only parsing the unflushed chunks
         //continue;
       }
       if (cell.getSequenceId() != curSeqId) {
-        store.add(cell, memstoreSize);
+        // Purposefully not copying to the MSLAB. We need to always flush then if we need to avoid this
+        // instead of checking for the flush size breach.
+        //: TODO : revisit this
+        store.add(cell, memstoreSize, false);
         curSeqId = cell.getSequenceId();
       }
     }
-
+    LOG.info("Added "+count+ " cells to the region "+getRegionInfo() );
     // add it to the RSAccounting so that we do the accounting of these edits from durable chunk
     if (this.rsAccounting != null) {
       rsAccounting.addRegionReplayEditsSize(getRegionInfo().getRegionName(), memstoreSize);
@@ -1909,6 +1926,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     * @return True if its worth doing a flush before we put up the close flag.
     */
   private boolean worthPreFlushing() {
+    if (!RegionReplicaUtil.isDefaultReplica(getRegionInfo())) {
+      // forcefully make the region flush on normal region close
+      return true;
+    }
     return this.memStoreSize.getDataSize() >
       this.conf.getLong("hbase.hregion.preclose.flush.size", 1024 * 1024 * 5);
   }
@@ -4327,7 +4348,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // TODO this logic should be part of a WAL impl and fully plugged in with out any core changes
       // as here. It is just a PoC
       if (!memstoreEdit.isEmpty() && !this.getRegionInfo().getTable().isSystemTable()) {
-        writeEntry = replicateCurrentBatch(memstoreEdit, 1);
+         writeEntry = replicateCurrentBatch(memstoreEdit, 1);
       }
       // if null create one
       if (writeEntry == null) {

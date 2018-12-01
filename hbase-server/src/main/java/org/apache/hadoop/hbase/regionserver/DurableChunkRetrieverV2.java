@@ -71,6 +71,9 @@ public class DurableChunkRetrieverV2 {
   public boolean appendChunk(Pair<byte[], byte[]> regionStore, DurableSlicedChunk chunk) {
     byte[] primaryRegionName = null;
     try {
+      // Verify the case where a replica region was hosted and the primary is trying to be assigned
+      // to that server because we found the existing AEP chunk file. Whether the primary region
+      // name and replica region name mapping is happening fine
       primaryRegionName = RegionInfo.toPrimaryRegionName(regionStore.getFirst());
     } catch (IOException e) {
       // Do not expect this to happen.
@@ -93,6 +96,7 @@ public class DurableChunkRetrieverV2 {
             (this.hrs != null) ? !(this.hrs.atleastOneReplicaGood(regionStore.getFirst())) : true;
         if (toBeKept) {
           storeVsChunks = new TreeMap<>(Bytes.BYTES_COMPARATOR);
+          // the chunks are always stored with the primary region name
           this.chunks.put(primaryRegionName, storeVsChunks);
           addChunkUnderStore(regionStore.getSecond(), chunk, storeVsChunks);
         } else {

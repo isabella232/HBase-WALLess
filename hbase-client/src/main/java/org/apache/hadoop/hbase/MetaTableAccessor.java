@@ -335,7 +335,12 @@ public class MetaTableAccessor {
   public static RegionLocations getRegionLocations(Connection connection, byte[] regionName)
       throws IOException {
     RegionInfo parsedInfo = parseRegionInfoFromRegionName(regionName);
-    byte[] row = getMetaKeyForRegion(parsedInfo);
+   return getRegionLocations(connection, parsedInfo);
+  }
+  
+  public static RegionLocations getRegionLocations(Connection connection, RegionInfo regionName)
+      throws IOException {
+    byte[] row = getMetaKeyForRegion(regionName);
     Get get = new Get(row);
     get.addFamily(HConstants.CATALOG_FAMILY);
     Result r = get(getMetaHTable(connection), get);

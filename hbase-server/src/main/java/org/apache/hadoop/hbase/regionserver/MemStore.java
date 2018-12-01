@@ -75,6 +75,14 @@ public interface MemStore {
   void add(final Cell cell, MemStoreSizing memstoreSizing);
 
   /**
+   * Write an update
+   * @param cell the cell
+   * @param memstoreSizing the memtsore sizing needed
+   * @param copyToMsLab to copy to mslab or not
+   */
+  void add(final Cell cell, MemStoreSizing memstoreSizing, boolean copyToMsLab);
+
+  /**
    * Write the updates
    * @param cells
    * @param memstoreSizing The delta in memstore size will be passed back via this.

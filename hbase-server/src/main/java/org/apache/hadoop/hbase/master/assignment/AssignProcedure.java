@@ -38,13 +38,13 @@ import org.apache.hadoop.hbase.procedure2.ProcedureMetrics;
 import org.apache.hadoop.hbase.procedure2.ProcedureStateSerializer;
 import org.apache.hadoop.hbase.procedure2.ProcedureSuspendedException;
 import org.apache.hadoop.hbase.procedure2.RemoteProcedureDispatcher.RemoteOperation;
-import org.apache.yetus.audience.InterfaceAudience;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.AssignRegionStateData;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MasterProcedureProtos.RegionTransitionState;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.RegionStateTransition.TransitionCode;
+import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Procedure that describe the assignment of a single region.
@@ -245,6 +245,7 @@ public class AssignProcedure extends RegionTransitionProcedure {
     if (!isServerOnline(env, regionNode)) {
       // TODO: is this correct? should we wait the chore/ssh?
       LOG.info("Server not online, re-queuing " + this + "; " + regionNode.toShortString());
+      checkForOnlineServer(env, regionNode);
       setTransitionState(RegionTransitionState.REGION_TRANSITION_QUEUE);
       return true;
     }
@@ -279,6 +280,19 @@ public class AssignProcedure extends RegionTransitionProcedure {
     return true;
   }
 
+  protected boolean checkForOnlineServer(final MasterProcedureEnv env,
+      final RegionStateNode regionNode) {
+    ServerName newServer = env.getAssignmentManager().getRegionStates()
+        .getNewRequestingServerName(regionNode.getRegionInfo().getRegionName());
+    if (newServer != null) {
+      LOG.info("Updating target server for the region " + regionInfo
+          + " with the new requesting server " + newServer);
+      this.targetServer = newServer;
+      return true;
+    }
+    return false;
+  }
+
   @Override
   protected Procedure finishTransition(final MasterProcedureEnv env, final RegionStateNode regionNode)
       throws IOException {
@@ -286,6 +300,8 @@ public class AssignProcedure extends RegionTransitionProcedure {
     // This success may have been after we failed open a few times. Be sure to cleanup any
     // failed open references. See #incrementAndCheckMaxAttempts and where it is called.
     env.getAssignmentManager().getRegionStates().removeFromFailedOpen(regionNode.getRegionInfo());
+    env.getAssignmentManager().getRegionStates()
+        .removeFromNewRequestingServer(regionNode.getRegionInfo().getRegionName());
     return null;
   }
 

@@ -48,12 +48,14 @@ import org.apache.hadoop.hbase.client.ColumnFamilyDescriptor;
 import org.apache.hadoop.hbase.client.MasterSwitchType;
 import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.client.RegionInfoBuilder;
+import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.TableDescriptor;
 import org.apache.hadoop.hbase.client.TableState;
 import org.apache.hadoop.hbase.client.VersionInfoUtil;
 import org.apache.hadoop.hbase.client.replication.ReplicationPeerConfigUtil;
 import org.apache.hadoop.hbase.coprocessor.MasterCoprocessor;
 import org.apache.hadoop.hbase.errorhandling.ForeignException;
+import org.apache.hadoop.hbase.exceptions.DeserializationException;
 import org.apache.hadoop.hbase.exceptions.UnknownProtocolException;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.ipc.CoprocessorRpcUtils;
@@ -65,6 +67,7 @@ import org.apache.hadoop.hbase.ipc.RpcServerFactory;
 import org.apache.hadoop.hbase.ipc.RpcServerInterface;
 import org.apache.hadoop.hbase.ipc.ServerRpcController;
 import org.apache.hadoop.hbase.master.assignment.RegionStates;
+import org.apache.hadoop.hbase.master.assignment.RegionStates.RegionStateNode;
 import org.apache.hadoop.hbase.master.locking.LockProcedure;
 import org.apache.hadoop.hbase.master.procedure.MasterProcedureUtil;
 import org.apache.hadoop.hbase.master.procedure.MasterProcedureUtil.NonceProcedureRunnable;
@@ -284,6 +287,7 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProto
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RegionServerStatusProtos.ReportRegionStateTransitionResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.HMRegionReplicaHealthChangeRequest;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicaRegionHealthProtos.RegionReplicaHealthChangeResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicationProtos.AddReplicationPeerRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ReplicationProtos.AddReplicationPeerResponse;
@@ -2299,20 +2303,60 @@ public class MasterRpcServices extends RSRpcServices
 
   @Override
   public ReplicaStatusResponse atleastOneReplicaGood(RpcController controller,
-      RegionSpecifier request) throws ServiceException {
+      RegionReplicaHealthChangeRequest request) throws ServiceException {
     ReplicaStatusResponse.Builder builder = ReplicaStatusResponse.newBuilder();
-    assert request.getType() == RegionSpecifierType.REGION_NAME;
-    byte[] regionName = request.getValue().toByteArray();
-    RegionLocations locations;
+    assert request.getSpecifier().getType() == RegionSpecifierType.REGION_NAME;
+    byte[] regionName = request.getSpecifier().getValue().toByteArray();
+    ServerName requestingServer = ProtobufUtil.toServerName(request.getRequestingServer());
+    RegionLocations locations = null;
+    RegionInfo parseRegionInfoFromRegionName = null;
     try {
-      locations = MetaTableAccessor.getRegionLocations(this.master.getConnection(), regionName);
+      LOG.info("Calling region locations " + Bytes.toString(regionName));
+      parseRegionInfoFromRegionName = MetaTableAccessor.parseRegionInfoFromRegionName(regionName);
+      // If meta is down how do we really know this ?? Assign meta first??
+      locations = MetaTableAccessor.getRegionLocations(this.master.getConnection(),
+        RegionReplicaUtil.getRegionInfoForDefaultReplica(parseRegionInfoFromRegionName));
     } catch (IOException e) {
-      throw new ServiceException(e);
+      // throw new ServiceException(e);
+      // TODO : Handle these
+      LOG.error("IOException while getting the region locations. Probably META is not up?? ", e);
+    } catch (Exception e) {
+      // TODO : Handle meta down cases
+      LOG.error("Exception while getting the region locations. Probably META is not up?? ", e);
     }
-    for (HRegionLocation location : locations.getRegionLocations()) {
-      if (location.isGood()) {
-        return builder.setStatus(true).build();
+    if (locations != null) {
+      LOG.info("The locations are " + locations);
+      for (HRegionLocation location : locations.getRegionLocations()) {
+        if (location != null && location.isGood()) {
+          if (ServerName.isSameAddress(location.getServerName(), requestingServer)
+              && location.getServerName().getStartcode() == requestingServer.getStartcode()) {
+            return builder.setStatus(true).build();
+          }
+        }
       }
+    }
+    // If the flow has come here it means there was no matching server or all the locations are BAD.
+    boolean newServer = true;
+    // We are not bothered about the location was good or bad
+    if (locations != null) {
+      for (HRegionLocation location : locations.getRegionLocations()) {
+        if (ServerName.isSameAddress(location.getServerName(), requestingServer)
+            && (location.getServerName().getStartcode() == requestingServer.getStartcode())) {
+          // It is a new server - the start code is also varied
+          newServer = false;
+          break;
+        }
+      }
+    }
+    // If we see that newServer as false - then it means that we have all old servers only but all the location
+    // of the replicas in META is in BAD state. If we see that newServer = true it means that though
+    // the META says the replicas are in BAD state still we have a new server checked in. So it makes sense
+    // to assign to that server - atleast the primary
+    if (newServer) {
+      master.getAssignmentManager().getRegionStates().addToNewRequestingServer(
+        parseRegionInfoFromRegionName.getRegionName(), requestingServer);
+      LOG.info("Adding region " + parseRegionInfoFromRegionName + " from requesting server "
+          + requestingServer + " to the newrequesting servers map");
     }
     return builder.setStatus(false).build();
   }

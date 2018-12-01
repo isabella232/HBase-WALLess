@@ -728,19 +728,23 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
    */
   // TODO remove this and Memstore#remove(Cell)
   public void add(final Cell cell, MemStoreSizing memstoreSizing) {
+    add(cell, memstoreSizing, true);
+  }
+
+  public void add(final Cell cell, MemStoreSizing memstoreSizing, boolean copyToMsLab) {
     lock.readLock().lock();
     try {
       if (this.currentParallelPutCount.getAndIncrement() > this.parallelPutCountPrintThreshold) {
-        LOG.trace(this.getTableName() + "tableName={}, encodedName={}, columnFamilyName={} is " +
-          "too busy!", this.getRegionInfo().getEncodedName(), this .getColumnFamilyName());
+        LOG.trace(this.getTableName() + "tableName={}, encodedName={}, columnFamilyName={} is "
+            + "too busy!",
+          this.getRegionInfo().getEncodedName(), this.getColumnFamilyName());
       }
-      this.memstore.add(cell, memstoreSizing);
+      this.memstore.add(cell, memstoreSizing, copyToMsLab);
     } finally {
       lock.readLock().unlock();
       currentParallelPutCount.decrementAndGet();
     }
   }
-
   /**
    * Adds the specified value to the memstore
    */
