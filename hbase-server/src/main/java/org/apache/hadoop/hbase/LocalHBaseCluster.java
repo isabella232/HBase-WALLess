@@ -92,8 +92,14 @@ public class LocalHBaseCluster {
   public LocalHBaseCluster(final Configuration conf, final int noRegionServers)
   throws IOException {
     this(conf, 1, noRegionServers, getMasterImplementation(conf),
-        getRegionServerImplementation(conf));
+        getRegionServerImplementation(conf), null);
   }
+
+  public LocalHBaseCluster(final Configuration conf, final int noRegionServers, List<String> aepPaths)
+      throws IOException {
+        this(conf, 1, noRegionServers, getMasterImplementation(conf),
+            getRegionServerImplementation(conf), aepPaths);
+      }
 
   /**
    * Constructor.
@@ -107,7 +113,14 @@ public class LocalHBaseCluster {
       final int noRegionServers)
   throws IOException {
     this(conf, noMasters, noRegionServers, getMasterImplementation(conf),
-        getRegionServerImplementation(conf));
+        getRegionServerImplementation(conf), null);
+  }
+
+  public LocalHBaseCluster(final Configuration conf, final int noMasters,
+      final int noRegionServers, List<String> aepPaths)
+  throws IOException {
+    this(conf, noMasters, noRegionServers, getMasterImplementation(conf),
+        getRegionServerImplementation(conf), aepPaths);
   }
 
   @SuppressWarnings("unchecked")
@@ -135,7 +148,7 @@ public class LocalHBaseCluster {
   @SuppressWarnings("unchecked")
   public LocalHBaseCluster(final Configuration conf, final int noMasters,
     final int noRegionServers, final Class<? extends HMaster> masterClass,
-    final Class<? extends HRegionServer> regionServerClass)
+    final Class<? extends HRegionServer> regionServerClass, List<String> aepPaths)
   throws IOException {
     this.conf = conf;
 
@@ -164,8 +177,21 @@ public class LocalHBaseCluster {
        regionServerClass);
 
     for (int i = 0; i < noRegionServers; i++) {
-      addRegionServer(new Configuration(conf), i);
+      if (aepPaths != null) {
+        Configuration newConf = new Configuration(conf);
+        newConf.set("hbase.memstore.mslab.durable.path", aepPaths.get(i));
+        addRegionServer(newConf, i);
+      } else {
+        addRegionServer(new Configuration(conf), i);
+      }
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  public LocalHBaseCluster(final Configuration conf, final int noMasters, final int noRegionServers,
+      final Class<? extends HMaster> masterClass,
+      final Class<? extends HRegionServer> regionServerClass) throws IOException {
+    this(conf, noMasters, noRegionServers, masterClass, regionServerClass, null);
   }
 
   public JVMClusterUtil.RegionServerThread addRegionServer()
@@ -209,6 +235,7 @@ public class LocalHBaseCluster {
     // Create each master with its own Configuration instance so each has
     // its Connection instance rather than share (see HBASE_INSTANCES down in
     // the guts of ConnectionManager.
+    conf.getBoolean("hbase.hregion.memstore.mslab.enabled", false);
     JVMClusterUtil.MasterThread mt = JVMClusterUtil.createMasterThread(c,
         (Class<? extends HMaster>) conf.getClass(HConstants.MASTER_IMPL, this.masterClass), index);
     this.masterThreads.add(mt);

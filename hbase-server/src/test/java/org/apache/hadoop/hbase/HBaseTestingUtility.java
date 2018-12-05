@@ -792,7 +792,7 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
    * @see {@link #shutdownMiniDFSCluster()}
    */
   public MiniHBaseCluster startMiniCluster(boolean withWALDir) throws Exception {
-    return startMiniCluster(1, 1, 1, null, null, null, false, withWALDir);
+    return startMiniCluster(1, 1, 1, null, null, null, false, withWALDir, null);
   }
 
   /**
@@ -821,14 +821,24 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
    * @see {@link #shutdownMiniCluster()}
    * @return Mini hbase cluster instance created.
    */
-  public MiniHBaseCluster startMiniCluster(final int numSlaves)
-  throws Exception {
+  public MiniHBaseCluster startMiniCluster(final int numSlaves) throws Exception {
     return startMiniCluster(1, numSlaves, false);
   }
 
+  public MiniHBaseCluster startMiniCluster(final int numSlaves, final List<String> aepPaths)
+      throws Exception {
+    return startMiniCluster(1, numSlaves, false, aepPaths);
+  }
+
   public MiniHBaseCluster startMiniCluster(final int numSlaves, boolean create, boolean withWALDir)
-          throws Exception {
-    return startMiniCluster(1, numSlaves, numSlaves, null, null, null, create, withWALDir);
+      throws Exception {
+    return startMiniCluster(1, numSlaves, numSlaves, null, null, null, create, withWALDir, null);
+  }
+
+  public MiniHBaseCluster startMiniCluster(final int numSlaves, boolean create, boolean withWALDir,
+      List<String> aepPaths) throws Exception {
+    return startMiniCluster(1, numSlaves, numSlaves, null, null, null, create, withWALDir,
+      aepPaths);
   }
 
   /**
@@ -842,6 +852,12 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
       final int numSlaves, boolean create)
     throws Exception {
       return startMiniCluster(numMasters, numSlaves, null, create);
+  }
+
+  public MiniHBaseCluster startMiniCluster(final int numMasters,
+      final int numSlaves, boolean create, List<String> aepPaths)
+    throws Exception {
+      return startMiniCluster(numMasters, numSlaves, null, create, aepPaths);
   }
 
   /**
@@ -860,7 +876,14 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
       final int numSlaves, final String[] dataNodeHosts, boolean create)
       throws Exception {
     return startMiniCluster(numMasters, numSlaves, numSlaves, dataNodeHosts,
-        null, null, create, false);
+        null, null, create, false, null);
+  }
+  
+  public MiniHBaseCluster startMiniCluster(final int numMasters,
+      final int numSlaves, final String[] dataNodeHosts, boolean create, List<String> aepPaths)
+      throws Exception {
+    return startMiniCluster(numMasters, numSlaves, numSlaves, dataNodeHosts,
+        null, null, create, false, aepPaths);
   }
 
   /**
@@ -943,7 +966,16 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
       Class<? extends MiniHBaseCluster.MiniHBaseClusterRegionServer> regionserverClass)
     throws Exception {
     return startMiniCluster(numMasters, numSlaves, numDataNodes, dataNodeHosts,
-        masterClass, regionserverClass, false, false);
+        masterClass, regionserverClass, false, false, null);
+  }
+
+  public MiniHBaseCluster startMiniCluster(final int numMasters,
+      final int numSlaves, int numDataNodes, final String[] dataNodeHosts,
+      Class<? extends HMaster> masterClass,
+      Class<? extends MiniHBaseCluster.MiniHBaseClusterRegionServer> regionserverClass, List<String> aepPaths)
+    throws Exception {
+    return startMiniCluster(numMasters, numSlaves, numDataNodes, dataNodeHosts,
+        masterClass, regionserverClass, false, false, aepPaths);
   }
 
   /**
@@ -957,7 +989,7 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
     final int numSlaves, int numDataNodes, final String[] dataNodeHosts,
     Class<? extends HMaster> masterClass,
     Class<? extends MiniHBaseCluster.MiniHBaseClusterRegionServer> regionserverClass,
-    boolean create, boolean withWALDir)
+    boolean create, boolean withWALDir, List<String> aepPaths)
   throws Exception {
     if (dataNodeHosts != null && dataNodeHosts.length != 0) {
       numDataNodes = dataNodeHosts.length;
@@ -989,7 +1021,7 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
 
     // Start the MiniHBaseCluster
     return startMiniHBaseCluster(numMasters, numSlaves, null, masterClass,
-      regionserverClass, create, withWALDir);
+      regionserverClass, create, withWALDir, aepPaths);
   }
 
   public MiniHBaseCluster startMiniHBaseCluster(final int numMasters, final int numSlaves)
@@ -999,7 +1031,13 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
 
   public MiniHBaseCluster startMiniHBaseCluster(final int numMasters, final int numSlaves,
       List<Integer> rsPorts) throws IOException, InterruptedException {
-    return startMiniHBaseCluster(numMasters, numSlaves, rsPorts, null, null, false, false);
+    return startMiniHBaseCluster(numMasters, numSlaves, rsPorts, null, null, false, false, null);
+  }
+  
+  public MiniHBaseCluster startMiniHBaseCluster(final int numMasters, final int numSlaves,
+      List<Integer> rsPorts, List<String> aepPaths) throws IOException, InterruptedException {
+    return startMiniHBaseCluster(numMasters, numSlaves, rsPorts, null, null, false, false,
+      aepPaths);
   }
 
   /**
@@ -1020,7 +1058,7 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
   public MiniHBaseCluster startMiniHBaseCluster(final int numMasters,
         final int numSlaves, List<Integer> rsPorts, Class<? extends HMaster> masterClass,
         Class<? extends MiniHBaseCluster.MiniHBaseClusterRegionServer> regionserverClass,
-        boolean create, boolean withWALDir)
+        boolean create, boolean withWALDir, List<String> aepPaths)
   throws IOException, InterruptedException {
     // Now do the mini hbase cluster.  Set the hbase.rootdir in config.
     createRootDir(create);
@@ -1043,7 +1081,7 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
     Configuration c = new Configuration(this.conf);
     TraceUtil.initTracer(c);
     this.hbaseCluster =
-        new MiniHBaseCluster(c, numMasters, numSlaves, rsPorts, masterClass, regionserverClass);
+        new MiniHBaseCluster(c, numMasters, numSlaves, rsPorts, masterClass, regionserverClass, aepPaths);
     // Don't leave here till we've done a successful scan of the hbase:meta
     Table t = getConnection().getTable(TableName.META_TABLE_NAME);
     ResultScanner s = t.getScanner(new Scan());
@@ -1413,7 +1451,7 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
     TableDescriptorBuilder builder = TableDescriptorBuilder.newBuilder(htd);
     for (byte[] family : families) {
       builder.setColumnFamily(
-          ColumnFamilyDescriptorBuilder.newBuilder(family).setBloomFilterType(type)
+          ColumnFamilyDescriptorBuilder.newBuilder(family).setBloomFilterType(type).setInMemoryCompaction(MemoryCompactionPolicy.NONE)
               .setBlocksize(blockSize).build());
     }
     TableDescriptor td = builder.build();

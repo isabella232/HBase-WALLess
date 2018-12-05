@@ -62,10 +62,17 @@ public class MiniHBaseCluster extends HBaseCluster {
    * Start a MiniHBaseCluster.
    * @param conf Configuration to be used for cluster
    * @param numRegionServers initial number of region servers to start.
+   * @param aepPaths 
+   * @param regionserverClass 
+   * @param masterClass 
+   * @param rsPorts 
+   * @param numSlaves 
    * @throws IOException
    */
-  public MiniHBaseCluster(Configuration conf, int numRegionServers)
-  throws IOException, InterruptedException {
+  public MiniHBaseCluster(Configuration conf, int numRegionServers, int numSlaves,
+      List<Integer> rsPorts, Class<? extends HMaster> masterClass,
+      Class<? extends MiniHBaseClusterRegionServer> regionserverClass)
+      throws IOException, InterruptedException {
     this(conf, 1, numRegionServers);
   }
 
@@ -81,6 +88,11 @@ public class MiniHBaseCluster extends HBaseCluster {
     this(conf, numMasters, numRegionServers, null, null);
   }
 
+  public MiniHBaseCluster(Configuration conf, int numRegionServers)
+      throws IOException, InterruptedException {
+    this(conf, 1, numRegionServers, null, null);
+  }
+
   /**
    * Start a MiniHBaseCluster.
    * @param conf Configuration to be used for cluster
@@ -88,10 +100,9 @@ public class MiniHBaseCluster extends HBaseCluster {
    * @param numRegionServers initial number of region servers to start.
    */
   public MiniHBaseCluster(Configuration conf, int numMasters, int numRegionServers,
-         Class<? extends HMaster> masterClass,
-         Class<? extends MiniHBaseCluster.MiniHBaseClusterRegionServer> regionserverClass)
-      throws IOException, InterruptedException {
-    this(conf, numMasters, numRegionServers, null, masterClass, regionserverClass);
+      Class<? extends HMaster> masterClass,
+      Class<? extends MiniHBaseCluster.MiniHBaseClusterRegionServer> regionserverClass)      throws IOException, InterruptedException {
+    this(conf, numMasters, numRegionServers, null, masterClass, regionserverClass, null);
   }
 
   /**
@@ -103,9 +114,9 @@ public class MiniHBaseCluster extends HBaseCluster {
    * @throws InterruptedException
    */
   public MiniHBaseCluster(Configuration conf, int numMasters, int numRegionServers,
-         List<Integer> rsPorts,
-         Class<? extends HMaster> masterClass,
-         Class<? extends MiniHBaseCluster.MiniHBaseClusterRegionServer> regionserverClass)
+      List<Integer> rsPorts, Class<? extends HMaster> masterClass,
+      Class<? extends MiniHBaseCluster.MiniHBaseClusterRegionServer> regionserverClass,
+      List<String> aepPaths)
       throws IOException, InterruptedException {
     super(conf);
     if (conf.getBoolean(LocalHBaseCluster.ASSIGN_RANDOM_PORTS, false)) {
@@ -118,7 +129,7 @@ public class MiniHBaseCluster extends HBaseCluster {
     // Hadoop 2
     CompatibilityFactory.getInstance(MetricsAssertHelper.class).init();
 
-    init(numMasters, numRegionServers, rsPorts, masterClass, regionserverClass);
+    init(numMasters, numRegionServers, rsPorts, masterClass, regionserverClass, aepPaths);
     this.initialClusterStatus = getClusterStatus();
   }
 
@@ -236,7 +247,7 @@ public class MiniHBaseCluster extends HBaseCluster {
 
   private void init(final int nMasterNodes, final int nRegionNodes, List<Integer> rsPorts,
                  Class<? extends HMaster> masterClass,
-                 Class<? extends MiniHBaseCluster.MiniHBaseClusterRegionServer> regionserverClass)
+                 Class<? extends MiniHBaseCluster.MiniHBaseClusterRegionServer> regionserverClass, List<String> aepPaths)
   throws IOException, InterruptedException {
     try {
       if (masterClass == null){
@@ -247,17 +258,25 @@ public class MiniHBaseCluster extends HBaseCluster {
       }
 
       // start up a LocalHBaseCluster
-      hbaseCluster = new LocalHBaseCluster(conf, nMasterNodes, 0,
-          masterClass, regionserverClass);
+      hbaseCluster =
+          new LocalHBaseCluster(conf, nMasterNodes, 0, masterClass, regionserverClass, aepPaths);
 
       // manually add the regionservers as other users
+      if(aepPaths != null) {
+        LOG.info("The aep paths are "+aepPaths);
+      }
       for (int i = 0; i < nRegionNodes; i++) {
         Configuration rsConf = HBaseConfiguration.create(conf);
+        LOG.info("The path is "+i+ " "+aepPaths.get(i));
+        if (aepPaths != null) {
+          rsConf.set("hbase.memstore.mslab.durable.path", aepPaths.get(i));
+        }
         if (rsPorts != null) {
           rsConf.setInt(HConstants.REGIONSERVER_PORT, rsPorts.get(i));
         }
         User user = HBaseTestingUtility.getDifferentUser(rsConf,
             ".hfs."+index++);
+        LOG.info("The aep path is  "+rsConf.get("hbase.memstore.mslab.durable.path"));
         hbaseCluster.addRegionServer(rsConf, i, user);
       }
 
@@ -383,7 +402,15 @@ public class MiniHBaseCluster extends HBaseCluster {
    */
   public JVMClusterUtil.RegionServerThread startRegionServer()
       throws IOException {
+    return startRegionServer(null);
+  }
+  
+  public JVMClusterUtil.RegionServerThread startRegionServer(String aepPath)
+      throws IOException {
     final Configuration newConf = HBaseConfiguration.create(conf);
+    if (aepPath != null) {
+      newConf.set("hbase.memstore.mslab.durable.path", aepPath);
+    }
     User rsUser =
         HBaseTestingUtility.getDifferentUser(newConf, ".hfs."+index++);
     JVMClusterUtil.RegionServerThread t =  null;

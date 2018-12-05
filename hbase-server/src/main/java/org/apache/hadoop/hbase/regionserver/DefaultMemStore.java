@@ -83,6 +83,15 @@ public class DefaultMemStore extends AbstractMemStore {
   }
 
   /**
+   * Constructor.
+   * @param c Comparator
+   */
+  public DefaultMemStore(byte[] regionName, byte[] cfName, final Configuration conf,
+      final CellComparator c) {
+    super(regionName, cfName, conf, c, null);
+  }
+
+  /**
    * Creates a snapshot of the current memstore.
    * Snapshot must be cleared by call to {@link #clearSnapshot(long)}
    */

@@ -23,6 +23,7 @@ import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.testclassification.MediumTests;
 import org.apache.hadoop.hbase.testclassification.RegionServerTests;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.hbase.util.JVMClusterUtil.MasterThread;
 import org.apache.hadoop.hbase.util.JVMClusterUtil.RegionServerThread;
 import org.apache.hadoop.hbase.util.RegionSplitter;
 import org.junit.AfterClass;
@@ -41,7 +42,7 @@ public class TestDurableChunkRetrieval {
       HBaseClassTestRule.forClass(TestDurableChunkRetrieval.class);
   private static final Log LOG = LogFactory.getLog(TestDurableChunkRetrieval.class);
 
-  private static final int NB_SERVERS = 1;
+  private static final int NB_SERVERS = 4;
   private static Table table;
 
   private static final HBaseTestingUtility HTU = new HBaseTestingUtility();
@@ -69,8 +70,16 @@ public class TestDurableChunkRetrieval {
    // HTU.getConfiguration().setInt("hbase.hregion.memstore.mslab.max.allocation", (2048)-1);
 
     HTU.getConfiguration().setBoolean("hbase.balancer.tablesOnMaster", false);
-    HTU.getConfiguration().set("hbase.memstore.mslab.durable.path", "./chunkfile");
-    HTU.startMiniCluster(NB_SERVERS);
+    //HTU.getConfiguration().set("hbase.memstore.mslab.durable.path", "./chunkfile");
+    List<String> aepPaths = new ArrayList<String> (NB_SERVERS);
+    for (int i = 0; i < NB_SERVERS; i++) {
+      File file = new File("./chunkfile" + i);
+      if(file.exists()) {
+        file.delete();
+      }
+      aepPaths.add("./chunkfile" + i);
+    }
+    HTU.startMiniCluster(NB_SERVERS, aepPaths);
     Thread.sleep(3000);
     final TableName tableName =
         TableName.valueOf(TestDurableChunkRetrieval.class.getSimpleName());
@@ -81,7 +90,7 @@ public class TestDurableChunkRetrieval {
 
   private static void createTableDirectlyFromHTD(final TableName tableName) throws IOException {
     HTableDescriptor htd = new HTableDescriptor(tableName);
-    //htd.setRegionReplication(1);
+    htd.setRegionReplication(3);
     // create a table with 3 replication
 
     table = HTU.createTable(htd, new byte[][] { f }, null,
@@ -139,18 +148,46 @@ public class TestDurableChunkRetrieval {
     System.out.println("Before abort results count is "+count);
     // doing this would mean that while retrieval we will not have any chunks to read data
     //HTU.getAdmin().flush(table.getName());
+    List<String> aepPaths = new ArrayList<String> (NB_SERVERS);
+    RegionServerThread toStop = null;
+    String aepPathToStop = null;
     for (RegionServerThread rs : HTU.getMiniHBaseCluster().getRegionServerThreads()) {
-      for (Region r : rs.getRegionServer().getRegions(table.getName())) {
+      String aepPath = rs.getRegionServer().getConfiguration().get("hbase.memstore.mslab.durable.path");
+      System.out.println("The aePath is "+aepPath);
+      aepPaths.add(aepPath);
+      List<HRegion> regions = rs.getRegionServer().getRegions();
+/*      for(HRegion region : regions) {
+        if(!region.getTableDescriptor().getTableName().isSystemTable()) {
+          if(region.getRegionInfo().getReplicaId() == 2) {
+            toStop = rs;
+            aepPathToStop = aepPath;
+            break;
+          }
+        }
+      }*/
+      rs.getRegionServer().stop("for test");
+      //Thread.sleep(15000);
+      /*for (Region r : rs.getRegionServer().getRegions(table.getName())) {
         // now see how does the assignment happen
-        rs.getRegionServer().abort("for test");
+        aepPath = rs.getRegionServer().getConfiguration().get("hbase.memstore.mslab.durable.path");
+        //rs.getRegionServer().abort("for test");
+        //rs.getRegionServer().stop("for test");
         break;
-      }
+      }*/
     }
+    //toStop.getRegionServer().stop("forTest");
+    for (MasterThread mas : HTU.getMiniHBaseCluster().getMasterThreads()) {
+      //mas.getMaster().stop("Stopping master");
+    }
+    Thread.sleep(30000);
+    LOG.info("All region servers stopped ");
     // start new region server.
     // If i move the sleep to after the start of new RS then it is creating lot of issues.  Need to debug
-    Thread.sleep(15000);
-    HTU.getHBaseCluster().startRegionServer();
-    Thread.sleep(5000);
+    HTU.getHBaseCluster().startMaster();
+    for (String path : aepPaths) {
+      HTU.getHBaseCluster().startRegionServer(path);
+    }
+    Thread.sleep(60000);
     s = new Scan();
     scanner = table.getScanner(s);
     iterator = scanner.iterator();
@@ -163,7 +200,7 @@ public class TestDurableChunkRetrieval {
     System.out.println("After abort results count is "+count);
     assertEquals("The total rows received should be 1000", count, 1000);
     // flush this data
-    HTU.getAdmin().flush(table.getName());
+/*    HTU.getAdmin().flush(table.getName());
     
     // now load some more data
     puts = new ArrayList<Put>();
@@ -197,7 +234,7 @@ public class TestDurableChunkRetrieval {
       Result next = iterator.next();
       count++;
     }
-    assertEquals("The total rows received should be 300", count, 300);
+    assertEquals("The total rows received should be 300", count, 300);*/
   }
   
   public static class WriteThread extends Thread {

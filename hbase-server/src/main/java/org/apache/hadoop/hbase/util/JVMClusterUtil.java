@@ -83,6 +83,7 @@ public class JVMClusterUtil {
     try {
       Constructor<? extends HRegionServer> ctor = hrsc.getConstructor(Configuration.class);
       ctor.setAccessible(true);
+      LOG.info("The server has "+c.get("hbase.memstore.mslab.durable.path"));
       server = ctor.newInstance(c);
     } catch (InvocationTargetException ite) {
       Throwable target = ite.getTargetException();

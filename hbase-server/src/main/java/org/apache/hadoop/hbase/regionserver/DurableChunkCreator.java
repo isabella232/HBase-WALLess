@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.regionserver;
 import java.io.File;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.mnemonic.DurableChunk;
 import org.apache.mnemonic.NonVolatileMemAllocator;
@@ -36,7 +37,7 @@ public class DurableChunkCreator extends ChunkCreator {
   // Size for one durable chunk been created over the pmem.
   static final String DURABLECHUNK_SIZE = "hbase.durablechunk.size";
   private static final long DEFAULT_DURABLECHUNK_SIZE = 8L * 1024 * 1024 * 1024;// 8 GB
-
+private String path = null;
   private DurableChunk<NonVolatileMemAllocator> durableBigChunk[];
   // Offset to track the allocation inside the bigChunk.
   private long offsetInCurChunk = 0;
@@ -50,12 +51,13 @@ public class DurableChunkCreator extends ChunkCreator {
 
   DurableChunkCreator(Configuration config, int chunkSize, long globalMemStoreSize, String durablePath) {
     super(chunkSize, true, globalMemStoreSize, 1.0F, 1.0F, null, 0);// TODO what should be last arg?
+    this.path = durablePath;
     // This config is used for easy testing. Once we get a sweet spot we can remove this - I
     // believe, if at all we get one
     // Do validation. but for now creating max sized allocator
     boolean exists = new File(durablePath).exists();
     if (exists) {
-      LOG.info("Durable memstore backed file found. Hence retrieving data from it");
+      LOG.info("Durable memstore backed file found. Hence retrieving data from it "+durablePath);
     }
     long allocatorSize = (long) ((2 * globalMemStoreSize));
     if (exists) {
@@ -79,7 +81,7 @@ public class DurableChunkCreator extends ChunkCreator {
     int numOfChunks = (int) (globalMemStoreSize / durableBigChunkSize);
     long remainingChunksLen = (globalMemStoreSize % durableBigChunkSize);
     LOG.info("Size of a durable chunk : " + durableBigChunkSize + ", Full size chunks : "
-        + numOfChunks + ", Remaining size : " + remainingChunksLen);
+        + numOfChunks + ", Remaining size : " + remainingChunksLen + " "+this.path);
    // create as many chunks needed.
     durableBigChunk =
         remainingChunksLen > 0 ? new DurableChunk[numOfChunks + 1] : new DurableChunk[numOfChunks];
@@ -203,7 +205,11 @@ public class DurableChunkCreator extends ChunkCreator {
         DurableSlicedChunk chunk = createChunk(true, CompactingMemStore.IndexType.ARRAY_MAP,
             chunkSize);
         chunk.init();
+        // we need to ensure we do this every time.
         Pair<byte[], byte[]> ownerRegionStore = chunk.getOwnerRegionStore();
+        if(ownerRegionStore != null) {
+          LOG.info("The region name is " + Bytes.toString(ownerRegionStore.getFirst()));
+        }
         // Still I see that on RS coming back the namespace and meta are not coming back online. Need to fix or see if any config issue
         if (ownerRegionStore == null || !(retriever.appendChunk(ownerRegionStore, chunk))) {
           chunk.prepopulateChunk();

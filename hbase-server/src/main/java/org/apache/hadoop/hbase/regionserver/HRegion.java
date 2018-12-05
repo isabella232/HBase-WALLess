@@ -965,7 +965,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // Replay cells from durable chunk
     if (this.getRegionServerServices() != null) {
       chunkRetriever = ((HRegionServer) this.getRegionServerServices()).getRetriver();
-      dataPool = ((DurableChunkCreator) this.getChunkCreator()).getDataPool();
+      if (this.getChunkCreator() != null && this.getChunkCreator() instanceof DurableChunkCreator) {
+        dataPool = ((DurableChunkCreator) this.getChunkCreator()).getDataPool();
+      }
     }
     if (this.getRegionServerServices() != null
         && ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
