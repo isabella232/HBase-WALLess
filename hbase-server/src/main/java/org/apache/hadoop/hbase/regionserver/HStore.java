@@ -349,13 +349,22 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
           MemoryCompactionPolicy.valueOf(conf.get(CompactingMemStore.COMPACTING_MEMSTORE_TYPE_KEY,
               CompactingMemStore.COMPACTING_MEMSTORE_TYPE_DEFAULT));
     }
+    ChunkCreator memstoreChunkCreator = null;
+    if(this.getHRegion().getRegionServerServices() == null) {
+      // for tests
+      memstoreChunkCreator =  this.getHRegion().getChunkCreator();
+    } else {
+      memstoreChunkCreator =
+          ((HRegionServer) this.getHRegion().getRegionServerServices()).getMemstoreChunkCreator();
+    }
     switch (inMemoryCompaction) {
       case NONE:
         // TODO : always write the primary region name into the chunks??. So that on a failover of 
         // a replica to primary we still have the correct info in the chunk? The retriever any way needs to
         // check based on primary region info name only if there are any other replicas available.
         ms = ReflectionUtils.newInstance(DefaultMemStore.class, new Object[] {
-          this.getRegionInfo().getRegionName(), this.family.getName(), conf, this.comparator });
+          this.getRegionInfo().getRegionName(), this.family.getName(), conf, this.comparator,
+          memstoreChunkCreator });
         break;
       default:
         Class<? extends CompactingMemStore> clz = conf.getClass(MEMSTORE_CLASS_NAME,
@@ -363,7 +372,7 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
         ms = ReflectionUtils.newInstance(clz,
           new Object[] { this.getRegionInfo().getRegionName(), this.family.getName(), conf,
               this.comparator, this, this.getHRegion().getRegionServicesForStores(),
-              inMemoryCompaction });
+              inMemoryCompaction,  memstoreChunkCreator });
     }
     return ms;
   }

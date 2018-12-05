@@ -29,15 +29,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
-import org.apache.yetus.audience.InterfaceAudience;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.hadoop.hbase.regionserver.HeapMemoryManager.HeapMemoryTuneObserver;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.util.StringUtils;
-
 import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hbase.thirdparty.com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Does the management of memstoreLAB chunk creations. A monotonically incrementing id is associated
@@ -76,8 +75,6 @@ public class ChunkCreator {
 
   private final boolean offheap;
   @VisibleForTesting
-  static ChunkCreator instance;
-  @VisibleForTesting
   static boolean chunkPoolDisabled = false;
   protected MemStoreChunkPool dataChunksPool;
   private int chunkSize;
@@ -108,6 +105,9 @@ public class ChunkCreator {
             heapMemoryManager);
   }
 
+  MemStoreChunkPool getDataPool() {
+    return this.dataChunksPool;
+  }
   /**
    * Initializes the instance of ChunkCreator
    * @param chunkSize the chunkSize
@@ -133,8 +133,9 @@ public class ChunkCreator {
     return instance;
   }*/
 
-  static ChunkCreator getInstance() {
-    return instance;
+  ChunkCreator getInstance() {
+    //return instance;
+    return null;
   }
 
   /**
@@ -259,9 +260,9 @@ public class ChunkCreator {
     assert id > 0;
     // do not create offheap chunk on demand
     if (pool && this.offheap) {
-      chunk = new OffheapChunk(size, id, pool);
+      chunk = new OffheapChunk(size, id, pool, this);
     } else {
-      chunk = new OnheapChunk(size, id, pool);
+      chunk = new OnheapChunk(size, id, pool, this);
     }
     if (pool || (chunkIndexType == CompactingMemStore.IndexType.CHUNK_MAP)) {
       // put the pool chunk into the chunkIdMap so it is not GC-ed
@@ -655,17 +656,8 @@ public class ChunkCreator {
     return;
   }
 
-  @VisibleForTesting
-  static ChunkCreator resetInstance() {
-    ChunkCreator cur = instance;
-    instance = null;
-    return cur;
-  }
-
-  protected static void shutdown() {
-    if (instance != null) {
-      instance.close();
-    }
+  protected void shutdown() {
+    this.close();
   }
 
   protected void close() {

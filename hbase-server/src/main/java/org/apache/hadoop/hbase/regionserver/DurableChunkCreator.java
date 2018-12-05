@@ -161,7 +161,7 @@ public class DurableChunkCreator extends ChunkCreator {
         this.offsetInCurChunk = 0;
         continue;
       }
-      DurableSlicedChunk chunk = new DurableSlicedChunk(id, tempChunk, this.offsetInCurChunk, size);
+      DurableSlicedChunk chunk = new DurableSlicedChunk(id, tempChunk, this.offsetInCurChunk, size, this);
       addToChunkMap(chunk);
       this.offsetInCurChunk += size;
       return chunk;
@@ -188,10 +188,6 @@ public class DurableChunkCreator extends ChunkCreator {
     // index pool size % to be 0 so no impact.
     return new DurableMemStoreChunkPool(label, chunkSize, maxCount, initialCount,
         poolSizePercentage);
-  }
-
-  MemStoreChunkPool getDataPool() {
-    return this.dataChunksPool;
   }
 
   class DurableMemStoreChunkPool extends MemStoreChunkPool {

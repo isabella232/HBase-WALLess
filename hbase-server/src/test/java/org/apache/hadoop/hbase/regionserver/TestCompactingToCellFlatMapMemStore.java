@@ -79,8 +79,8 @@ public class TestCompactingToCellFlatMapMemStore extends TestCompactingMemStore 
 
   @Override public void setUp() throws Exception {
 
-    compactingSetUp();
     this.conf = HBaseConfiguration.create();
+    compactingSetUp(this.conf);
 
     // set memstore to do data compaction
     conf.set(CompactingMemStore.COMPACTING_MEMSTORE_TYPE_KEY,
@@ -88,7 +88,7 @@ public class TestCompactingToCellFlatMapMemStore extends TestCompactingMemStore 
     conf.setDouble(CompactingMemStore.IN_MEMORY_FLUSH_THRESHOLD_FACTOR_KEY, 0.02);
     this.memstore =
         new MyCompactingMemStore(conf, CellComparatorImpl.COMPARATOR, store,
-            regionServicesForStores, MemoryCompactionPolicy.EAGER);
+            regionServicesForStores, MemoryCompactionPolicy.EAGER, this.chunkCreator);
   }
 
   //////////////////////////////////////////////////////////////////////////////

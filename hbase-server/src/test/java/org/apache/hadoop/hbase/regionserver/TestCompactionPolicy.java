@@ -100,12 +100,11 @@ public class TestCompactionPolicy {
     HRegionInfo info = new HRegionInfo(htd.getTableName(), null, null, false);
 
     hlog = new FSHLog(fs, basedir, logName, conf);
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
-        null);
-    region = HRegion.createHRegion(info, basedir, conf, htd, hlog);
+    region = ExtendedHRegion.createHRegion(info, basedir, conf, htd, hlog);
+    // why being created and closed??
     region.close();
     Path tableDir = FSUtils.getTableDir(basedir, htd.getTableName());
-    region = new HRegion(tableDir, hlog, fs, conf, info, htd, null);
+    region = ExtendedHRegion.createHRegion(info, basedir, conf, htd, hlog);
 
     store = new HStore(region, hcd, conf);
 

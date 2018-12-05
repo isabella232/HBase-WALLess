@@ -556,8 +556,6 @@ public class TestWALLockup {
    */
   private static HRegion initHRegion(TableName tableName, byte[] startKey, byte[] stopKey, WAL wal)
       throws IOException {
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
-        null);
     return TEST_UTIL.createLocalHRegion(tableName, startKey, stopKey, false, Durability.SYNC_WAL,
       wal, COLUMN_FAMILY_BYTES);
   }

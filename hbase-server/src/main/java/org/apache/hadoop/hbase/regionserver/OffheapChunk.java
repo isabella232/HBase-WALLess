@@ -28,13 +28,13 @@ import org.apache.yetus.audience.InterfaceAudience;
 @InterfaceAudience.Private
 public class OffheapChunk extends Chunk {
 
-  OffheapChunk(int size, int id) {
+  OffheapChunk(int size, int id, ChunkCreator chunkCreator) {
     // better if this is always created fromPool. This should not be called
-    super(size, id);
+    super(size, id, chunkCreator);
   }
 
-  OffheapChunk(int size, int id, boolean fromPool) {
-    super(size, id, fromPool);
+  OffheapChunk(int size, int id, boolean fromPool, ChunkCreator chunkCreator) {
+    super(size, id, fromPool, chunkCreator);
     assert fromPool == true;
   }
 

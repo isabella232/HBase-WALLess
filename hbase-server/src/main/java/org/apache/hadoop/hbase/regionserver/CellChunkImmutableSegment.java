@@ -187,7 +187,8 @@ public class CellChunkImmutableSegment extends ImmutableSegment {
     }
     // build the immutable CellSet
     CellChunkMap ccm =
-        new CellChunkMap(getComparator(), chunks, 0, numOfCellsAfterCompaction, false);
+        new CellChunkMap(getComparator(), chunks, 0, numOfCellsAfterCompaction, false,
+            this.memStoreLAB.getChunkCreator());
     this.setCellSet(null, new CellSet(ccm, numUniqueKeys));  // update the CellSet of this Segment
   }
 
@@ -244,7 +245,8 @@ public class CellChunkImmutableSegment extends ImmutableSegment {
       segmentScanner.close();
     }
 
-    CellChunkMap ccm = new CellChunkMap(getComparator(), chunks, 0, numOfCells, false);
+    CellChunkMap ccm = new CellChunkMap(getComparator(), chunks, 0, numOfCells, false,
+        this.memStoreLAB.getChunkCreator());
     // update the CellSet of this Segment
     this.setCellSet(oldCellSet, new CellSet(ccm, numUniqueKeys));
   }
@@ -278,7 +280,7 @@ public class CellChunkImmutableSegment extends ImmutableSegment {
   // If the percentage of its remaining free space is above the INDEX_CHUNK_UNUSED_SPACE
   // threshold, then we will use index chunks (which are smaller) instead.
   private ChunkCreator.ChunkType useIndexChunks(int numOfCells) {
-    int dataChunkSize = ChunkCreator.getInstance().getChunkSize();
+    int dataChunkSize = this.memStoreLAB.getChunkCreator().getChunkSize();
     int numOfCellsInChunk = calcNumOfCellsInChunk(dataChunkSize);
     int cellsInLastChunk = numOfCells % numOfCellsInChunk;
     if (cellsInLastChunk == 0) { // There is no free space in the last chunk and thus,
@@ -304,7 +306,7 @@ public class CellChunkImmutableSegment extends ImmutableSegment {
     // calculate how many chunks we will need for index
 
     ChunkCreator.ChunkType chunkType = useIndexChunks(numOfCells);
-    int chunkSize = ChunkCreator.getInstance().getChunkSize(chunkType);
+    int chunkSize = this.memStoreLAB.getChunkCreator().getChunkSize(chunkType);
     int numberOfChunks = calculateNumberOfChunks(numOfCells, chunkSize);
     // all index Chunks are allocated from ChunkCreator
     Chunk[] chunks = new Chunk[numberOfChunks];

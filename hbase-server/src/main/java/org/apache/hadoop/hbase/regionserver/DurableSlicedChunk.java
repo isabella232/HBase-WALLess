@@ -70,8 +70,8 @@ public class DurableSlicedChunk extends Chunk {
   private static byte[] dummy;
 
   public DurableSlicedChunk(int id, DurableChunk<NonVolatileMemAllocator> durableBigChunk,
-      long offset, int size) {
-    super(size, id, true);// Durable chunks are always created out of pool.
+      long offset, int size, ChunkCreator chunkCreator) {
+    super(size, id, true, chunkCreator);// Durable chunks are always created out of pool.
     this.offset = offset;
     this.durableChunk = durableBigChunk;
     // All DurableSlicedChunk are created at the RS startup time itself in a sequential way. No

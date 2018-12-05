@@ -181,8 +181,6 @@ public class TestCompactionArchiveIOException {
 
   private HRegion initHRegion(TableDescriptor htd, RegionInfo info) throws IOException {
     Configuration conf = testUtil.getConfiguration();
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
-        null);
     Path tableDir = FSUtils.getTableDir(testDir, htd.getTableName());
     Path regionDir = new Path(tableDir, info.getEncodedName());
     Path storeDir = new Path(regionDir, htd.getColumnFamilies()[0].getNameAsString());
@@ -198,7 +196,7 @@ public class TestCompactionArchiveIOException {
     final Configuration walConf = new Configuration(conf);
     FSUtils.setRootDir(walConf, tableDir);
     final WALFactory wals = new WALFactory(walConf, "log_" + info.getEncodedName());
-    HRegion region = new HRegion(fs, wals.getWAL(info), conf, htd, null);
+    HRegion region = new ExtendedHRegion(fs, wals.getWAL(info), conf, htd, null, null);
 
     region.initialize();
 

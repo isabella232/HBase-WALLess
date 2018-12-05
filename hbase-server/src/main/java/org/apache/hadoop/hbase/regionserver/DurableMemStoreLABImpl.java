@@ -30,7 +30,6 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ObjectIntPair;
 import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -50,16 +49,27 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
 
   // Used in testing
   public DurableMemStoreLABImpl() {
-    this(null, null, new Configuration());
+    this(null, null, new Configuration(), null);
   }
 
   // Used in testing
+  public DurableMemStoreLABImpl(DurableChunkCreator chunkCreator) {
+    this(null, null, new Configuration(), chunkCreator);
+  }
+  
+  // Used in testing
   public DurableMemStoreLABImpl(Configuration conf) {
-    this(null, null, conf);
+    this(null, null, conf, null);
+  }
+  
+  // Used in testing
+  public DurableMemStoreLABImpl(Configuration conf, DurableChunkCreator chunkCreator) {
+    this(null, null, conf, chunkCreator);
   }
 
-  public DurableMemStoreLABImpl(byte[] regionName, byte[] cfName, Configuration conf) {
-    super(regionName, cfName, conf);
+  public DurableMemStoreLABImpl(byte[] regionName, byte[] cfName, Configuration conf,
+      DurableChunkCreator chunkCreator) {
+    super(regionName, cfName, conf, chunkCreator);
   }
 
   @Override

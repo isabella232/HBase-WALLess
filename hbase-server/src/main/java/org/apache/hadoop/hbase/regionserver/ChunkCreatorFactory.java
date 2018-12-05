@@ -25,16 +25,16 @@ public class ChunkCreatorFactory {
   // TODO better name?
   public static final String MSLAB_DURABLE_PATH_KEY = "hbase.memstore.mslab.durable.path";
 
-  private static ChunkCreator chunkCreator = null;
 
   private ChunkCreatorFactory() {
   }
 
   @edu.umd.cs.findbugs.annotations.SuppressWarnings(value = "LI_LAZY_INIT_STATIC",
       justification = "Method is called by single thread at the starting of RS")
-  public synchronized static void createChunkCreator(int chunkSize, boolean offheap,
+  public synchronized static ChunkCreator createChunkCreator(int chunkSize, boolean offheap,
       long globalMemStoreSize, float poolSizePercentage, float initialCountPercentage,
       HRegionServer hrs, String durablePath) {
+    ChunkCreator chunkCreator = null;
     if (durablePath != null) {
       assert offheap;// When working with Durbale chunks, it has to be marked as off heap.
       if (poolSizePercentage != 1.0 || initialCountPercentage != 1.0) {
@@ -58,10 +58,6 @@ public class ChunkCreatorFactory {
     // TODO the index chunk size % is passed as 0. We should allow configuring this.
     chunkCreator.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage, 0,
         initialCountPercentage, hrs);
-    ChunkCreator.instance = chunkCreator;
-  }
-
-  public static ChunkCreator getChunkCreator() {
     return chunkCreator;
   }
 }

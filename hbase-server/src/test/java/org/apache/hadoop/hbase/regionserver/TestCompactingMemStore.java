@@ -70,7 +70,7 @@ public class TestCompactingMemStore extends TestDefaultMemStore {
       HBaseClassTestRule.forClass(TestCompactingMemStore.class);
 
   private static final Logger LOG = LoggerFactory.getLogger(TestCompactingMemStore.class);
-  protected static ChunkCreator chunkCreator;
+  protected ChunkCreator chunkCreator;
   protected HRegion region;
   protected RegionServicesForStores regionServicesForStores;
   protected HStore store;
@@ -91,18 +91,22 @@ public class TestCompactingMemStore extends TestDefaultMemStore {
   @Override
   @Before
   public void setUp() throws Exception {
-    compactingSetUp();
-    this.memstore = new MyCompactingMemStore(HBaseConfiguration.create(), CellComparator.getInstance(),
-        store, regionServicesForStores, MemoryCompactionPolicy.EAGER);
-    ((CompactingMemStore)memstore).setIndexType(CompactingMemStore.IndexType.ARRAY_MAP);
-  }
-
-  protected void compactingSetUp() throws Exception {
-    super.internalSetUp();
     Configuration conf = new Configuration();
     conf.setBoolean(MemStoreLAB.USEMSLAB_KEY, true);
     conf.setFloat(MemStoreLAB.CHUNK_POOL_MAXSIZE_KEY, 0.2f);
     conf.setInt(HRegion.MEMSTORE_PERIODIC_FLUSH_INTERVAL, 1000);
+    long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
+        .getMax() * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
+    chunkCreator = ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
+      globalMemStoreLimit, 0.4f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
+    compactingSetUp(conf);
+    this.memstore = new MyCompactingMemStore(HBaseConfiguration.create(), CellComparator.getInstance(),
+        store, regionServicesForStores, MemoryCompactionPolicy.EAGER, this.chunkCreator);
+    ((CompactingMemStore)memstore).setIndexType(CompactingMemStore.IndexType.ARRAY_MAP);
+  }
+
+  protected void compactingSetUp(Configuration conf) throws Exception {
+    super.internalSetUp();
     HBaseTestingUtility hbaseUtility = HBaseTestingUtility.createLocalHTU(conf);
     HColumnDescriptor hcd = new HColumnDescriptor(FAMILY);
     HTableDescriptor htd = new HTableDescriptor(TableName.valueOf("foobar"));
@@ -110,16 +114,12 @@ public class TestCompactingMemStore extends TestDefaultMemStore {
     HRegionInfo info =
         new HRegionInfo(TableName.valueOf("foobar"), null, null, false);
     WAL wal = hbaseUtility.createWal(conf, hbaseUtility.getDataTestDir(), info);
-    this.region = HRegion.createHRegion(info, hbaseUtility.getDataTestDir(), conf, htd, wal, true);
+    this.region = ExtendedHRegion.createHRegion(info, hbaseUtility.getDataTestDir(), conf, htd, wal,
+      true, chunkCreator);
     //this.region = hbaseUtility.createTestRegion("foobar", hcd);
     this.regionServicesForStores = region.getRegionServicesForStores();
     this.store = new HStore(region, hcd, conf);
 
-    long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
-        .getMax() * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
-        globalMemStoreLimit, 0.4f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
-    chunkCreator = ChunkCreatorFactory.getChunkCreator();
     assertTrue(chunkCreator != null);
   }
 
@@ -155,7 +155,7 @@ public class TestCompactingMemStore extends TestDefaultMemStore {
     // use case 3: first in snapshot second in kvset
     this.memstore = new CompactingMemStore(null, null, HBaseConfiguration.create(),
         CellComparator.getInstance(), store, regionServicesForStores,
-        MemoryCompactionPolicy.EAGER);
+        MemoryCompactionPolicy.EAGER, this.chunkCreator);
     this.memstore.add(kv1.clone(), null);
     // As compaction is starting in the background the repetition
     // of the k1 might be removed BUT the scanners created earlier
@@ -879,9 +879,9 @@ public class TestCompactingMemStore extends TestDefaultMemStore {
   static protected class MyCompactingMemStore extends CompactingMemStore {
 
     public MyCompactingMemStore(Configuration conf, CellComparator c, HStore store,
-        RegionServicesForStores regionServices, MemoryCompactionPolicy compactionPolicy)
+        RegionServicesForStores regionServices, MemoryCompactionPolicy compactionPolicy, ChunkCreator chunkCreator)
         throws IOException {
-      super(null, null, conf, c, store, regionServices, compactionPolicy);
+      super(null, null, conf, c, store, regionServices, compactionPolicy, chunkCreator);
     }
 
     void disableCompaction() {

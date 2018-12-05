@@ -54,13 +54,14 @@ public class TestMemstoreLABWithoutPool {
   private static final byte[] rk = Bytes.toBytes("r1");
   private static final byte[] cf = Bytes.toBytes("f");
   private static final byte[] q = Bytes.toBytes("q");
+  private static ChunkCreator instance;
 
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
     long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
         .getMax() * 0.8);
     // disable pool
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT + Bytes.SIZEOF_LONG,
+    instance = ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT + Bytes.SIZEOF_LONG,
         false, globalMemStoreLimit, 0.0f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
   }
 
@@ -70,7 +71,7 @@ public class TestMemstoreLABWithoutPool {
   @Test
   public void testLABRandomAllocation() {
     Random rand = new Random();
-    MemStoreLAB mslab = new MemStoreLABImpl();
+    MemStoreLAB mslab = new MemStoreLABImpl(instance);
     int expectedOff = 0;
     ByteBuffer lastBuffer = null;
     int lastChunkId = -1;
@@ -108,7 +109,7 @@ public class TestMemstoreLABWithoutPool {
     Configuration conf = HBaseConfiguration.create();
     MemStoreLABImpl[] mslab = new MemStoreLABImpl[10];
     for (int i = 0; i < 10; i++) {
-      mslab[i] = new MemStoreLABImpl(conf);
+      mslab[i] = new MemStoreLABImpl(conf, instance);
     }
     // launch multiple threads to trigger frequent chunk retirement
     List<Thread> threads = new ArrayList<>();
@@ -148,7 +149,7 @@ public class TestMemstoreLABWithoutPool {
     }
     // all of the chunkIds would have been returned back
     assertTrue("All the chunks must have been cleared",
-        ChunkCreator.instance.numberOfMappedChunks() == 0);
+        instance.numberOfMappedChunks() == 0);
   }
 
   private Thread getChunkQueueTestThread(final MemStoreLABImpl mslab, String threadName,

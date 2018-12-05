@@ -95,20 +95,30 @@ public class MemStoreLABImpl implements MemStoreLAB {
 
   // Used in testing
   public MemStoreLABImpl() {
-    this(null, null, new Configuration());
+    this(null, null, new Configuration(), null);
+  }
+
+  // Used in testing
+  public MemStoreLABImpl(ChunkCreator chunkCreator) {
+    this(null, null, new Configuration(), chunkCreator);
   }
 
   // Used in testing
   public MemStoreLABImpl(Configuration conf) {
-    this(null, null, conf);
+    this(null, null, conf, null);
   }
 
-  public MemStoreLABImpl(byte[] regionName, byte[] cfName, Configuration conf) {
+  // Used in testing
+  public MemStoreLABImpl(Configuration conf, ChunkCreator chunkCreator) {
+    this(null, null, conf, chunkCreator);
+  }
+
+  public MemStoreLABImpl(byte[] regionName, byte[] cfName, Configuration conf, ChunkCreator chunkCreator) {
     this.regionName = regionName;
     this.cfName = cfName;
     dataChunkSize = conf.getInt(CHUNK_SIZE_KEY, CHUNK_SIZE_DEFAULT);
     maxAlloc = conf.getInt(MAX_ALLOC_KEY, MAX_ALLOC_DEFAULT);
-    this.chunkCreator = ChunkCreator.getInstance();
+    this.chunkCreator = chunkCreator;
     // if we don't exclude allocations >CHUNK_SIZE, we'd infiniteloop on one!
     Preconditions.checkArgument(maxAlloc <= dataChunkSize,
         MAX_ALLOC_KEY + " must be less than " + CHUNK_SIZE_KEY);
@@ -328,8 +338,8 @@ public class MemStoreLABImpl implements MemStoreLAB {
   */
   @Override
   public Chunk getNewExternalChunk(int size) {
-    int allocSize = size + ChunkCreator.getInstance().SIZEOF_CHUNK_HEADER;
-    if (allocSize <= ChunkCreator.getInstance().getChunkSize()) {
+    int allocSize = size + ChunkCreator.SIZEOF_CHUNK_HEADER;
+    if (allocSize <= this.chunkCreator.getChunkSize()) {
       return getNewExternalChunk(ChunkCreator.ChunkType.DATA_CHUNK);
     } else {
       Chunk c = this.chunkCreator.getJumboChunk(this.regionName, this.cfName, size);
@@ -383,5 +393,10 @@ public class MemStoreLABImpl implements MemStoreLAB {
       toReturn.add((newCell == null) ? cell : newCell);
     }
     return toReturn;
+  }
+
+  @Override
+  public ChunkCreator getChunkCreator() {
+    return this.chunkCreator;
   }
 }

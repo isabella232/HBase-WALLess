@@ -216,7 +216,7 @@ public class MemStoreCompactor {
 
         result = SegmentFactory.instance().createImmutableSegmentByCompaction(
           compactingMemStore.getConfiguration(), compactingMemStore.getComparator(), iterator,
-          versionedList.getNumOfCells(), compactingMemStore.getIndexType(), action);
+          versionedList.getNumOfCells(), compactingMemStore.getIndexType(), action, compactingMemStore.getChunkCreator());
         iterator.close();
         break;
       case MERGE:

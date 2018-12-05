@@ -28,6 +28,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -172,12 +173,10 @@ public class TestCompactionArchiveConcurrentClose {
 
     HRegionFileSystem fs =
         new WaitingHRegionFileSystem(conf, tableDir.getFileSystem(conf), tableDir, info);
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
-        null);
     final Configuration walConf = new Configuration(conf);
     FSUtils.setRootDir(walConf, tableDir);
     final WALFactory wals = new WALFactory(walConf, "log_" + info.getEncodedName());
-    HRegion region = new HRegion(fs, wals.getWAL(info), conf, htd, null);
+    HRegion region = new ExtendedHRegion(fs, wals.getWAL(info), conf, htd, null, null);
 
     region.initialize();
 

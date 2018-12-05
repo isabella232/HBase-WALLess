@@ -162,8 +162,6 @@ public class TestHRegionReplayEvents {
     htd = builder.build();
 
     time = System.currentTimeMillis();
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
-        null);
     primaryHri =
         RegionInfoBuilder.newBuilder(htd.getTableName()).setRegionId(time).setReplicaId(0).build();
     secondaryHri =
@@ -183,7 +181,7 @@ public class TestHRegionReplayEvents {
     es.startExecutorService(
       string+"-"+string, 1);
     when(rss.getExecutorService()).thenReturn(es);
-    primaryRegion = HRegion.createHRegion(primaryHri, rootDir, CONF, htd, walPrimary);
+    primaryRegion = ExtendedHRegion.createHRegion(primaryHri, rootDir, CONF, htd, walPrimary);
     primaryRegion.close();
     List<HRegion> regions = new ArrayList<>();
     regions.add(primaryRegion);

@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
+
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.Cell;
@@ -57,7 +58,7 @@ import org.apache.hadoop.hbase.testclassification.MediumTests;
 import org.apache.hadoop.hbase.testclassification.RegionServerTests;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
-import org.junit.BeforeClass;
+import org.apache.hbase.thirdparty.com.google.common.collect.Lists;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
@@ -65,8 +66,6 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import org.apache.hbase.thirdparty.com.google.common.collect.Lists;
 
 /**
  * Test cases against ReversibleKeyValueScanner
@@ -96,12 +95,6 @@ public class TestReversibleScanners {
 
   @Rule
   public TestName name = new TestName();
-
-  @BeforeClass
-  public static void setUp() {
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
-        null);
-  }
 
   @Test
   public void testReversibleStoreFileScanner() throws IOException {
@@ -140,7 +133,8 @@ public class TestReversibleScanners {
 
   @Test
   public void testReversibleMemstoreScanner() throws IOException {
-    MemStore memstore = new DefaultMemStore();
+    MemStore memstore = new DefaultMemStore(ChunkCreatorFactory
+      .createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null, null));
     writeMemstore(memstore);
     List<KeyValueScanner> scanners = memstore.getScanners(Long.MAX_VALUE);
     seekTestOfReversibleKeyValueScanner(scanners.get(0));
@@ -170,7 +164,8 @@ public class TestReversibleScanners {
         TEST_UTIL.getConfiguration(), cacheConf, fs).withOutputDir(
         hfilePath).withFileContext(hFileContext).build();
 
-    MemStore memstore = new DefaultMemStore();
+    MemStore memstore = new DefaultMemStore(ChunkCreatorFactory
+      .createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null, null));
     writeMemstoreAndStoreFiles(memstore, new StoreFileWriter[] { writer1,
         writer2 });
 
@@ -260,7 +255,8 @@ public class TestReversibleScanners {
         TEST_UTIL.getConfiguration(), cacheConf, fs).withOutputDir(
         hfilePath).withFileContext(hFileContext).build();
 
-    MemStore memstore = new DefaultMemStore();
+    MemStore memstore = new DefaultMemStore(ChunkCreatorFactory
+      .createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null, null));
     writeMemstoreAndStoreFiles(memstore, new StoreFileWriter[] { writer1,
         writer2 });
 

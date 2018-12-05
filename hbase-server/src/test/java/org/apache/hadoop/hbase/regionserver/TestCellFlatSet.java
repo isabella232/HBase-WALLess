@@ -80,17 +80,18 @@ public class TestCellFlatSet {
   public TestCellFlatSet(String chunkType){
     long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
         .getMax() * MemorySizeUtil.getGlobalMemStoreHeapPercent(CONF, false));
+    ChunkCreator chunkCreator;
     if (chunkType.equals("NORMAL_CHUNKS")) {
-      ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
+      chunkCreator = ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 
           globalMemStoreLimit, 0.2f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
       smallChunks = false;
     } else {
       // chunkCreator with smaller chunk size, so only 3 cell-representations can accommodate a chunk
-      ChunkCreatorFactory.createChunkCreator(SMALL_CHUNK_SIZE, false,
+      chunkCreator = ChunkCreatorFactory.createChunkCreator(SMALL_CHUNK_SIZE, false,
           globalMemStoreLimit, 0.2f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
       smallChunks = true;
     }
-    chunkCreator = ChunkCreatorFactory.getChunkCreator();
+    TestCellFlatSet.chunkCreator = chunkCreator;
     assertNotNull(chunkCreator);
   }
 
@@ -318,7 +319,8 @@ public class TestCellFlatSet {
       idxOffset = ByteBufferUtils.putLong(idxBuffer, idxOffset, kv.getSequenceId());     // seqId
     }
 
-    return new CellChunkMap(CellComparator.getInstance(),chunkArray,0,NUM_OF_CELLS,!asc);
+    return new CellChunkMap(CellComparator.getInstance(), chunkArray, 0, NUM_OF_CELLS, !asc,
+        chunkCreator);
   }
 
   /* Create CellChunkMap with four cells inside the data jumbo chunk. This test is working only
@@ -368,6 +370,7 @@ public class TestCellFlatSet {
       dataOffset = ChunkCreator.SIZEOF_CHUNK_HEADER;
     }
 
-    return new CellChunkMap(CellComparator.getInstance(),chunkArray,0,NUM_OF_CELLS,!asc);
+    return new CellChunkMap(CellComparator.getInstance(), chunkArray, 0, NUM_OF_CELLS, !asc,
+        chunkCreator);
   }
 }

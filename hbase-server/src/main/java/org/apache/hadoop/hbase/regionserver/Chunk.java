@@ -56,14 +56,15 @@ public abstract class Chunk {
   // indicates if the chunk is formed by ChunkCreator#MemstorePool
   private final boolean fromPool;
 
+  private final ChunkCreator chunkCreator;
   /**
    * Create an uninitialized chunk. Note that memory is not allocated yet, so
    * this is cheap.
    * @param size in bytes
    * @param id the chunk id
    */
-  public Chunk(int size, int id) {
-    this(size, id, false);
+  public Chunk(int size, int id, ChunkCreator chunkCreator) {
+    this(size, id, false, chunkCreator);
   }
 
   /**
@@ -73,10 +74,11 @@ public abstract class Chunk {
    * @param id the chunk id
    * @param fromPool if the chunk is formed by pool
    */
-  public Chunk(int size, int id, boolean fromPool) {
+  public Chunk(int size, int id, boolean fromPool, ChunkCreator chunkCreator) {
     this.size = size;
     this.id = id;
     this.fromPool = fromPool;
+    this.chunkCreator = chunkCreator;
   }
 
   int getId() {
@@ -88,11 +90,11 @@ public abstract class Chunk {
   }
 
   boolean isJumbo() {
-    return size > ChunkCreator.getInstance().getChunkSize();
+    return size > this.chunkCreator.getChunkSize();
   }
 
   boolean isIndexChunk() {
-    return size == ChunkCreator.getInstance().getChunkSize(ChunkCreator.ChunkType.INDEX_CHUNK);
+    return size == this.chunkCreator.getChunkSize(ChunkCreator.ChunkType.INDEX_CHUNK);
   }
 
   public void init() {

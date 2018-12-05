@@ -28,12 +28,12 @@ import org.apache.yetus.audience.InterfaceAudience;
 @InterfaceAudience.Private
 public class OnheapChunk extends Chunk {
 
-  OnheapChunk(int size, int id) {
-    super(size, id);
+  OnheapChunk(int size, int id, ChunkCreator chunkCreator) {
+    super(size, id, chunkCreator);
   }
 
-  OnheapChunk(int size, int id, boolean fromPool) {
-    super(size, id, fromPool);
+  OnheapChunk(int size, int id, boolean fromPool, ChunkCreator chunkCreator) {
+    super(size, id, fromPool, chunkCreator);
   }
 
   @Override

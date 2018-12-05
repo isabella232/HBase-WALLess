@@ -64,9 +64,8 @@ public class TestMemStoreChunkPool {
     ChunkCreator.chunkPoolDisabled = false;
     long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
         .getMax() * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
+    chunkCreator = ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
         globalMemStoreLimit, 0.2f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
-    chunkCreator = ChunkCreatorFactory.getChunkCreator();
     assertTrue(chunkCreator != null);
   }
 
@@ -83,7 +82,7 @@ public class TestMemStoreChunkPool {
   @Test
   public void testReusingChunks() {
     Random rand = new Random();
-    MemStoreLAB mslab = new MemStoreLABImpl(conf);
+    MemStoreLAB mslab = new MemStoreLABImpl(conf, chunkCreator);
     int expectedOff = 0;
     ByteBuffer lastBuffer = null;
     final byte[] rk = Bytes.toBytes("r1");
@@ -109,7 +108,7 @@ public class TestMemStoreChunkPool {
     int chunkCount = chunkCreator.getPoolSize();
     assertTrue(chunkCount > 0);
     // reconstruct mslab
-    mslab = new MemStoreLABImpl(conf);
+    mslab = new MemStoreLABImpl(conf, chunkCreator);
     // chunk should be got from the pool, so we can reuse it.
     KeyValue kv = new KeyValue(rk, cf, q, new byte[10]);
     mslab.copyCellInto(kv);
@@ -127,7 +126,7 @@ public class TestMemStoreChunkPool {
     byte[] qf5 = Bytes.toBytes("testqualifier5");
     byte[] val = Bytes.toBytes("testval");
 
-    DefaultMemStore memstore = new DefaultMemStore();
+    DefaultMemStore memstore = new DefaultMemStore(this.chunkCreator);
 
     // Setting up memstore
     memstore.add(new KeyValue(row, fam, qf1, val), null);
@@ -168,7 +167,7 @@ public class TestMemStoreChunkPool {
     byte[] qf7 = Bytes.toBytes("testqualifier7");
     byte[] val = Bytes.toBytes("testval");
 
-    DefaultMemStore memstore = new DefaultMemStore();
+    DefaultMemStore memstore = new DefaultMemStore(this.chunkCreator);
 
     // Setting up memstore
     memstore.add(new KeyValue(row, fam, qf1, val), null);
@@ -233,11 +232,11 @@ public class TestMemStoreChunkPool {
     final int initialCount = 5;
     final int chunkSize = 40;
     final int valSize = 7;
-    ChunkCreator oldCreator = ChunkCreator.getInstance();
+    ChunkCreator oldCreator = chunkCreator;
     ChunkCreator newCreator = new ChunkCreator(chunkSize, false, 400, 1, 0.5f, null, 0);
     assertEquals(initialCount, newCreator.getPoolSize());
     assertEquals(maxCount, newCreator.getMaxCount());
-    ChunkCreator.instance = newCreator;// Replace the global ref with the new one we created.
+    chunkCreator = newCreator;// Replace the global ref with the new one we created.
                                              // Used it for the testing. Later in finally we put
                                              // back the original
     final KeyValue kv = new KeyValue(Bytes.toBytes("r"), Bytes.toBytes("f"), Bytes.toBytes("q"),
@@ -246,7 +245,7 @@ public class TestMemStoreChunkPool {
       Runnable r = new Runnable() {
         @Override
         public void run() {
-          MemStoreLAB memStoreLAB = new MemStoreLABImpl(conf);
+          MemStoreLAB memStoreLAB = new MemStoreLABImpl(conf, chunkCreator);
           for (int i = 0; i < maxCount; i++) {
             memStoreLAB.copyCellInto(kv);// Try allocate size = chunkSize. Means every
                                          // allocate call will result in a new chunk
@@ -266,7 +265,7 @@ public class TestMemStoreChunkPool {
       t3.join();
       assertTrue(newCreator.getPoolSize() <= maxCount);
     } finally {
-      ChunkCreator.instance = oldCreator;
+      chunkCreator = oldCreator;
     }
   }
 }

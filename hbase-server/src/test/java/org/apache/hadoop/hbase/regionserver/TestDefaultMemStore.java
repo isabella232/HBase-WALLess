@@ -88,7 +88,7 @@ public class TestDefaultMemStore {
   protected static final byte[] FAMILY = Bytes.toBytes("column");
   protected MultiVersionConcurrencyControl mvcc;
   protected AtomicLong startSeqNum = new AtomicLong(0);
-  protected ChunkCreator chunkCreator;
+  protected static ChunkCreator chunkCreator;
 
   private String getName() {
     return this.name.getMethodName();
@@ -98,15 +98,14 @@ public class TestDefaultMemStore {
   public void setUp() throws Exception {
     internalSetUp();
     // no pool
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
+    chunkCreator = ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
         null);
-    this.chunkCreator = ChunkCreatorFactory.getChunkCreator();
-    this.memstore = new DefaultMemStore();
+    this.memstore = new DefaultMemStore(chunkCreator);
   }
 
   @AfterClass
   public static void tearDownClass() throws Exception {
-    ChunkCreator.getInstance().clearChunkIds();
+    chunkCreator.clearChunkIds();
   }
 
   protected void internalSetUp() throws Exception {
@@ -259,7 +258,7 @@ public class TestDefaultMemStore {
     verifyScanAcrossSnapshot2(kv1, kv2);
 
     // use case 3: first in snapshot second in kvset
-    this.memstore = new DefaultMemStore();
+    this.memstore = new DefaultMemStore(this.chunkCreator);
     this.memstore.add(kv1.clone(), null);
     this.memstore.snapshot();
     this.memstore.add(kv2.clone(), null);
@@ -539,7 +538,7 @@ public class TestDefaultMemStore {
 
   @Test
   public void testMultipleVersionsSimple() throws Exception {
-    DefaultMemStore m = new DefaultMemStore();
+    DefaultMemStore m = new DefaultMemStore(this.chunkCreator);
     byte [] row = Bytes.toBytes("testRow");
     byte [] family = Bytes.toBytes("testFamily");
     byte [] qf = Bytes.toBytes("testQualifier");
@@ -821,7 +820,7 @@ public class TestDefaultMemStore {
    */
   @Test
   public void testUpsertMemstoreSize() throws Exception {
-    memstore = new DefaultMemStore();
+    memstore = new DefaultMemStore(this.chunkCreator);
     MemStoreSize oldSize = memstore.size();
 
     List<Cell> l = new ArrayList<>();
@@ -863,7 +862,7 @@ public class TestDefaultMemStore {
     try {
       EnvironmentEdgeForMemstoreTest edge = new EnvironmentEdgeForMemstoreTest();
       EnvironmentEdgeManager.injectEdge(edge);
-      DefaultMemStore memstore = new DefaultMemStore();
+      DefaultMemStore memstore = new DefaultMemStore(this.chunkCreator);
       long t = memstore.timeOfOldestEdit();
       assertEquals(Long.MAX_VALUE, t);
 
@@ -1091,7 +1090,8 @@ public class TestDefaultMemStore {
   }
 
   public static void main(String [] args) throws IOException {
-    MemStore ms = new DefaultMemStore();
+    MemStore ms = new DefaultMemStore(ChunkCreatorFactory
+        .createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null, null));
 
     long n1 = System.nanoTime();
     addRows(25000, ms);

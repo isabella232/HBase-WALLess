@@ -21,9 +21,8 @@ import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
-import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.hadoop.hbase.util.ReflectionUtils;
-import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
+import org.apache.yetus.audience.InterfaceAudience;
 
 /**
  * A memstore-local allocation buffer.
@@ -113,7 +112,8 @@ public interface MemStoreLAB {
   */
   Chunk getNewExternalChunk(int size);
 
-  static MemStoreLAB newInstance(byte[] regionName, byte[] cfName, Configuration conf) {
+  static MemStoreLAB newInstance(byte[] regionName, byte[] cfName, Configuration conf,
+      ChunkCreator chunkCreator) {
     MemStoreLAB memStoreLAB = null;
     if (isEnabled(conf)) {
       String path = conf.get("hbase.memstore.mslab.durable.path");
@@ -122,13 +122,13 @@ public interface MemStoreLAB {
       if (path != null) {
         String className = conf.get(MSLAB_CLASS_NAME, DurableMemStoreLABImpl.class.getName());
         memStoreLAB = ReflectionUtils.instantiateWithCustomCtor(className,
-          new Class[] { byte[].class, byte[].class, Configuration.class },
-          new Object[] { regionName, cfName, conf });
+          new Class[] { byte[].class, byte[].class, Configuration.class, DurableChunkCreator.class },
+          new Object[] { regionName, cfName, conf, chunkCreator });
       } else {
         String className = conf.get(MSLAB_CLASS_NAME, MemStoreLABImpl.class.getName());
         memStoreLAB = ReflectionUtils.instantiateWithCustomCtor(className,
-          new Class[] { byte[].class, byte[].class, Configuration.class },
-          new Object[] { regionName, cfName, conf });
+          new Class[] { byte[].class, byte[].class, Configuration.class, ChunkCreator.class },
+          new Object[] { regionName, cfName, conf, chunkCreator });
       }
     }
     return memStoreLAB;
@@ -143,4 +143,6 @@ public interface MemStoreLAB {
   boolean isOffHeap();
 
   List<Cell> copyCellsInto(List<Cell> cells);
+
+  ChunkCreator getChunkCreator();
 }

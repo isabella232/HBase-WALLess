@@ -64,10 +64,11 @@ public class TestDurableMemstoreLABImpl {
   private static final byte[] rk = Bytes.toBytes("r1");
   private static final byte[] cf = Bytes.toBytes("f");
   private static final byte[] q = Bytes.toBytes("q");
+  private static ChunkCreator chunkCreator;
 
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
-    ChunkCreatorFactory.createChunkCreator(1 * 400, true, 72 * 1024000L, 1.0f,
+    chunkCreator =  ChunkCreatorFactory.createChunkCreator(1 * 400, true, 72 * 1024000L, 1.0f,
         1.0f, null, "./chunkfile");
   }
 
@@ -76,7 +77,7 @@ public class TestDurableMemstoreLABImpl {
     long globalMemStoreLimit =
         (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getMax()
             * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, true,
+    chunkCreator = ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, true,
         globalMemStoreLimit, 0.2f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
   }
 
@@ -86,7 +87,7 @@ public class TestDurableMemstoreLABImpl {
   @Test
   public void testLABRandomAllocation() {
     Random rand = new Random();
-    MemStoreLAB mslab = new DurableMemStoreLABImpl();
+    MemStoreLAB mslab = new DurableMemStoreLABImpl((DurableChunkCreator)chunkCreator);
     int expectedOff = 0;
     ByteBuffer lastBuffer = null;
     int lastChunkId = -1;
@@ -119,7 +120,7 @@ public class TestDurableMemstoreLABImpl {
 
   //@Test
   public void testLABLargeAllocation() {
-    MemStoreLAB mslab = new DurableMemStoreLABImpl();
+    MemStoreLAB mslab = new DurableMemStoreLABImpl((DurableChunkCreator)chunkCreator);
     KeyValue kv = new KeyValue(rk, cf, q, new byte[2 * 1024 * 1024]);
     List<Cell> list = new ArrayList<Cell>();
     list.add(kv);
@@ -130,7 +131,7 @@ public class TestDurableMemstoreLABImpl {
 
   @Test
   public void testMultiChunkCase() throws Exception {
-    final DurableMemStoreLABImpl mslab = new DurableMemStoreLABImpl();
+    final DurableMemStoreLABImpl mslab = new DurableMemStoreLABImpl((DurableChunkCreator)chunkCreator);
     CopyThread[] threads = new CopyThread[2];
     List<Cell> cells = new ArrayList<Cell>();
     cells.add(new KeyValue(rk, cf, q, new byte[10]));
@@ -251,11 +252,11 @@ public class TestDurableMemstoreLABImpl {
   public void testLABChunkQueue() throws Exception {
     ChunkCreator oldInstance = null;
     try {
-      MemStoreLABImpl mslab = new DurableMemStoreLABImpl();
+      MemStoreLABImpl mslab = new DurableMemStoreLABImpl((DurableChunkCreator)chunkCreator);
       // by default setting, there should be no chunks initialized in the pool
       assertTrue(mslab.getPooledChunks().isEmpty());
-      oldInstance = ChunkCreator.instance;
-      ChunkCreator.instance = null;
+      oldInstance = chunkCreator;
+      chunkCreator = null;
       // reset mslab with chunk pool
       Configuration conf = HBaseConfiguration.create();
       conf.setDouble(MemStoreLAB.CHUNK_POOL_MAXSIZE_KEY, 0.1);
@@ -264,10 +265,10 @@ public class TestDurableMemstoreLABImpl {
       // reconstruct mslab
       long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
           .getMax() * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
-      ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.MAX_ALLOC_DEFAULT, true,
+      chunkCreator = ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.MAX_ALLOC_DEFAULT, true,
         globalMemStoreLimit, 1.0f, 1.0f, null, "./chunkfile");
       ChunkCreator.clearDisableFlag();
-      mslab = new DurableMemStoreLABImpl(conf);
+      mslab = new DurableMemStoreLABImpl(conf, (DurableChunkCreator)chunkCreator);
       // launch multiple threads to trigger frequent chunk retirement
       List<Thread> threads = new ArrayList<>();
       final KeyValue kv = new KeyValue(Bytes.toBytes("r"), Bytes.toBytes("f"), Bytes.toBytes("q"),
@@ -299,7 +300,7 @@ public class TestDurableMemstoreLABImpl {
       }
       // none of the chunkIds would have been returned back
       assertTrue("All the chunks must have been cleared",
-          ChunkCreator.instance.numberOfMappedChunks() != 0);
+        chunkCreator.numberOfMappedChunks() != 0);
       int pooledChunksNum = mslab.getPooledChunks().size();
       // close the mslab
       mslab.close();
@@ -309,7 +310,7 @@ public class TestDurableMemstoreLABImpl {
           + " after mslab closed but actually: " + (pooledChunksNum-queueLength),
           pooledChunksNum-queueLength == 0);
     } finally {
-      ChunkCreator.instance = oldInstance;
+      chunkCreator = oldInstance;
     }
   }
 

@@ -56,6 +56,7 @@ public abstract class AbstractMemStore implements MemStore {
   private volatile long timeOfOldestEdit;
   protected byte[] regionName;
   protected byte[] cfName;
+  private final ChunkCreator chunkCreator;
 
   public final static long FIXED_OVERHEAD = (long) ClassSize.OBJECT
           + (6 * ClassSize.REFERENCE)
@@ -77,10 +78,16 @@ public abstract class AbstractMemStore implements MemStore {
 
   protected AbstractMemStore(byte[] regionName, byte[] cfName, final Configuration conf,
       final CellComparator c) {
+    this(regionName, cfName, conf, c, null);
+  }
+
+  protected AbstractMemStore(byte[] regionName, byte[] cfName, final Configuration conf,
+      final CellComparator c, final ChunkCreator chunkCreator) {
     this.regionName = regionName;
     this.cfName = cfName;
     this.conf = conf;
     this.comparator = c;
+    this.chunkCreator = chunkCreator;
     resetActive();
     this.snapshot = SegmentFactory.instance().createImmutableSegment(c);
     this.snapshotId = NO_SNAPSHOT_ID;
@@ -89,7 +96,7 @@ public abstract class AbstractMemStore implements MemStore {
   protected void resetActive() {
     // Reset heap to not include any keys
     this.active = SegmentFactory.instance().createMutableSegment(this.regionName, this.cfName, conf,
-        comparator);
+        comparator, this.chunkCreator);
     this.timeOfOldestEdit = Long.MAX_VALUE;
   }
 
@@ -388,5 +395,9 @@ public abstract class AbstractMemStore implements MemStore {
 
   public byte[] getFamilyName() {
     return this.cfName;
+  }
+  
+  public ChunkCreator getChunkCreator() {
+    return this.chunkCreator;
   }
 }

@@ -135,7 +135,12 @@ public class ImmutableMemStoreLAB implements MemStoreLAB {
 
   @Override
   public boolean isOffHeap() {
-    return ChunkCreator.getInstance().isOffheap();
+    return this.getChunkCreator().isOffheap();
+  }
+
+  @Override
+  public ChunkCreator getChunkCreator() {
+    return this.getChunkCreator();
   }
 
   @Override

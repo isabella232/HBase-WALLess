@@ -63,7 +63,14 @@ public class DefaultMemStore extends AbstractMemStore {
    * Default constructor. Used for tests.
    */
   public DefaultMemStore() {
-    this(null, null, HBaseConfiguration.create(), CellComparator.getInstance());
+    this(null, null, HBaseConfiguration.create(), CellComparator.getInstance(), null);
+  }
+
+  /**
+   * Default constructor. Used for tests.
+   */
+  public DefaultMemStore(ChunkCreator chunkCreator) {
+    this(null, null, HBaseConfiguration.create(), CellComparator.getInstance(), chunkCreator);
   }
 
   /**
@@ -71,8 +78,8 @@ public class DefaultMemStore extends AbstractMemStore {
    * @param c Comparator
    */
   public DefaultMemStore(byte[] regionName, byte[] cfName, final Configuration conf,
-      final CellComparator c) {
-    super(regionName, cfName, conf, c);
+      final CellComparator c, final ChunkCreator chunkCreator) {
+    super(regionName, cfName, conf, c, chunkCreator);
   }
 
   /**

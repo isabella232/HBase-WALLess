@@ -62,10 +62,11 @@ public class TestMemStoreLAB {
   private static final byte[] rk = Bytes.toBytes("r1");
   private static final byte[] cf = Bytes.toBytes("f");
   private static final byte[] q = Bytes.toBytes("q");
+  private static ChunkCreator instance;
 
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
-    ChunkCreatorFactory.createChunkCreator(1 * 1024, false, 50 * 1024000L, 0.2f,
+    instance = ChunkCreatorFactory.createChunkCreator(1 * 1024, false, 50 * 1024000L, 0.2f,
         MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
   }
 
@@ -74,7 +75,7 @@ public class TestMemStoreLAB {
     long globalMemStoreLimit =
         (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getMax()
             * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
+    instance = ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
         globalMemStoreLimit, 0.2f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
   }
 
@@ -84,7 +85,7 @@ public class TestMemStoreLAB {
   @Test
   public void testLABRandomAllocation() {
     Random rand = new Random();
-    MemStoreLAB mslab = new MemStoreLABImpl();
+    MemStoreLAB mslab = new MemStoreLABImpl(instance);
     int expectedOff = 0;
     ByteBuffer lastBuffer = null;
     int lastChunkId = -1;
@@ -114,7 +115,7 @@ public class TestMemStoreLAB {
 
   @Test
   public void testLABLargeAllocation() {
-    MemStoreLAB mslab = new MemStoreLABImpl();
+    MemStoreLAB mslab = new MemStoreLABImpl(instance);
     KeyValue kv = new KeyValue(rk, cf, q, new byte[2 * 1024 * 1024]);
     Cell newCell = mslab.copyCellInto(kv);
     assertNull("2MB allocation shouldn't be satisfied by LAB.", newCell);
@@ -132,7 +133,7 @@ public class TestMemStoreLAB {
 
     final AtomicInteger totalAllocated = new AtomicInteger();
 
-    final MemStoreLAB mslab = new MemStoreLABImpl();
+    final MemStoreLAB mslab = new MemStoreLABImpl(instance);
     List<List<AllocRecord>> allocations = Lists.newArrayList();
 
     for (int i = 0; i < 10; i++) {
@@ -203,11 +204,11 @@ public class TestMemStoreLAB {
   public void testLABChunkQueue() throws Exception {
     ChunkCreator oldInstance = null;
     try {
-      MemStoreLABImpl mslab = new MemStoreLABImpl();
+      MemStoreLABImpl mslab = new MemStoreLABImpl(instance);
       // by default setting, there should be no chunks initialized in the pool
       assertTrue(mslab.getPooledChunks().isEmpty());
-      oldInstance = ChunkCreator.instance;
-      ChunkCreator.instance = null;
+      oldInstance = instance;
+      instance = null;
       // reset mslab with chunk pool
       Configuration conf = HBaseConfiguration.create();
       conf.setDouble(MemStoreLAB.CHUNK_POOL_MAXSIZE_KEY, 0.1);
@@ -216,10 +217,10 @@ public class TestMemStoreLAB {
       // reconstruct mslab
       long globalMemStoreLimit = (long) (ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()
           .getMax() * MemorySizeUtil.getGlobalMemStoreHeapPercent(conf, false));
-      ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.MAX_ALLOC_DEFAULT, false,
+      instance = ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.MAX_ALLOC_DEFAULT, false,
         globalMemStoreLimit, 0.1f, MemStoreLAB.POOL_INITIAL_SIZE_DEFAULT, null, null);
       ChunkCreator.clearDisableFlag();
-      mslab = new MemStoreLABImpl(conf);
+      mslab = new MemStoreLABImpl(conf, instance);
       // launch multiple threads to trigger frequent chunk retirement
       List<Thread> threads = new ArrayList<>();
       final KeyValue kv = new KeyValue(Bytes.toBytes("r"), Bytes.toBytes("f"), Bytes.toBytes("q"),
@@ -251,7 +252,7 @@ public class TestMemStoreLAB {
       }
       // none of the chunkIds would have been returned back
       assertTrue("All the chunks must have been cleared",
-          ChunkCreator.instance.numberOfMappedChunks() != 0);
+          instance.numberOfMappedChunks() != 0);
       int pooledChunksNum = mslab.getPooledChunks().size();
       // close the mslab
       mslab.close();
@@ -261,7 +262,7 @@ public class TestMemStoreLAB {
           + " after mslab closed but actually: " + (pooledChunksNum-queueLength),
           pooledChunksNum-queueLength == 0);
     } finally {
-      ChunkCreator.instance = oldInstance;
+      instance = oldInstance;
     }
   }
 

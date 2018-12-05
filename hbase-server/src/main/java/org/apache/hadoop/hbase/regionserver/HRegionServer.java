@@ -481,6 +481,7 @@ public class HRegionServer extends HasThread implements
   private RegionServerRpcQuotaManager rsQuotaManager;
   private RegionServerSpaceQuotaManager rsSpaceQuotaManager;
 
+  private ChunkCreator memstoreChunkCreator;
   // TODO : Better way. for now allowing to be set in the region server direclty
   private DurableChunkRetrieverV2 retriever;
 
@@ -1149,7 +1150,7 @@ public class HRegionServer extends HasThread implements
     }
 
     // close the DurableChunk-if there is any
-    ChunkCreator.shutdown(this.conf.get(ChunkCreatorFactory.MSLAB_DURABLE_PATH_KEY, null));
+    this.memstoreChunkCreator.shutdown();
     if (this.rpcServices != null) {
       this.rpcServices.stop();
     }
@@ -1596,8 +1597,8 @@ public class HRegionServer extends HasThread implements
       int chunkSize = conf.getInt(MemStoreLAB.CHUNK_SIZE_KEY, MemStoreLAB.CHUNK_SIZE_DEFAULT);
       // init the chunkCreator
       String durablePath = conf.get(ChunkCreatorFactory.MSLAB_DURABLE_PATH_KEY, null);
-      ChunkCreatorFactory.createChunkCreator(chunkSize, offheap, globalMemStoreSize,
-          poolSizePercentage, initialCountPercentage, this, durablePath);
+      memstoreChunkCreator = ChunkCreatorFactory.createChunkCreator(chunkSize, offheap,
+        globalMemStoreSize, poolSizePercentage, initialCountPercentage, this, durablePath);
     }
   }
 
@@ -3885,5 +3886,9 @@ public class HRegionServer extends HasThread implements
 
   public DurableChunkRetrieverV2 getRetriver() {
     return this.retriever;
+  }
+
+  public ChunkCreator getMemstoreChunkCreator() {
+    return this.memstoreChunkCreator;
   }
 }

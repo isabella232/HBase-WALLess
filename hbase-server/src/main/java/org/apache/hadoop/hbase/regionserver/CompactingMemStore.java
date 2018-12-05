@@ -103,8 +103,8 @@ public class CompactingMemStore extends AbstractMemStore {
 
   public CompactingMemStore(byte[] regionName, byte[] cfName, Configuration conf, CellComparator c,
       HStore store, RegionServicesForStores regionServices,
-      MemoryCompactionPolicy compactionPolicy) throws IOException {
-    super(regionName, cfName, conf, c);
+      MemoryCompactionPolicy compactionPolicy, final ChunkCreator chunkCreator) throws IOException {
+    super(regionName, cfName, conf, c, chunkCreator);
     this.store = store;
     this.regionServices = regionServices;
     this.pipeline = new CompactionPipeline(getRegionServices());

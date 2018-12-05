@@ -212,14 +212,12 @@ public class TestHStore {
     FileSystem fs = FileSystem.get(conf);
 
     fs.delete(logdir, true);
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false,
-        MemStoreLABImpl.CHUNK_SIZE_DEFAULT, 1, 0, null, null);
     RegionInfo info = RegionInfoBuilder.newBuilder(htd.getTableName()).build();
     Configuration walConf = new Configuration(conf);
     FSUtils.setRootDir(walConf, basedir);
     WALFactory wals = new WALFactory(walConf, methodName);
-    region = new HRegion(new HRegionFileSystem(conf, fs, tableDir, info), wals.getWAL(info), conf,
-        htd, null);
+    region = new ExtendedHRegion(new HRegionFileSystem(conf, fs, tableDir, info), wals.getWAL(info),
+        conf, htd, null, null);
   }
 
   private HStore init(String methodName, Configuration conf, TableDescriptorBuilder builder,
@@ -1755,8 +1753,8 @@ public class TestHStore {
     private static final AtomicInteger RUNNER_COUNT = new AtomicInteger(0);
     public MyCompactingMemStoreWithCustomCompactor(Configuration conf, CellComparatorImpl c,
         HStore store, RegionServicesForStores regionServices,
-        MemoryCompactionPolicy compactionPolicy) throws IOException {
-      super(null, null, conf, c, store, regionServices, compactionPolicy);
+        MemoryCompactionPolicy compactionPolicy, ChunkCreator chunkCreator) throws IOException {
+      super(null, null, conf, c, store, regionServices, compactionPolicy, chunkCreator);
     }
 
     @Override
@@ -1784,8 +1782,8 @@ public class TestHStore {
     private final CountDownLatch snapshotLatch = new CountDownLatch(1);
     public MyCompactingMemStore(Configuration conf, CellComparatorImpl c,
         HStore store, RegionServicesForStores regionServices,
-        MemoryCompactionPolicy compactionPolicy) throws IOException {
-      super(null, null, conf, c, store, regionServices, compactionPolicy);
+        MemoryCompactionPolicy compactionPolicy, ChunkCreator chunkCreator) throws IOException {
+      super(null, null, conf, c, store, regionServices, compactionPolicy, chunkCreator);
     }
 
     @Override

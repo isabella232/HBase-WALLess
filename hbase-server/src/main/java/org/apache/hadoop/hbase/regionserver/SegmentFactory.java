@@ -51,12 +51,11 @@ public final class SegmentFactory {
   // for compaction
   public ImmutableSegment createImmutableSegmentByCompaction(Configuration conf,
       CellComparator comparator, MemStoreSegmentsIterator iterator, int numOfCells,
-      CompactingMemStore.IndexType idxType, MemStoreCompactionStrategy.Action action)
-      throws IOException {
-    MemStoreLAB memStoreLAB = MemStoreLAB.newInstance(null, null, conf);
-    return
-        createImmutableSegment(
-            conf,comparator,iterator,memStoreLAB,numOfCells,action,idxType);
+      CompactingMemStore.IndexType idxType, MemStoreCompactionStrategy.Action action,
+      ChunkCreator chunkCreator) throws IOException {
+    MemStoreLAB memStoreLAB = MemStoreLAB.newInstance(null, null, conf, chunkCreator);
+    return createImmutableSegment(conf, comparator, iterator, memStoreLAB, numOfCells, action,
+      idxType);
   }
 
   // create empty immutable segment
@@ -73,8 +72,8 @@ public final class SegmentFactory {
 
   // create mutable segment
   public MutableSegment createMutableSegment(byte[] regionName, byte[] cfName, Configuration conf,
-      CellComparator comparator) {
-    MemStoreLAB memStoreLAB = MemStoreLAB.newInstance(regionName, cfName, conf);
+      CellComparator comparator, ChunkCreator chunkCreator) {
+    MemStoreLAB memStoreLAB = MemStoreLAB.newInstance(regionName, cfName, conf, chunkCreator);
     return generateMutableSegment(conf, comparator, memStoreLAB);
   }
 

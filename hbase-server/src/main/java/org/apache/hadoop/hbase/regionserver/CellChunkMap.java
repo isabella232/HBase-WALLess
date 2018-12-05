@@ -62,6 +62,8 @@ public class CellChunkMap extends CellFlatMap {
   // each chunk starts with its own ID following the cells data
   private final int numOfCellRepsInChunk;
 
+  private final ChunkCreator chunkCreator;
+
   /**
    * C-tor for creating CellChunkMap from existing Chunk array, which must be ordered
    * (decreasingly or increasingly according to parameter "descending")
@@ -72,7 +74,7 @@ public class CellChunkMap extends CellFlatMap {
    * @param descending the order of the given array
    */
   public CellChunkMap(Comparator<? super Cell> comparator,
-      Chunk[] chunks, int min, int max, boolean descending) {
+      Chunk[] chunks, int min, int max, boolean descending, ChunkCreator chunkCreator) {
     super(comparator, min, max, descending);
     this.chunks = chunks;
     if (chunks != null && chunks.length != 0 && chunks[0] != null) {
@@ -81,13 +83,14 @@ public class CellChunkMap extends CellFlatMap {
     } else { // In case the chunks array was not allocated
       this.numOfCellRepsInChunk = 0;
     }
+    this.chunkCreator = chunkCreator;
   }
 
   /* To be used by base (CellFlatMap) class only to create a sub-CellFlatMap
   * Should be used only to create only CellChunkMap from CellChunkMap */
   @Override
   protected CellFlatMap createSubCellFlatMap(int min, int max, boolean descending) {
-    return new CellChunkMap(this.comparator(), this.chunks, min, max, descending);
+    return new CellChunkMap(this.comparator(), this.chunks, min, max, descending, this.chunkCreator);
   }
 
 
@@ -103,7 +106,7 @@ public class CellChunkMap extends CellFlatMap {
 
     // find the chunk holding the data of the cell, the chunkID is stored first
     int chunkId = ByteBufferUtils.toInt(block, offsetInBytes);
-    Chunk chunk = ChunkCreator.getInstance().getChunk(chunkId);
+    Chunk chunk = this.chunkCreator.getChunk(chunkId);
     if (chunk == null) {
       // this should not happen
       throw new IllegalArgumentException("In CellChunkMap, cell must be associated with chunk."

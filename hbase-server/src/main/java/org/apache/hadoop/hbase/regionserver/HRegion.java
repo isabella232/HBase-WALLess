@@ -919,7 +919,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    * @return What the next sequence (edit) id should be.
    * @throws IOException e
    */
-  private long initialize(final CancelableProgressable reporter) throws IOException {
+  public long initialize(final CancelableProgressable reporter) throws IOException {
 
     //Refuse to open the region if there is no column family in the table
     if (htableDescriptor.getColumnFamilyCount() == 0) {
@@ -965,7 +965,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     // Replay cells from durable chunk
     if (this.getRegionServerServices() != null) {
       chunkRetriever = ((HRegionServer) this.getRegionServerServices()).getRetriver();
-      dataPool = ((DurableChunkCreator) DurableChunkCreator.getInstance()).getDataPool();
+      dataPool = ((DurableChunkCreator) this.getChunkCreator()).getDataPool();
     }
     if (this.getRegionServerServices() != null
         && ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
@@ -1133,7 +1133,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     long maxSeqId = -1;
     // initialized to -1 so that we pick up MemstoreTS from column families
     long maxMemstoreTS = -1;
-
     if (htableDescriptor.getColumnFamilyCount() != 0) {
       // initialize the thread pool for opening stores in parallel.
       ThreadPoolExecutor storeOpenerThreadPool =
@@ -2736,7 +2735,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         new Pair<CompletableFuture<ReplicateMemstoreResponse>, WriteEntry>();
     // TODO : We should send the RPC for a case where a region is closed as part of MOVE.
     // In case of disabling or RS shutdown this may be ok.
-    if (!this.closing.get() && !this.closed.get()) {
+    if (!this.closing.get() && !this.closed.get() && this.memstoreReplicator != null) {
       FlushDescriptor desc =
           ProtobufUtil.toFlushDescriptor(action, getRegionInfo(), flushOpSeqId, committedFiles);
       Cell kv = new KeyValue(WALEdit.getRowForRegion(getRegionInfo()), WALEdit.METAFAMILY,
@@ -2778,18 +2777,21 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         WALEdit.COMPACTION, EnvironmentEdgeManager.currentTime(), byteArray);
     WriteEntry writeNum = null;
     try {
-      MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
-          this.getRegionInfo().getEncodedNameAsBytes(), replicaOffered);
-      MemstoreEdits memstoreEdits = new MemstoreEdits();
-      memstoreEdits.add(kv);
-      // TODO this is meta marker cell only. But the special treatment might not be needed here. As
-      // of now leave it this way.
-      ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
-          memstoreEdits, replicaCordinator, true);
-      writeNum = memstoreReplicationKey.getWriteEntry();
-      if (response.getFailedReplicasCount() > 0) {
-        List<Integer> failedReplicas = response.getFailedReplicasList();
-        // TODO should mark these as BAD
+      if (this.memstoreReplicator != null) {
+        MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
+            this.getRegionInfo().getEncodedNameAsBytes(), replicaOffered);
+        MemstoreEdits memstoreEdits = new MemstoreEdits();
+        memstoreEdits.add(kv);
+        // TODO this is meta marker cell only. But the special treatment might not be needed here.
+        // As
+        // of now leave it this way.
+        ReplicateMemstoreResponse response = this.memstoreReplicator
+            .replicate(memstoreReplicationKey, memstoreEdits, replicaCordinator, true);
+        writeNum = memstoreReplicationKey.getWriteEntry();
+        if (response.getFailedReplicasCount() > 0) {
+          List<Integer> failedReplicas = response.getFailedReplicasList();
+          // TODO should mark these as BAD
+        }
       }
     } finally {
       if (writeNum != null) {
@@ -4348,7 +4350,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // TODO this logic should be part of a WAL impl and fully plugged in with out any core changes
       // as here. It is just a PoC
       if (!memstoreEdit.isEmpty() && !this.getRegionInfo().getTable().isSystemTable()) {
-         writeEntry = replicateCurrentBatch(memstoreEdit, 1);
+        if (this.memstoreReplicator != null) {
+          writeEntry = replicateCurrentBatch(memstoreEdit, 1);
+        }
       }
       // if null create one
       if (writeEntry == null) {
@@ -9251,4 +9255,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return this.replicaCordinator.getCurrentPiplineForReads();
   }
 
+  @VisibleForTesting
+  // We should be getting this from the RSS. But in tests this is not possible hence we always create
+  // ExtendedHRegion in tests which has the capability to return a chunkcreator.
+  public ChunkCreator getChunkCreator() {
+    // Instead of changing all test cases - I am just doing a hack here
+    if (this.getRegionServerServices() != null) {
+      return ((HRegionServer) this.getRegionServerServices()).getMemstoreChunkCreator();
+    }
+    return null;
+  }
 }

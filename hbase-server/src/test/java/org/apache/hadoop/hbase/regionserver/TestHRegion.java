@@ -2448,8 +2448,6 @@ public class TestHRegion {
     FSHLog hLog = new FSHLog(fs, rootDir, "testDataInMemoryWithoutWAL", CONF);
     // This chunk creation is done throughout the code base. Do we want to move it into core?
     // It is missing from this test. W/o it we NPE.
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
-        null);
     HRegion region = initHRegion(tableName, null, null, false, Durability.SYNC_WAL, hLog,
         COLUMN_FAMILY_BYTES);
 
@@ -2722,8 +2720,6 @@ public class TestHRegion {
     hcd.setMaxVersions(maxVersions);
     HTableDescriptor htd = new HTableDescriptor(TableName.valueOf("testFilterAndColumnTracker"));
     htd.addFamily(hcd);
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
-        null);
     HRegionInfo info = new HRegionInfo(htd.getTableName(), null, null, false);
     Path logDir = TEST_UTIL.getDataTestDirOnTestFS(method + ".log");
     final WAL wal = HBaseTestingUtility.createWal(TEST_UTIL.getConfiguration(), logDir, info);
@@ -4370,7 +4366,7 @@ public class TestHRegion {
         fs.exists(regionInfoFile));
 
     // Try to open the region
-    region = HRegion.openHRegion(rootDir, hri, htd, null, CONF);
+    region = ExtendedHRegion.openHRegion(rootDir, hri, htd, null, CONF);
     assertEquals(regionDir, region.getRegionFileSystem().getRegionDir());
     HBaseTestingUtility.closeRegionAndWAL(region);
 
@@ -4383,7 +4379,7 @@ public class TestHRegion {
     assertFalse(HRegionFileSystem.REGION_INFO_FILE + " should be removed from the region dir",
         fs.exists(regionInfoFile));
 
-    region = HRegion.openHRegion(rootDir, hri, htd, null, CONF);
+    region = ExtendedHRegion.openHRegion(rootDir, hri, htd, null, CONF);
 //    region = TEST_UTIL.openHRegion(hri, htd);
     assertEquals(regionDir, region.getRegionFileSystem().getRegionDir());
     HBaseTestingUtility.closeRegionAndWAL(region);
@@ -4773,7 +4769,7 @@ public class TestHRegion {
       primaryRegion.flush(true);
 
       // open secondary region
-      secondaryRegion = HRegion.openHRegion(rootDir, secondaryHri, htd, null, CONF);
+      secondaryRegion = ExtendedHRegion.openHRegion(rootDir, secondaryHri, htd, null, CONF);
 
       verifyData(secondaryRegion, 0, 1000, cq, families);
     } finally {
@@ -4823,7 +4819,7 @@ public class TestHRegion {
       primaryRegion.flush(true);
 
       // open secondary region
-      secondaryRegion = HRegion.openHRegion(rootDir, secondaryHri, htd, null, CONF);
+      secondaryRegion = ExtendedHRegion.openHRegion(rootDir, secondaryHri, htd, null, CONF);
 
       try {
         putData(secondaryRegion, 0, 1000, cq, families);
@@ -4882,7 +4878,7 @@ public class TestHRegion {
       primaryRegion.flush(true);
 
       // open secondary region
-      secondaryRegion = HRegion.openHRegion(rootDir, secondaryHri, htd, null, CONF);
+      secondaryRegion = ExtendedHRegion.openHRegion(rootDir, secondaryHri, htd, null, CONF);
 
       // move the file of the primary region to the archive, simulating a compaction
       Collection<HStoreFile> storeFiles = primaryRegion.getStore(families[0]).getStorefiles();
@@ -5064,8 +5060,6 @@ public class TestHRegion {
       String callingMethod, Configuration conf, boolean isReadOnly, byte[]... families)
       throws IOException {
     Path logDir = TEST_UTIL.getDataTestDirOnTestFS(callingMethod + ".log");
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
-        null);
     HRegionInfo hri = new HRegionInfo(tableName, startKey, stopKey);
     final WAL wal = HBaseTestingUtility.createWal(conf, logDir, hri);
     return initHRegion(tableName, startKey, stopKey, isReadOnly,
@@ -5970,8 +5964,8 @@ public class TestHRegion {
 
 
     // create and then open a region first so that it can be closed later
-    region = HRegion.createHRegion(hri, rootDir, TEST_UTIL.getConfiguration(), htd, rss.getWAL(hri));
-    region = HRegion.openHRegion(hri, htd, rss.getWAL(hri),
+    region = ExtendedHRegion.createHRegion(hri, rootDir, TEST_UTIL.getConfiguration(), htd, rss.getWAL(hri));
+    region = ExtendedHRegion.openHRegion(hri, htd, rss.getWAL(hri),
       TEST_UTIL.getConfiguration(), rss, null);
 
     // close the region
@@ -6531,6 +6525,11 @@ public class TestHRegion {
         return new HMobStore(this, family, this.conf);
       }
       return new HStoreForTesting(this, family, this.conf);
+    }
+
+    public ChunkCreator getChunkCreator() {
+      return ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0,
+        0, null, null);
     }
   }
 

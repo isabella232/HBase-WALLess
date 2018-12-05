@@ -250,15 +250,13 @@ public class TestBulkLoad {
     for (byte[] family : families) {
       hTableDescriptor.addFamily(new HColumnDescriptor(family));
     }
-    ChunkCreatorFactory.createChunkCreator(MemStoreLABImpl.CHUNK_SIZE_DEFAULT, false, 0, 0, 0, null,
-        null);
     // TODO We need a way to do this without creating files
-    return HRegion.createHRegion(hRegionInfo,
+    HRegion r = ExtendedHRegion.createHRegion(hRegionInfo,
         new Path(testFolder.newFolder().toURI()),
         conf,
         hTableDescriptor,
-        log);
-
+        log, true, null);
+   return r;
   }
 
   private HRegion testRegionWithFamilies(byte[]... families) throws IOException {
