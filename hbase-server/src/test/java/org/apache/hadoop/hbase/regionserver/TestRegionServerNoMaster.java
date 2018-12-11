@@ -17,7 +17,11 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
+import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.hadoop.hbase.HBaseClassTestRule;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.HConstants;
@@ -75,7 +79,15 @@ public class TestRegionServerNoMaster {
 
   @BeforeClass
   public static void before() throws Exception {
-    HTU.startMiniCluster(NB_SERVERS);
+    List<String> aepPaths = new ArrayList<String>(NB_SERVERS);
+    for (int i = 0; i < NB_SERVERS; i++) {
+      File file = new File("./chunkfile" + i);
+      if (file.exists()) {
+        file.delete();
+      }
+      aepPaths.add("./chunkfile" + i);
+    }
+    HTU.startMiniCluster(NB_SERVERS, aepPaths);
     final TableName tableName = TableName.valueOf(TestRegionServerNoMaster.class.getSimpleName());
 
     // Create table then get the single region for our new table.

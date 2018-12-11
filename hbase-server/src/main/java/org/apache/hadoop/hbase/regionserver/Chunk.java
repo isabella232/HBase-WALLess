@@ -197,4 +197,8 @@ public abstract class Chunk {
   public void prePutbackToPool() {
     // do nothing
   }
+
+  public boolean isEmpty() {
+    return !(this.nextFreeOffset.get() > 0);
+  }
 }

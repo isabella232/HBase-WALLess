@@ -19,14 +19,17 @@ package org.apache.hadoop.hbase.regionserver;
 
 import static org.apache.hadoop.hbase.regionserver.DurableSlicedChunk.SIZE_OF_CELL_SEQ_ID;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
@@ -36,9 +39,6 @@ import org.apache.yetus.audience.InterfaceAudience;
 
 @InterfaceAudience.Private
 public class DurableMemStoreLABImpl extends MemStoreLABImpl {
-
-  @VisibleForTesting
-  public static boolean useDurableMemstore = true;
 
   private AtomicReference<DurableSlicedChunk> firstChunk = new AtomicReference<>();
   private volatile int chunkSeqId = 1;
@@ -72,6 +72,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     super(regionName, cfName, conf, chunkCreator);
   }
 
+  // TODO this needs to be revisited!!..
   @Override
   public List<Cell> copyCellsInto(List<Cell> cells) {
     int totalSize = 0;
@@ -328,6 +329,56 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
 
     boolean isCompleted() {
       return this.completed;
+    }
+  }
+
+  protected void addToChunks(int chunkId) {
+    super.addToChunks(chunkId);
+    this.lazyMapAdditionReader.add(chunkId);
+  }
+
+  private ChunksReader lazyMapAdditionReader = new ChunksReader();
+
+  private class ChunksReader {
+    private List<Integer> chunksToRead = new ArrayList<>();
+    private int curChunkIndex = 0;
+    private CellScanner curChunk = null;
+
+    synchronized void add(int chunkId) {
+      this.chunksToRead.add(chunkId);
+    }
+
+    synchronized Cell next() throws IOException {
+      boolean hasCell = false;
+      while (curChunkIndex < chunksToRead.size()) {
+        if (curChunk == null) {
+          curChunk = ((DurableSlicedChunk) DurableMemStoreLABImpl.this.chunkCreator
+              .getChunk(chunksToRead.get(curChunkIndex))).getCellScanner(Optional.empty());
+        }
+        if (curChunk.advance()) {
+          hasCell = true;
+          break;
+        } else if (curChunkIndex < chunksToRead.size() - 1) {
+          curChunkIndex++;
+          curChunk = null;
+        } else {
+          break;
+        }
+      }
+      if (hasCell) {
+        // Already advanced above
+        return curChunk.current();
+      }
+      return null;
+    }
+  }
+
+  @Override
+  public Cell readNextCell() {
+    try {
+      return this.lazyMapAdditionReader.next();
+    } catch (IOException e) {
+      return null;// TODO
     }
   }
 }

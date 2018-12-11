@@ -119,12 +119,28 @@ public class MutableSegment extends Segment {
       return ClassSize.CONCURRENT_SKIPLISTMAP_ENTRY;
   }
 
+  public List<Cell> persist(List<Cell> cells, boolean forceCloneOfBigCell, MemStoreSizing memstoreSize) {
+    if (this.memStoreLAB == null) {
+      throw new IllegalStateException();
+    }
+    // TODO handle forceCloneOfBigCell = true case?   forceCloneOfBigCell arg may be not needed at all...
+    List<Cell> cellsFromMslab = this.memStoreLAB.copyCellsInto(cells);
+    long cellSize = 0;
+    for (Cell cell : cellsFromMslab) {
+      cellSize += Segment.getCellLength(cell);
+    }
+    if (memstoreSize != null) {
+      memstoreSize.incMemStoreSize(cellSize, 0, cellSize);
+    }
+    incSize(cellSize, 0, cellSize);
+    return cellsFromMslab;
+  }
+
+  //TODO handle forceCloneOfBigCell
   public List<Cell> maybeCloneWithAllocator(List<Cell> cells, boolean forceCloneOfBigCell) {
     if (this.memStoreLAB == null) {
       return cells;
     }
-    // TODO handle forceCloneOfBigCell = true case?
-    List<Cell> cellsFromMslab = this.memStoreLAB.copyCellsInto(cells);
-    return cellsFromMslab;
+    return this.memStoreLAB.copyCellsInto(cells);
   }
 }

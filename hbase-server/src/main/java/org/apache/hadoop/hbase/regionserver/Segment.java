@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.SortedSet;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -64,6 +65,10 @@ public abstract class Segment {
   // including the heap overhead of this class.
   protected final MemStoreSizing segmentSize;
   protected final TimeRangeTracker timeRangeTracker;
+  // This boolean been tracked will be used while flushing. If tags present in any of the cells, we
+  // will have to write the tags length 2 bytes along with every cell even if it is not having any
+  // tags in it. This is for the consistent format of the cells in that File. When no cells having
+  // tags, we can omit writing this 0 tags length.
   protected volatile boolean tagsPresent;
 
   // Empty constructor to be used when Segment is used as interface,
@@ -128,7 +133,14 @@ public abstract class Segment {
    * @return whether the segment has any cells
    */
   public boolean isEmpty() {
-    return getCellSet().isEmpty();
+    // In a normal Segment, checking the CSLM for emptiness alone is enough. The extra check on
+    // MSLAB is for replica region's memstore segments. In case of WALLess HBase region replication,
+    // the cell data will be copied to MSLAB first and the addition to CSLM will be async handled.
+    // It can so happen that no Cells at all on CSLM but MSLAB contains many cell data.
+    if (this.memStoreLAB == null) {
+      return getCellSet().isEmpty();
+    }
+    return getCellSet().isEmpty() && this.memStoreLAB.isEmpty();
   }
 
   /**
@@ -296,10 +308,10 @@ public abstract class Segment {
 
   protected void internalAdd(Cell cell, boolean mslabUsed, MemStoreSizing memstoreSizing) {
     boolean succ = getCellSet().add(cell);
-    updateMetaInfo(cell, succ, mslabUsed, memstoreSizing);
+    updateSizeAndMetaInfo(cell, succ, mslabUsed, memstoreSizing);
   }
 
-  protected void updateMetaInfo(Cell cellToAdd, boolean succ, boolean mslabUsed,
+  protected void updateSizeAndMetaInfo(Cell cellToAdd, boolean succ, boolean mslabUsed,
       MemStoreSizing memstoreSizing) {
     long cellSize = 0;
     // If there's already a same cell in the CellSet and we are using MSLAB, we must count in the
@@ -314,6 +326,10 @@ public abstract class Segment {
     if (memstoreSizing != null) {
       memstoreSizing.incMemStoreSize(cellSize, heapSize, offHeapSize);
     }
+    updateMetaInfo(cellToAdd);
+  }
+
+  private void updateMetaInfo(Cell cellToAdd) {
     getTimeRangeTracker().includeTimestamp(cellToAdd);
     minSequenceId = Math.min(minSequenceId, cellToAdd.getSequenceId());
     // In no tags case this NoTagsKeyValue.getTagsLength() is a cheap call.
@@ -325,8 +341,8 @@ public abstract class Segment {
     }
   }
 
-  protected void updateMetaInfo(Cell cellToAdd, boolean succ, MemStoreSizing memstoreSizing) {
-    updateMetaInfo(cellToAdd, succ, (getMemStoreLAB()!=null), memstoreSizing);
+  protected void updateSizeAndMetaInfo(Cell cellToAdd, boolean succ, MemStoreSizing memstoreSizing) {
+    updateSizeAndMetaInfo(cellToAdd, succ, (getMemStoreLAB()!=null), memstoreSizing);
   }
 
   /**
@@ -415,5 +431,34 @@ public abstract class Segment {
     res += "min timestamp=" + timeRangeTracker.getMin() + ", ";
     res += "max timestamp=" + timeRangeTracker.getMax();
     return res;
+  }
+
+  public long addPersistedCells(Optional<Long> readPnt, MemStoreSizing memStoreSize) {
+    Cell cell = null;
+    long prevSeqId = -1;
+    while ((cell = nextFromMSLAB()) != null) {
+      boolean succ = getCellSet().add(cell);
+      long heapSize = heapSizeChange(cell, succ);
+      incSize(0, heapSize, 0);
+      if (memStoreSize != null) {
+        memStoreSize.incMemStoreSize(0, heapSize, 0);
+      }
+      updateMetaInfo(cell);
+      long curSeqId = cell.getSequenceId();
+      if (readPnt.isPresent()) {
+        if (curSeqId > readPnt.get()) break;
+      } else {
+        if (prevSeqId != -1 && prevSeqId != curSeqId) break;        
+      }
+      prevSeqId = curSeqId;
+    }
+    return prevSeqId;
+  }
+
+  private Cell nextFromMSLAB() {
+    if (this.memStoreLAB != null) {
+      return this.memStoreLAB.readNextCell();
+    }
+    return null;
   }
 }

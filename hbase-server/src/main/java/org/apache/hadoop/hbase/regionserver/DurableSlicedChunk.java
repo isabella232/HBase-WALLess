@@ -61,7 +61,7 @@ public class DurableSlicedChunk extends Chunk {
   public static final int OFFSET_TO_OFFSETMETA = OFFSET_TO_SEQID + SIZE_OF_SEQID;
   public static final int SIZE_OF_OFFSETMETA = Bytes.SIZEOF_LONG;
   public static final int OFFSET_TO_REGION_IDENTIFIER = OFFSET_TO_OFFSETMETA + SIZE_OF_OFFSETMETA; 
-  private static final int EO_CELLS = -1;
+  private static final int EO_CELLS = 0;
 
   static final Logger LOG = LoggerFactory.getLogger(DurableSlicedChunk.class);
   private DurableChunk<NonVolatileMemAllocator> durableChunk;
@@ -117,7 +117,6 @@ public class DurableSlicedChunk extends Chunk {
   void prepopulateChunk() {
     // We have observed that the write perf of the persistent memory is much higher when the chunk
     // area is prepopulated with data. So this hack!
-    //LOG.info("Prepopulating the chunk");
     ByteBufferUtils.copyFromArrayToBuffer(data, Bytes.SIZEOF_INT, dummy, 0,
         (size - Bytes.SIZEOF_INT));
   }
@@ -170,7 +169,7 @@ public class DurableSlicedChunk extends Chunk {
     // We move from one chunk to another. Mark in the prev chunk at the end of last cell.
     // Write a Key length as -1 to denote this is the end of cells here. In replay we
     // consider this.
-    if (this.data.capacity() - this.nextFreeOffset.get() >= KeyValue.KEY_LENGTH_SIZE) {
+    if (isEOCToBeMarked(this.nextFreeOffset.get())) {
       ByteBufferUtils.putInt(this.data, this.nextFreeOffset.get(), EO_CELLS);
     }
   }
@@ -216,6 +215,7 @@ public class DurableSlicedChunk extends Chunk {
         int keyLen, valLen, tagsLen;
         if (endOffset.isPresent() && this.offset >= endOffset.get()) return false;
         int offsetTmp = this.offset;
+        if(!isEOCToBeMarked(offsetTmp)) return false;
         keyLen = ByteBufferUtils.toInt(data, offsetTmp);
         if (keyLen == EO_CELLS) return false;
         offsetTmp += KeyValue.KEY_LENGTH_SIZE;
@@ -232,6 +232,10 @@ public class DurableSlicedChunk extends Chunk {
       }
     };
     return scanner;
+  }
+
+  private boolean isEOCToBeMarked(int offset) {
+    return (this.data.capacity() - offset > KeyValue.KEY_LENGTH_SIZE);
   }
 
   private int getCellOffset() {

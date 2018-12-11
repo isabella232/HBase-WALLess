@@ -106,7 +106,7 @@ public class CellArrayImmutableSegment extends ImmutableSegment {
       }
       // second parameter true, because in compaction/merge the addition of the cell to new segment
       // is always successful
-      updateMetaInfo(cells[i], true, null); // updates the size per cell
+      updateSizeAndMetaInfo(cells[i], true, null); // updates the size per cell
       if(action == MemStoreCompactionStrategy.Action.MERGE_COUNT_UNIQUE_KEYS) {
         //counting number of unique keys
         if (prev != null) {

@@ -20,12 +20,16 @@ package org.apache.hadoop.hbase.regionserver;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HBaseClassTestRule;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
@@ -43,11 +47,17 @@ import org.apache.hadoop.hbase.util.JVMClusterUtil.RegionServerThread;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 @Category({ RegionServerTests.class, MediumTests.class })
 public class TestScanFailoverWithReplicas {
+  @ClassRule
+  public static final HBaseClassTestRule CLASS_RULE = HBaseClassTestRule
+      .forClass(TestScanFailoverWithReplicas.class);
   private static final Log LOG = LogFactory.getLog(TestScanFailoverWithReplicas.class);
 
   private static final int NB_SERVERS = 4;
@@ -61,16 +71,31 @@ public class TestScanFailoverWithReplicas {
   private static final HBaseTestingUtility HTU = new HBaseTestingUtility();
   private static final byte[] f = HConstants.CATALOG_FAMILY;
 
+  @Rule
+  public TestName name = new TestName();
+
   @BeforeClass
   public static void before() throws Exception {
     // Reduce the hdfs block size and prefetch to trigger the file-link reopen
     // when the file is moved to archive (e.g. compaction)
-    DurableMemStoreLABImpl.useDurableMemstore = false;
     HTU.getConfiguration().setInt(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, 8192);
     HTU.getConfiguration().setInt(DFSConfigKeys.DFS_CLIENT_READ_PREFETCH_SIZE_KEY, 1);
     HTU.getConfiguration().setInt(HConstants.HREGION_MEMSTORE_FLUSH_SIZE, 128 * 1024 * 1024);
     HTU.getConfiguration().setLong("hbase.client.scanner.caching", 20l);
-    HTU.startMiniCluster(NB_SERVERS);
+    HTU.getConfiguration().setInt("hbase.regionserver.offheap.global.memstore.size", 800);
+    HTU.getConfiguration().setBoolean("hbase.hregion.memstore.mslab.enabled", true);
+    HTU.getConfiguration().setInt("hbase.hregion.memstore.chunkpool.maxsize", 1);
+    HTU.getConfiguration().setInt("hbase.hregion.memstore.chunkpool.initialsize", 1);
+    List<String> aepPaths = new ArrayList<String>(NB_SERVERS);
+    for (int i = 0; i < NB_SERVERS; i++) {
+      File file = new File("./chunkfile" + i);
+      if (file.exists()) {
+        file.delete();
+      }
+      aepPaths.add("./chunkfile" + i);
+    }
+    HTU.startMiniCluster(NB_SERVERS, aepPaths);
+
     final TableName tableName = TableName.valueOf(TestScanFailoverWithReplicas.class.getSimpleName());
 
     // Create table then get the single region for our new table.
@@ -87,7 +112,6 @@ public class TestScanFailoverWithReplicas {
   
   @AfterClass
   public static void afterClass() throws Exception {
-    DurableMemStoreLABImpl.useDurableMemstore = true;
     HRegionServer.TEST_SKIP_REPORTING_TRANSITION = false;
     table.close();
     HTU.shutdownMiniCluster();

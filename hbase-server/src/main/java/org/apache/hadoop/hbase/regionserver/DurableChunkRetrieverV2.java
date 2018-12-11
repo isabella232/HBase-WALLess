@@ -163,7 +163,7 @@ public class DurableChunkRetrieverV2 {
         if (chunk.getSeqId() == cellsOffsetMeta.getFirst()) {
           return Optional.of(cellsOffsetMeta.getSecond());
         }
-        return null;
+        return Optional.empty();
       }
     };
     return scanner;

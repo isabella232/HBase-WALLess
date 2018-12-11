@@ -20,9 +20,7 @@ package org.apache.hadoop.hbase.regionserver.memstore.replication;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.KeyValue;
@@ -42,11 +40,9 @@ public class TestRegionReplicaCordinator {
 
   @Test
   public void testPullEntries() throws Exception {
-    Set<byte[]> families = new HashSet<>();
-    families.add(Bytes.toBytes("f1"));
     RegionInfo regionInfo = new HRegionInfo(1234, TableName.META_TABLE_NAME, 0);
-    RegionReplicaCoordinator replicaCordinator = new RegionReplicaCoordinator(null, regionInfo, mvcc,
-        families, 1, 0, 3);
+    RegionReplicaCoordinator replicaCordinator = new RegionReplicaCoordinator(null, regionInfo,
+        mvcc, 1, 0, 3);
     MemstoreReplicationEntry e1 = createEntry(false);
     MemstoreReplicationEntry e2 = createEntry(false);
     MemstoreReplicationEntry e3 = createEntry(false);

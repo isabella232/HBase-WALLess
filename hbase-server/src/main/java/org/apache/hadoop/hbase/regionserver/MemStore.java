@@ -19,11 +19,11 @@ package org.apache.hadoop.hbase.regionserver;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.hadoop.hbase.Cell;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.MemStoreAsyncAddHandler;
 
 /**
  * The MemStore holds in-memory modifications to the Store. Modifications are {@link Cell}s.
@@ -90,8 +90,6 @@ public interface MemStore {
    */
   void add(List<Cell> cells, MemStoreSizing memstoreSizing);
 
-  void addAsync(List<Cell> cells, MemStoreAsyncAddHandler asyncHandler);
-
   /**
    * @return Oldest timestamp of all the Cells in the MemStore
    */
@@ -150,4 +148,8 @@ public interface MemStore {
    * are done
    */
   default void stopReplayingFromWAL(){return;}
+
+  default long addPersistedCells(Optional<Long> readPnt, MemStoreSizing memStoreSize){ return -1; }
+
+  void persist(List<Cell> cells, MemStoreSizing sizeAccounting);;
 }

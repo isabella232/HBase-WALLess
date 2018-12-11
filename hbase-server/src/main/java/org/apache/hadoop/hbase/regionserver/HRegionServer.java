@@ -130,6 +130,7 @@ import org.apache.hadoop.hbase.regionserver.handler.CloseMetaHandler;
 import org.apache.hadoop.hbase.regionserver.handler.CloseRegionHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RSProcedureHandler;
 import org.apache.hadoop.hbase.regionserver.handler.RegionReplicaFlushHandler;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemStoreAsyncAddService;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.SimpleMemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.ReplicaGoodStateMarkerHandler;
@@ -537,6 +538,8 @@ public class HRegionServer extends HasThread implements
   private final boolean masterless;
 
   protected MemstoreReplicator memstoreReplicator;
+
+  protected MemStoreAsyncAddService memStoreAsyncAddService;
 
   static final String MASTERLESS_CONFIG_NAME = "hbase.masterless";
 
@@ -1149,6 +1152,9 @@ public class HRegionServer extends HasThread implements
       stopServiceThreads();
     }
 
+    if (memStoreAsyncAddService != null) {
+      this.memStoreAsyncAddService.close();
+    }
     // close the DurableChunk-if there is any
     this.memstoreChunkCreator.shutdown();
     if (this.rpcServices != null) {
@@ -1787,6 +1793,9 @@ public class HRegionServer extends HasThread implements
       final StringBuilder whyFlush = new StringBuilder();
       for (HRegion r : this.server.onlineRegions.values()) {
         if (r == null) continue;
+        // For replica regions, no need to do this check. It can not flush on its own. Any way the
+        // primary would have been flushed and so this replica also.
+        if (!r.isDefaultReplica()) continue;
         if (r.shouldFlush(whyFlush)) {
           FlushRequester requester = server.getFlushRequester();
           if (requester != null) {
@@ -1939,8 +1948,6 @@ public class HRegionServer extends HasThread implements
     }
     this.executorService.startExecutorService(ExecutorType.RS_REFRESH_PEER,
       conf.getInt("hbase.regionserver.executor.refresh.peer.threads", 2));
-    this.executorService.startExecutorService(ExecutorType.RS_REGION_REPLICA_MEMSTORE_ASYNC_ADD,
-        conf.getInt("hbase.regionserver.memstore.replication.async.add.threads", 10));
     this.executorService.startExecutorService(ExecutorType.RS_REGION_REPLICA_GOOD_HEALTH_MARKER_OPS,
         3);// TODO to have a conf for the threads count.
 
@@ -1989,6 +1996,7 @@ public class HRegionServer extends HasThread implements
       // TODO : for tests. In real case this is not needed. Find a better way to do this
       //ChunkCreator.resetInstance(conf.get(ChunkCreatorFactory.MSLAB_DURABLE_PATH_KEY, null));
       initializeMemStoreChunkCreator();
+      this.memStoreAsyncAddService = new MemStoreAsyncAddService(conf);
     }
   }
 
@@ -3827,6 +3835,11 @@ public class HRegionServer extends HasThread implements
   @Override
   public MemstoreReplicator getMemstoreReplicator() {
     return this.memstoreReplicator;
+  }
+
+  @Override
+  public MemStoreAsyncAddService getMemStoreAsyncAddService() {
+    return this.memStoreAsyncAddService;
   }
 
   @Override

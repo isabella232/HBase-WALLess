@@ -23,6 +23,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
@@ -233,5 +234,26 @@ public class DefaultMemStore extends AbstractMemStore {
     final int seconds = 30;
     LOG.info("Waiting " + seconds + " seconds while heap dump is taken");
     LOG.info("Exiting.");
+  }
+
+  private volatile long asyncAddedLatestSeqId = -1;
+  // This method is called in thread safe way.
+  @Override
+  public long addPersistedCells(Optional<Long> readPnt, MemStoreSizing memStoreSize) {
+    if (readPnt.isPresent() && this.asyncAddedLatestSeqId >= readPnt.get()) {
+      return this.asyncAddedLatestSeqId;
+    }
+    long prevSeqId = -1;
+    if (this.snapshot != null) {
+      prevSeqId = this.snapshot.addPersistedCells(readPnt, memStoreSize);
+    }
+    boolean goToActive = (readPnt.isPresent()) ? prevSeqId < readPnt.get() : prevSeqId == -1;
+    if (goToActive && this.active != null) {
+      prevSeqId = this.active.addPersistedCells(readPnt, memStoreSize);
+    }
+    if (prevSeqId != -1) {
+      this.asyncAddedLatestSeqId = prevSeqId;
+    }
+    return prevSeqId;
   }
 }

@@ -38,7 +38,6 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.Table;
-import org.apache.hadoop.hbase.regionserver.DurableMemStoreLABImpl;
 import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.regionserver.HRegionServer;
 import org.apache.hadoop.hbase.regionserver.Region;
@@ -74,7 +73,6 @@ public class TestRegionReplicasClusterSwitchOver {
 
   @BeforeClass
   public static void before() throws Exception {
-    DurableMemStoreLABImpl.useDurableMemstore = false;
     HTU.getConfiguration().setInt("hbase.master.wait.on.regionservers.mintostart", 3);
 
     HTU.startMiniCluster(NB_SERVERS);

@@ -64,6 +64,7 @@ import org.apache.hadoop.hbase.regionserver.RegionServerServices;
 import org.apache.hadoop.hbase.regionserver.SecureBulkLoadManager;
 import org.apache.hadoop.hbase.regionserver.ServerNonceManager;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionRequester;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemStoreAsyncAddService;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -726,5 +727,11 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
   public boolean reportReplicaRegionHealthChange(List<RegionInfo> regions, boolean good) {
     // TODO Auto-generated method stub
     return false;
+  }
+
+  @Override
+  public MemStoreAsyncAddService getMemStoreAsyncAddService() {
+    // TODO Auto-generated method stub
+    return null;
   }
 }

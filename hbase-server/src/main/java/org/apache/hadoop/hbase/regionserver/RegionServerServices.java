@@ -35,6 +35,7 @@ import org.apache.hadoop.hbase.quotas.RegionServerRpcQuotaManager;
 import org.apache.hadoop.hbase.quotas.RegionServerSpaceQuotaManager;
 import org.apache.hadoop.hbase.quotas.RegionSizeStore;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionRequester;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemStoreAsyncAddService;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.wal.WAL;
@@ -272,4 +273,6 @@ public interface RegionServerServices extends Server, MutableOnlineRegions, Favo
   MemstoreReplicator getMemstoreReplicator();
 
   boolean reportReplicaRegionHealthChange(List<RegionInfo> regions, boolean good);
+
+  MemStoreAsyncAddService getMemStoreAsyncAddService();
 }

@@ -69,6 +69,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 
@@ -148,11 +149,11 @@ import org.apache.hadoop.hbase.regionserver.ScannerContext.LimitScope;
 import org.apache.hadoop.hbase.regionserver.ScannerContext.NextState;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionContext;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionLifeCycleTracker;
+import org.apache.hadoop.hbase.regionserver.memstore.replication.MemStoreAsyncAddService;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicator;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.RegionReplicaCoordinator;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.MemStoreAsyncAddHandler;
 import org.apache.hadoop.hbase.regionserver.throttle.CompactionThroughputControllerFactory;
 import org.apache.hadoop.hbase.regionserver.throttle.NoLimitThroughputController;
 import org.apache.hadoop.hbase.regionserver.throttle.StoreHotnessProtector;
@@ -405,6 +406,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   private MemstoreReplicator memstoreReplicator;
   RegionReplicaCoordinator replicaCordinator;
+  private MemStoreAsyncAddService memStoreAsyncAddService;
   private org.apache.hadoop.hbase.executor.ExecutorService executor;
   // Used in Replica regions where we add Cells to CSLM in an async way. Once the cells are copied
   // to MSLAB, we consider it as success addition and reply back to caller. The actual addition to
@@ -951,9 +953,11 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
     // Write HRI to a file in case we need to recover hbase:meta
     // Only the primary replica should write .regioninfo
-    if (this.getRegionInfo().getReplicaId() == RegionInfo.DEFAULT_REPLICA_ID) {
+    if (isDefaultReplica()) {
       status.setStatus("Writing region info on filesystem");
       fs.checkRegionInfoOnFilesystem();
+    } else {
+      this.memStoreAsyncAddService.register(this);
     }
 
     // Initialize all the HStores
@@ -969,7 +973,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         dataPool = ((DurableChunkCreator) this.getChunkCreator()).getDataPool();
       }
     }
-    if (this.getRegionServerServices() != null
+    if (this.getRegionServerServices() != null && !this.getRegionInfo().getTable().isSystemTable()
         && ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
       LOG.debug("Retrieving the data for region " + this.getRegionInfo() + " from chunk retriever");
       if (chunkRetriever != null) {
@@ -1216,9 +1220,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   private void initMemstoreReplication(RegionServerServices rsServices, Set<byte[]> families) {
     this.memstoreReplicator = rsServices.getMemstoreReplicator();
     int replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
-    this.replicaCordinator = new RegionReplicaCoordinator(this.conf, this.getRegionInfo(), this.mvcc,
-        families, this.htableDescriptor.getMinRegionReplication(),
-        replicationThreadIndex, this.getTableDescriptor().getRegionReplication());
+    this.replicaCordinator = new RegionReplicaCoordinator(this.conf, this.getRegionInfo(),
+        this.mvcc, this.htableDescriptor.getMinRegionReplication(), replicationThreadIndex,
+        this.getTableDescriptor().getRegionReplication());
+    this.memStoreAsyncAddService = rsServices.getMemStoreAsyncAddService();
   }
 
   /**
@@ -1608,6 +1613,9 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         return doClose(abort, status);
       }
     } finally {
+      if (!this.isDefaultReplica()) {
+        this.memStoreAsyncAddService.deregister(this);
+      }
       status.cleanup();
     }
   }
@@ -2460,8 +2468,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       return true;
     }
     long modifiedFlushCheckInterval = flushCheckInterval;
-    if (getRegionInfo().getTable().isSystemTable() &&
-        getRegionInfo().getReplicaId() == RegionInfo.DEFAULT_REPLICA_ID) {
+    if (getRegionInfo().getTable().isSystemTable() && isDefaultReplica()) {
       modifiedFlushCheckInterval = SYSTEM_CACHE_FLUSH_INTERVAL;
     }
     if (modifiedFlushCheckInterval <= 0) { //disabled
@@ -2482,6 +2489,10 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
     }
     return false;
+  }
+
+  public boolean isDefaultReplica() {
+    return (this.getRegionInfo().getReplicaId() == RegionInfo.DEFAULT_REPLICA_ID);
   }
 
   /**
@@ -4508,7 +4519,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     return response;
   }
 
-  private void doBatchOpForMemstoreReplication(NavigableMap<byte[], List<Cell>> familyMap,
+  // **** OLD one.
+  /*private void doBatchOpForMemstoreReplication(NavigableMap<byte[], List<Cell>> familyMap,
      long[] seqIds) throws IOException {
     startRegionOperation(Operation.REPLAY_BATCH_MUTATE);
     try {
@@ -4518,9 +4530,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // Should we call this or just leave it?? I think not to call it because primary is yet to
       // update its size?? TODO - check for now commenting
       // checkResources();
-      /*
-       * if (throwError) { throw new IOException("Purposefully throwing error"); }
-       */
       // We don't need row locking here at all.. This method is executed at the replica regions. The
       // primary or other replica regions call RPC with a batch of Mutaions each containing Cells.
       // We wont be calling other methods which required write row locks directly on this replica
@@ -4546,6 +4555,43 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         this.updatesLock.readLock().unlock();
       }
       this.executor.submit(handler);
+    } finally {
+      closeRegionOperation(Operation.REPLAY_BATCH_MUTATE);
+      // TODO metrics should be updated but need a new one.. Should not directly affect the normal
+      // put/delete metrics.
+    }
+  }*/
+
+  private void doBatchOpForMemstoreReplication(NavigableMap<byte[], List<Cell>> familyMap,
+      long[] seqIds) throws IOException {
+    startRegionOperation(Operation.REPLAY_BATCH_MUTATE);
+    try {
+      // TODO We will be in replay mode. This will never happen. Do we need to check this for
+      // replication also?
+      // checkReadOnly();
+      // Should we call this or just leave it?? I think not to call it because primary is yet to
+      // update its size?? TODO - check for now commenting
+      // checkResources();
+      // We don't need row locking here at all.. This method is executed at the replica regions. The
+      // primary or other replica regions call RPC with a batch of Mutaions each containing Cells.
+      // We wont be calling other methods which required write row locks directly on this replica
+      // regions.(Like checkAndPut, increment etc).. Only plain Cell write op will come to here. We
+      // don't really worry abt what kind of Mutation it is.
+      lock(this.updatesLock.readLock(), familyMap.size());
+      long maxSeqId = seqIds[seqIds.length - 1];
+      MemStoreSizing sizeAccounting = new MemStoreSizing();
+      try {
+        for (Map.Entry<byte[], List<Cell>> e : familyMap.entrySet()) {
+          HStore store = this.getStore(e.getKey());
+          // TODO handle upsert
+          store.persist(e.getValue(), sizeAccounting);
+        }
+        this.incMemStoreSize(sizeAccounting);
+        // Update the currentMaxSeqId
+        this.currentMaxSeqId.getAndAccumulate(maxSeqId, (x, y) -> Math.max(x, y));
+      } finally {
+        this.updatesLock.readLock().unlock();
+      }
     } finally {
       closeRegionOperation(Operation.REPLAY_BATCH_MUTATE);
       // TODO metrics should be updated but need a new one.. Should not directly affect the normal
@@ -5469,6 +5515,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   @VisibleForTesting
   // TODO : change all these names as there is no WAL marker. They are all direct cells sent
   // via RPCs
+  // TODO redo!!!!
   PrepareFlushResult replayWALFlushStartMarker(FlushDescriptor flush) throws IOException {
     return replayWALFlushStartMarker(flush, 0, 1);
   }
@@ -5496,7 +5543,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         continue;
       }
       storesToFlush.add(store);
-      this.replicaCordinator.getStoreCordinator(family).setLatestFlushSeqId(replaySeqId);
     }
 
     MonitoredTask status = TaskMonitor.get().createStatus("Preparing flush " + this);
@@ -5760,9 +5806,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
       // Record latest flush time
       this.lastStoreFlushTimeMap.put(store, startTime);
-      if (dropMemstoreSnapshot) {
-        this.replicaCordinator.getStoreCordinator(family).setLatestFlushCommitted();
-      }
     }
   }
 
@@ -6880,13 +6923,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         } else {
           this.readPt = rsServices.getNonceManager().getMvccFromOperationContext(nonceGroup, nonce);
         }
-        if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
-          // The cells are added to the CSLM (from where we read) in an async way for the replica
-          // regions. The below wait is to confirm that all the Cells till the readPnt are actually
-          // committed into CSLM.
-          mvcc.waitForRead(this.readPt);
-        } 
         scannerReadPoints.put(this, this.readPt);
+      }
+      if (!RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
+        memStoreAsyncAddService.prioritize(this.region, this.readPt);
+        // The cells are added to the CSLM (from where we read) in an async way for the replica
+        // regions. The below wait is to confirm that all the Cells till the readPnt are actually
+        // committed into CSLM.
+        mvcc.waitForRead(this.readPt);
       }
       initializeScanners(scan, additionalScanners);
     }
@@ -9266,5 +9310,44 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       return ((HRegionServer) this.getRegionServerServices()).getMemstoreChunkCreator();
     }
     return null;
+  }
+
+  private ReentrantLock replicaRegionLock = new ReentrantLock();
+
+  public long asyncAddToMemstore(Optional<Long> readPnt) throws IOException {
+    long seqId = -1;
+    // TODO closing checks copied from startRegionOp. That is not called because we dont need any CP
+    // hooks to be called. Check whether we need call startop
+    if (this.closing.get()) {
+      throw new NotServingRegionException(getRegionInfo().getRegionNameAsString() + " is closing");
+    }
+    lock(lock.readLock());
+    try {
+      if (this.closed.get()) {
+        throw new NotServingRegionException(getRegionInfo().getRegionNameAsString() + " is closed");
+      }
+      if (replicaRegionLock.tryLock()) {
+        lock(this.updatesLock.readLock());
+        MemStoreSizing memStoreSize = new MemStoreSizing();
+        try {
+          for (HStore store : stores.values()) {
+            long storeSeqId = store.addPersistedCellsToMemStore(readPnt, memStoreSize);
+            seqId = (seqId == -1) ? storeSeqId : Math.min(seqId, storeSeqId);
+          }
+          this.incMemStoreSize(memStoreSize);
+          if (seqId > -1) {
+            // TODO just use tryAdvanceTo() only?
+            // TODO on flush, the mvcc should get advanced to the flushed point. In replica regions
+            // that matters.
+            this.mvcc.advanceTo(seqId);
+          }
+        } finally {
+          this.updatesLock.readLock().unlock();
+        }
+      }
+    } finally {
+      lock.readLock().unlock();
+    }
+    return seqId;
   }
 }

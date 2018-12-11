@@ -31,7 +31,6 @@ import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.MemStoreAsyncAddHandler;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ClassSize;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
@@ -114,8 +113,10 @@ public abstract class AbstractMemStore implements MemStore {
       Cell cell = cells.get(i);
       Cell copiedCell = copiedCells.get(i);
       boolean mslabUsed = (cell != copiedCell);
-      // This cell data is backed by the same byte[] where we read request in RPC(See HBASE-15180). By
-      // default MSLAB is ON and we might have copied cell to MSLAB area. If not we must do below deep
+      // This cell data is backed by the same byte[] where we read request in RPC(See HBASE-15180).
+      // By
+      // default MSLAB is ON and we might have copied cell to MSLAB area. If not we must do below
+      // deep
       // copy. Or else we will keep referring to the bigger chunk of memory and prevent it from
       // getting GCed.
       // Copy to MSLAB would not have happened if
@@ -131,9 +132,8 @@ public abstract class AbstractMemStore implements MemStore {
   }
 
   @Override
-  public void addAsync(List<Cell> cells, MemStoreAsyncAddHandler asyncHandler) {
-    List<Cell> copiedCells = active.maybeCloneWithAllocator(cells, false);
-    asyncHandler.append(this, copiedCells);
+  public void persist(List<Cell> cells, MemStoreSizing memstoreSizing) {
+    active.persist(cells, false, memstoreSizing);
   }
 
   @Override

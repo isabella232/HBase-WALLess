@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
@@ -48,7 +47,6 @@ import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl;
 import org.apache.hadoop.hbase.regionserver.MultiVersionConcurrencyControl.WriteEntry;
 import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.yetus.audience.InterfaceAudience;
 
@@ -121,12 +119,9 @@ public class RegionReplicaCoordinator {
   private volatile long badReplicaInProgressTs = UNSET;
   private int tableReplication;
 
-  private NavigableMap<byte[], RegionReplicaStoreCordinator> storeCordinators = new TreeMap<>(
-      Bytes.BYTES_COMPARATOR);
-
   public RegionReplicaCoordinator(Configuration conf, RegionInfo currentRegion,
-      MultiVersionConcurrencyControl mvcc, Set<byte[]> families, int minWriteReplicas,
-      int replicationThreadIndex, int tableReplication) {
+      MultiVersionConcurrencyControl mvcc, int minWriteReplicas, int replicationThreadIndex,
+      int tableReplication) {
     this.conf = conf;
     this.curRegion = currentRegion;
     this.mvcc = mvcc;
@@ -137,13 +132,6 @@ public class RegionReplicaCoordinator {
       badReplicas = new HashSet<>();
       badReplicasInMeta = new HashSet<>();
     }
-    for (byte[] family : families) {
-      this.storeCordinators.put(family, new RegionReplicaStoreCordinator());
-    }
-  }
-
-  public RegionReplicaStoreCordinator getStoreCordinator(byte[] store) {
-    return this.storeCordinators.get(store);
   }
 
   public CompletableFuture<ReplicateMemstoreResponse> append(MemstoreReplicationEntry entry)

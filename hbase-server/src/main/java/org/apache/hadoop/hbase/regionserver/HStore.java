@@ -88,7 +88,6 @@ import org.apache.hadoop.hbase.regionserver.compactions.CompactionProgress;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionRequestImpl;
 import org.apache.hadoop.hbase.regionserver.compactions.DefaultCompactor;
 import org.apache.hadoop.hbase.regionserver.compactions.OffPeakHours;
-import org.apache.hadoop.hbase.regionserver.memstore.replication.handler.MemStoreAsyncAddHandler;
 import org.apache.hadoop.hbase.regionserver.querymatcher.ScanQueryMatcher;
 import org.apache.hadoop.hbase.regionserver.throttle.ThroughputController;
 import org.apache.hadoop.hbase.regionserver.wal.WALUtil;
@@ -777,10 +776,11 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
     }
   }
 
-  public void addAsync(List<Cell> cells, MemStoreAsyncAddHandler asyncHandler) {
+  public void persist(List<Cell> cells, MemStoreSizing sizeAccounting) {
     lock.readLock().lock();
     try {
-      memstore.addAsync(cells, asyncHandler);
+      memstore.persist(cells, sizeAccounting);
+      // TODO : check whether we need to catch and throw exception here (if any)
     } finally {
       lock.readLock().unlock();
     }
@@ -1532,6 +1532,7 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
 
       // These may be null when the RS is shutting down. The space quota Chores will fix the Region
       // sizes later so it's not super-critical if we miss these.
+      // TODO this call need not be under write lock.
       RegionServerServices rsServices = region.getRegionServerServices();
       if (rsServices != null && rsServices.getRegionServerSpaceQuotaManager() != null) {
         updateSpaceQuotaAfterFileReplacement(
@@ -2764,4 +2765,12 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
     return currentParallelPutCount.get();
   }
 
+  public long addPersistedCellsToMemStore(Optional<Long> readPnt, MemStoreSizing memStoreSize) {
+    lock.readLock().lock();
+    try {
+      return memstore.addPersistedCells(readPnt, memStoreSize);
+    } finally {
+      lock.readLock().unlock();
+    }
+  }
 }

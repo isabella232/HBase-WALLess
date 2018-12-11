@@ -167,7 +167,7 @@ public class CellChunkImmutableSegment extends ImmutableSegment {
       // the sizes still need to be updated in the new segment
       // second parameter true, because in compaction/merge the addition of the cell to new segment
       // is always successful
-      updateMetaInfo(c, true, null); // updates the size per cell
+      updateSizeAndMetaInfo(c, true, null); // updates the size per cell
       if(action == MemStoreCompactionStrategy.Action.MERGE_COUNT_UNIQUE_KEYS) {
         //counting number of unique keys
         if (prev != null) {

@@ -147,4 +147,9 @@ public class ImmutableMemStoreLAB implements MemStoreLAB {
   public List<Cell> copyCellsInto(List<Cell> cells) {
     throw new IllegalStateException("This is an Immutable MemStoreLAB.");
   }
+
+  @Override
+  public boolean isEmpty() {
+    return false;
+  }
 }

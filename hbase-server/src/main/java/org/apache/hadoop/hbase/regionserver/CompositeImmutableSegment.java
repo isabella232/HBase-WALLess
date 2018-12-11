@@ -244,7 +244,7 @@ public class CompositeImmutableSegment extends ImmutableSegment {
   }
 
   @Override
-  protected void updateMetaInfo(Cell cellToAdd, boolean succ, boolean mslabUsed,
+  protected void updateSizeAndMetaInfo(Cell cellToAdd, boolean succ, boolean mslabUsed,
       MemStoreSizing memstoreSizing) {
     throw new IllegalStateException("Not supported by CompositeImmutableScanner");
   }

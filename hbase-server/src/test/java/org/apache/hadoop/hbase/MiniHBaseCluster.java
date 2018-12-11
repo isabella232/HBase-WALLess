@@ -267,7 +267,6 @@ public class MiniHBaseCluster extends HBaseCluster {
       }
       for (int i = 0; i < nRegionNodes; i++) {
         Configuration rsConf = HBaseConfiguration.create(conf);
-        LOG.info("The path is "+i+ " "+aepPaths.get(i));
         if (aepPaths != null) {
           rsConf.set("hbase.memstore.mslab.durable.path", aepPaths.get(i));
         }

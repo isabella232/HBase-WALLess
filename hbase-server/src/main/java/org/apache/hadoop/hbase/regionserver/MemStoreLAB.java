@@ -145,4 +145,11 @@ public interface MemStoreLAB {
   List<Cell> copyCellsInto(List<Cell> cells);
 
   ChunkCreator getChunkCreator();
+
+  // TODO better name
+  default Cell readNextCell() {
+    throw new UnsupportedOperationException();
+  };
+
+  boolean isEmpty();
 }

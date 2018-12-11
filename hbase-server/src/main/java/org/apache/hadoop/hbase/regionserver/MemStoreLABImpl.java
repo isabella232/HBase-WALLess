@@ -75,10 +75,10 @@ public class MemStoreLABImpl implements MemStoreLAB {
 
   // A set of chunks contained by this memstore LAB
   @VisibleForTesting
-  Set<Integer> chunks = new ConcurrentSkipListSet<Integer>();
+  protected Set<Integer> chunks = new ConcurrentSkipListSet<Integer>();
   private final int dataChunkSize;
   private final int maxAlloc;
-  private final ChunkCreator chunkCreator;
+  protected final ChunkCreator chunkCreator;
   private final CompactingMemStore.IndexType idxType; // what index is used for corresponding segment
 
   // This flag is for closing this instance, its set when clearing snapshot of
@@ -298,7 +298,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
           processNewChunk(c);
           // set the curChunk. No need of CAS as only one thread will be here
           currChunk.set(c);
-          chunks.add(c.getId());
+          addToChunks(c.getId());
           return c;
         }
       } finally {
@@ -322,7 +322,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
       case INDEX_CHUNK:
       case DATA_CHUNK:
         Chunk c = this.chunkCreator.getChunk(this.regionName, this.cfName, chunkType);
-        chunks.add(c.getId());
+        addToChunks(c.getId());
         return c;
       case JUMBO_CHUNK: // a jumbo chunk doesn't have a fixed size
       default:
@@ -343,9 +343,13 @@ public class MemStoreLABImpl implements MemStoreLAB {
       return getNewExternalChunk(ChunkCreator.ChunkType.DATA_CHUNK);
     } else {
       Chunk c = this.chunkCreator.getJumboChunk(this.regionName, this.cfName, size);
-      chunks.add(c.getId());
+      addToChunks(c.getId());
       return c;
     }
+  }
+
+  protected void addToChunks(int chunkId) {
+    chunks.add(chunkId);
   }
 
   @Override
@@ -398,5 +402,19 @@ public class MemStoreLABImpl implements MemStoreLAB {
   @Override
   public ChunkCreator getChunkCreator() {
     return this.chunkCreator;
+  }
+
+  @Override
+  public boolean isEmpty() {
+    // TODO in case of External and Jumbo chunks the curChunk is not been updated. Handle this API
+    // then also?
+    int chunksCount = this.chunks.size();
+    if (chunksCount > 1) return false;
+    if (chunksCount == 0) return true;
+    // Just one chunk only. Check that whether it is empty or not
+    // TODO think this is not enough for multi threaded! Revisit.
+    Chunk cc = this.currChunk.get();
+    if (cc != null) return cc.isEmpty();
+    return true;
   }
 }
