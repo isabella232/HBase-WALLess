@@ -964,65 +964,47 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     status.setStatus("Initializing all the Stores");
     long maxSeqId = initializeStores(reporter, status);
     this.mvcc.advanceTo(maxSeqId);
-    DurableChunkRetrieverV2 chunkRetriever = null;
-    MemStoreChunkPool dataPool = null;
     // Replay cells from durable chunk
-    if (this.getRegionServerServices() != null) {
-      chunkRetriever = ((HRegionServer) this.getRegionServerServices()).getRetriver();
-      if (this.getChunkCreator() != null && this.getChunkCreator() instanceof DurableChunkCreator) {
+    if (this.getRegionServerServices() != null
+        && MemStoreLAB.getMemstoreDurablePath(conf) != null) {
+      MemStoreChunkPool dataPool = null;
+      DurableChunkRetrieverV2 chunkRetriever = ((HRegionServer) this.getRegionServerServices()).getRetriver();
+      if (this.getChunkCreator() != null) {
+        assert this.getChunkCreator() instanceof DurableChunkCreator;
         dataPool = ((DurableChunkCreator) this.getChunkCreator()).getDataPool();
       }
-    }
-    if (this.getRegionServerServices() != null && !this.getRegionInfo().getTable().isSystemTable()
-        && ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
-      LOG.debug("Retrieving the data for region " + this.getRegionInfo() + " from chunk retriever");
-      if (chunkRetriever != null) {
-        for (HStore store : this.stores.values()) {
-          byte[] regionName = this.getRegionInfo().getRegionName();
-          CellScanner cellScanner = chunkRetriever.getCellScanner(regionName,
-              store.getColumnFamilyDescriptor().getName());
-          Exception e = null;
-          try {
-              maxSeqId = Math.max(maxSeqId, replayCellsFromDurableChunk(maxSeqId, cellScanner, store));
-            // advance to the new maxSeqId
-            this.mvcc.advanceTo(maxSeqId);
-          } catch (Exception ex) {
-            e = ex;
-            LOG.error("The error is ", ex);
-          } finally {
-            if (e == null) {
-              // TODO : If there is an error here. Better throw error outside.
-              chunkRetriever.finishRegionReplay(regionName, dataPool);
+      if (!this.getRegionInfo().getTable().isSystemTable()
+          && ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
+        if (chunkRetriever != null) {
+          for (HStore store : this.stores.values()) {
+            byte[] regionName = this.getRegionInfo().getRegionName();
+            CellScanner cellScanner = chunkRetriever.getCellScanner(regionName,
+                store.getColumnFamilyDescriptor().getName());
+            Exception e = null;
+            try {
+                maxSeqId = Math.max(maxSeqId, replayCellsFromDurableChunk(maxSeqId, cellScanner, store));
+              // advance to the new maxSeqId
+              this.mvcc.advanceTo(maxSeqId);
+            } catch (Exception ex) {
+              e = ex;
+              LOG.error("The error is ", ex);
+            } finally {
+              if (e == null) {
+                // TODO : If there is an error here. Better throw error outside.
+                chunkRetriever.finishRegionReplay(regionName, dataPool);
+              }
             }
           }
         }
+      } else {
+        // the case where a replica region is being opened and we have collected the chunks for it
+        // from the retriever. We need
+        // to return back the chunks. If at all a primary assignment also comes here then it is an
+        // assignment bug : How to solve that will be a TODO. Otherwise
+        // there is no way to clear the chunks and it won't be given back to the pool.
+        chunkRetriever.finishRegionReplay(
+            RegionInfo.toPrimaryRegionName(this.getRegionInfo().getRegionName()), dataPool);
       }
-    } else if (this.getRegionServerServices() != null) {
-      // the case where a replica region is being opened and we have collected the chunks for it
-      // from the retriever. We need
-      // to return back the chunks. If at all a primary assignment also comes here then it is an
-      // assignment bug : How to solve that will be a TODO. Otherwise
-      // there is no way to clear the chunks and it won't be given back to the pool.
-      chunkRetriever.finishRegionReplay(
-        RegionInfo.toPrimaryRegionName(this.getRegionInfo().getRegionName()), dataPool);
-    }
-    if (ServerRegionReplicaUtil.shouldReplayRecoveredEdits(this)) {
-      // TODO this should not be commented out ideally. We should make the memstore replication as a
-      // special WAL impl. Then we will not even have the WAL file. So we can still have this code.
-      // Till we do this correctly, lets comment it out.
-      /*Collection<HStore> stores = this.stores.values();
-      try {
-        // update the stores that we are replaying
-        stores.forEach(HStore::startReplayingFromWAL);
-        // Recover any edits if available.
-        maxSeqId = Math.max(maxSeqId,
-          replayRecoveredEditsIfAny(this.fs.getRegionDir(), maxSeqIdInStores, reporter, status));
-        // Make sure mvcc is up to max.
-        this.mvcc.advanceTo(maxSeqId);
-      } finally {
-        // update the stores that we are done replaying
-        stores.forEach(HStore::stopReplayingFromWAL);
-      }*/
     }
     this.lastReplayedOpenRegionSeqId = maxSeqId;
 

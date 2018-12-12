@@ -671,6 +671,7 @@ abstract class ServerRpcConnection implements Closeable {
         buf.position(offset);
         ByteBuff dup = buf.duplicate();
         dup.limit(offset + header.getCellBlockMeta().getLength());
+        // TODO here....  dup is the BB carrying whole cells data. 
         cellScanner = this.rpcServer.cellBlockBuilder.createCellScannerReusingBuffers(
             this.codec, this.compressionCodec, dup);
       }
