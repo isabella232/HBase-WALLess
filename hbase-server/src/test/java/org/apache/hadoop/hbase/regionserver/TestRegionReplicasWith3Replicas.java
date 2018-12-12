@@ -23,6 +23,7 @@ import static org.apache.hadoop.hbase.regionserver.TestRegionServerNoMaster.open
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.commons.logging.Log;
@@ -35,6 +36,7 @@ import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.NotServingRegionException;
+import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Consistency;
 import org.apache.hadoop.hbase.client.Delete;
@@ -47,11 +49,6 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.ipc.SimpleRpcServer;
-import org.apache.hadoop.hbase.regionserver.HRegion;
-import org.apache.hadoop.hbase.regionserver.HRegionServer;
-import org.apache.hadoop.hbase.regionserver.Region;
-import org.apache.hadoop.hbase.regionserver.StorefileRefresherChore;
-import org.apache.hadoop.hbase.regionserver.TestRegionServerNoMaster;
 import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.RequestConverter;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos;
@@ -62,7 +59,6 @@ import org.apache.hadoop.hbase.util.JVMClusterUtil.RegionServerThread;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hbase.util.Threads;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hbase.thirdparty.com.google.protobuf.ServiceException;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -76,9 +72,8 @@ import org.junit.rules.TestName;
 public class TestRegionReplicasWith3Replicas {
 
   @ClassRule
-  public static final HBaseClassTestRule CLASS_RULE = HBaseClassTestRule
-      .forClass(TestRegionReplicasWith3Replicas.class);
-
+  public static final HBaseClassTestRule CLASS_RULE =
+      HBaseClassTestRule.forClass(TestRegionReplicasWith3Replicas.class);
   private static final Log LOG = LogFactory.getLog(TestRegionReplicasWith3Replicas.class);
 
   private static final int NB_SERVERS = 3;
@@ -104,24 +99,23 @@ public class TestRegionReplicasWith3Replicas {
     HTU.getConfiguration().setBoolean("hbase.hregion.memstore.mslab.enabled", true);
     HTU.getConfiguration().setInt("hbase.hregion.memstore.chunkpool.maxsize", 1);
     HTU.getConfiguration().setInt("hbase.hregion.memstore.chunkpool.initialsize", 1);
-    List<String> aepPaths = new ArrayList<String>(NB_SERVERS);
+    List<String> aepPaths = new ArrayList<String> (NB_SERVERS);
     for (int i = 0; i < NB_SERVERS; i++) {
       File file = new File("./chunkfile" + i);
-      if (file.exists()) {
+      if(file.exists()) {
         file.delete();
       }
       aepPaths.add("./chunkfile" + i);
     }
     HTU.startMiniCluster(NB_SERVERS, aepPaths);
-
     final TableName tableName = TableName.valueOf(TestRegionReplicasWith3Replicas.class.getSimpleName());
 
     // Create table then get the single region for our new table.
     HTableDescriptor htd = new HTableDescriptor(tableName);
     htd.setRegionReplication(3);
-    table = HTU.createTable(htd, new byte[][] { f }, null,
-        new Configuration(HTU.getConfiguration()));
-
+    table =
+        HTU.createTable(htd, new byte[][] { f }, null, new Configuration(HTU.getConfiguration()));
+    Thread.sleep(5000);
     try (RegionLocator locator = HTU.getConnection().getRegionLocator(tableName)) {
       hriPrimary = locator.getRegionLocation(row, false).getRegionInfo();
     }
@@ -207,40 +201,41 @@ public class TestRegionReplicasWith3Replicas {
     OpenedIn tertiaryOpenedIn = null;
     System.out.println(SimpleRpcServer.class.getName());
     try {
-      pair = openSecondary();
-      tertiaryOpenedIn = openTertiary(pair);
+     // pair = openSecondary();
+      //tertiaryOpenedIn = openTertiary(pair);
       // load some data to primary
-      // loadInDifferentThreads(pair);
+      //loadInDifferentThreads(pair);
       HTU.loadNumericRows(table, f, 0, 100);
       // assert that we can read back from primary
       Assert.assertEquals(100, HTU.countRows(table));
       // flush so that region replica can read
-      Region primaryRegion = getPrimaryRegion(pair);
+      //Region primaryRegion = getPrimaryRegion(pair); 
       // region.flush(true);
       LOG.info("The region count has been retrieved ");
       byte[] row = Bytes.toBytes(String.valueOf(42));
       Get get = new Get(row);
       Result result = table.get(get);
+      LOG.info("Reading from primary ");
       Assert.assertArrayEquals(row, result.getValue(f, null));
       // just sleeping to see if the value is visible
       // try directly Get against region replica
       get = new Get(row);
       get.setConsistency(Consistency.TIMELINE);
-      LOG.info("Reading from primary ");
+      LOG.info("Reading from secondary ");
       get.setReplicaId(2);
       result = table.get(get);
       Assert.assertArrayEquals(row, result.getValue(f, null));
       get = new Get(row);
-      LOG.info("Reading from secondary ");
       get.setConsistency(Consistency.TIMELINE);
       get.setReplicaId(1);
       result = table.get(get);
-      LOG.info("The result is " + result);
+      LOG.info("The result is "+result);
       Assert.assertArrayEquals(row, result.getValue(f, null));
     } finally {
       HTU.deleteNumericRows(table, HConstants.CATALOG_FAMILY, 0, 100);
-      closeSecondary(pair.getSecond());
-      closeTertiary(tertiaryOpenedIn);
+      //closeSecondary(pair.getSecond());
+      //closeTertiary(tertiaryOpenedIn);
+      afterClass();
     }
   }
 
@@ -292,42 +287,51 @@ public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
     before();
   }
 
-  //@Test(timeout = 300000)
+  @Test(timeout = 300000)
   public void testVerifySecondaryAbilityToReadWithOnFiles() throws Exception {
     // disable the store file refresh chore (we do this by hand)
     HTU.getConfiguration().setInt(StorefileRefresherChore.REGIONSERVER_STOREFILE_REFRESH_PERIOD, 0);
     restartRegionServer();
 
-    Pair<OpenedIn, OpenedIn> pair = null;
-    OpenedIn tertiaryOpenedIn = null;
     try {
-      pair = openSecondary();
-      tertiaryOpenedIn = openTertiary(pair);
-
       // wait for post open deploy to be completed.
       Thread.sleep(3000);
       // load some data to primary
       LOG.info("Loading data to primary region");
+      List<HRegion> regions = new ArrayList<HRegion>();
+      List<ServerName> regionServers = getRegionServers();
+      for (ServerName server : regionServers) {
+        regions.addAll(
+          HTU.getMiniHBaseCluster().getRegionServer(server).getOnlineRegionsLocalContext());
+      }
       for (int i = 0; i < 3; ++i) {
         HTU.loadNumericRows(table, f, i * 1000, (i + 1) * 1000);
-        Region primaryRegion = getPrimaryRegion(pair);
-        ((HRegion)primaryRegion).flush(true);
-        Region secRegion = getSecondaryRegion(pair);
-        // this flush should not happen at any cost - Assert it some how
-        ((HRegion)secRegion).flush(true);
-        
-        Region tertiaryRegion = getTertiaryRegion(tertiaryOpenedIn);
-        // this flush should not happen at any cost
-        ((HRegion)tertiaryRegion).flush(true);
+        for (HRegion region : regions) {
+          if (!region.getTableDescriptor().getTableName().isSystemTable()) {
+            // only primary can flush
+            region.flush(true);
+          }
+        }
+      }
+      HRegion primaryRegion = null;
+      for (HRegion region : regions) {
+        if(hriPrimary.equals(region.getRegionInfo())) {
+          primaryRegion = region;
+          Assert.assertEquals(3, region.getStore(f).getStorefilesCount());
+          break;
+        }
       }
 
-      Region primaryRegion = getPrimaryRegion(pair);
-      Assert.assertEquals(3, primaryRegion.getStore(f).getStorefilesCount());
-
       // Refresh store files on the secondary
-      Region secondaryRegion = getSecondaryRegion(pair);
+      HRegion secondaryRegion = null;
       // after all the flushes no snapshot should be available and if there is read it should happen
       // from the store files which should have been created as part of primary flushes.
+      for (HRegion region : regions) {
+        if(hriSecondary.equals(region.getRegionInfo())) {
+         secondaryRegion = region;
+          break;
+        }
+      }
       byte[] row = Bytes.toBytes(String.valueOf(45));
       Get get = new Get(row);
       get.setConsistency(Consistency.TIMELINE);
@@ -338,7 +342,13 @@ public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
       Assert.assertEquals(3, secondaryRegion.getStore(f).getStorefilesCount());
       
       // no manual refresh done on tertiary region. //But lets see how many store files we have
-      Region tertiaryRegion = getTertiaryRegion(tertiaryOpenedIn);
+      HRegion tertiaryRegion = null;
+      for (HRegion region : regions) {
+        if(hriTertiary.equals(region.getRegionInfo())) {
+          tertiaryRegion = region;
+          break;
+        }
+      }
       Assert.assertEquals(3, tertiaryRegion.getStore(f).getStorefilesCount());
       // force compaction
       LOG.info("Force Major compaction on primary region " + hriPrimary);
@@ -386,8 +396,9 @@ public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
       e.printStackTrace();
     } finally {
       HTU.deleteNumericRows(table, HConstants.CATALOG_FAMILY, 0, 1000);
-      closeSecondary(pair.getSecond());
-      closeTertiary(tertiaryOpenedIn);
+      afterClass();
+      //closeSecondary(pair.getSecond());
+      //closeTertiary(tertiaryOpenedIn);
     }
   }
 
@@ -402,18 +413,18 @@ public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
     // restart the region server so that it starts the refresher chore
     restartRegionServer();
 
-    Pair<OpenedIn, OpenedIn> pair = null;
-    OpenedIn tertiaryOpenedIn = null;
     try {
-      LOG.info("Opening the secondary");
-      pair = openSecondary();
-      tertiaryOpenedIn = openTertiary(pair);
-
       // wait for post open deploy to be completed.
       // All replica regions force a flush on primary and this flush
       // makes additional store files. So before we even accept writes
       // wait for the replicas to be opened completely.
-      Thread.sleep(3000);
+      Thread.sleep(6000);
+      List<HRegion> regions = new ArrayList<HRegion>();
+      List<ServerName> regionServers = getRegionServers();
+      for (ServerName server : regionServers) {
+        regions.addAll(
+          HTU.getMiniHBaseCluster().getRegionServer(server).getOnlineRegionsLocalContext());
+      }
       //load some data to primary
       LOG.info("Loading data to primary region");
       HTU.loadNumericRows(table, f, 0, 1000);
@@ -421,21 +432,33 @@ public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
       Assert.assertEquals(1000, HTU.countRows(table));
       // flush so that region replica can read
       LOG.info("Flushing primary region");
-      Region region = getPrimaryRegion(pair);
-      ((HRegion)region).flush(true);
-      HRegion primaryRegion = (HRegion) region;
+      for (HRegion region : regions) {
+       region.flush(true);
+      }
 
       // ensure that chore is run
       LOG.info("Sleeping for " + (4 * refreshPeriod));
       Threads.sleep(4 * refreshPeriod);
-
+      HRegion primaryRegion = null;
+      for (HRegion region : regions) {
+        if(hriPrimary.equals(region.getRegionInfo())) {
+          primaryRegion = region;
+          break;
+        }
+      }
       LOG.info("Checking results from secondary region replica");
-      Region secondaryRegion = getSecondaryRegion(pair);
+      Region secondaryRegion = null;
+      for (HRegion region : regions) {
+        if(hriSecondary.equals(region.getRegionInfo())) {
+          secondaryRegion = region;
+          break;
+        }
+      }
       Assert.assertEquals(1, secondaryRegion.getStore(f).getStorefilesCount());
 
       assertGet(secondaryRegion, 42, true);
-      assertGetRpc(hriSecondary, 42, true, pair.getSecond());
-      assertGetRpc(hriSecondary, 1042, false, pair.getSecond());
+      assertGetRpc(hriSecondary, 42, true);
+      assertGetRpc(hriSecondary, 1042, false);
 
       // wait for post open deploy to be completed.
       // All replica regions force a flush on primary and this flush
@@ -444,19 +467,17 @@ public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
       Thread.sleep(3000);
       // load some data to primary
       HTU.loadNumericRows(table, f, 1000, 1100);
-      region = getPrimaryRegion(pair);
-      ((HRegion)region).flush(true);
+      ((HRegion)primaryRegion).flush(true);
 
       HTU.loadNumericRows(table, f, 2000, 2100);
-      region = getPrimaryRegion(pair);
-      ((HRegion)region).flush(true);
+      ((HRegion)primaryRegion).flush(true);
 
       // ensure that chore is run
       Threads.sleep(4 * refreshPeriod);
 
-      assertGetRpc(hriTertiary, 42, true, tertiaryOpenedIn);
-      assertGetRpc(hriTertiary, 1042, true, tertiaryOpenedIn);
-      assertGetRpc(hriTertiary, 2042, true, tertiaryOpenedIn);
+      assertGetRpc(hriTertiary, 42, true);
+      assertGetRpc(hriTertiary, 1042, true);
+      assertGetRpc(hriTertiary, 2042, true);
 
       // ensure that we see the 3 store files
       Assert.assertEquals(3, secondaryRegion.getStore(f).getStorefilesCount());
@@ -466,12 +487,12 @@ public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
 
       long wakeUpTime = System.currentTimeMillis() + 4 * refreshPeriod;
       while (System.currentTimeMillis() < wakeUpTime) {
-        assertGetRpc(hriSecondary, 42, true, pair.getSecond());
-        assertGetRpc(hriSecondary, 1042, true, pair.getSecond());
-        assertGetRpc(hriSecondary, 2042, true, pair.getSecond());
-        assertGetRpc(hriTertiary, 42, true, tertiaryOpenedIn);
-        assertGetRpc(hriTertiary, 1042, true, tertiaryOpenedIn);
-        assertGetRpc(hriTertiary, 2042, true, tertiaryOpenedIn);
+        assertGetRpc(hriSecondary, 42, true);
+        assertGetRpc(hriSecondary, 1042, true);
+        assertGetRpc(hriSecondary, 2042, true);
+        assertGetRpc(hriTertiary, 42, true);
+        assertGetRpc(hriTertiary, 1042, true);
+        assertGetRpc(hriTertiary, 2042, true);
         Threads.sleep(10);
       }
 
@@ -480,9 +501,7 @@ public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
       Assert.assertEquals(4, secondaryRegion.getStore(f).getStorefilesCount());
 
     } finally {
-      HTU.deleteNumericRows(table, HConstants.CATALOG_FAMILY, 0, 1000);
-      closeSecondary(pair.getSecond());
-      closeTertiary(tertiaryOpenedIn);
+      afterClass();
     }
   }
 
@@ -498,12 +517,12 @@ public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
   }
 
   // build a mock rpc
-  private void assertGetRpc(RegionInfo info, int value, boolean expect, OpenedIn openedIn)
-      throws IOException, ServiceException {
+  private void assertGetRpc(RegionInfo info, int value, boolean expect)
+      throws Exception {
     byte[] row = Bytes.toBytes(String.valueOf(value));
     Get get = new Get(row);
     ClientProtos.GetRequest getReq = RequestConverter.buildGetRequest(info.getRegionName(), get);
-    ClientProtos.GetResponse getResp =  getRegionServer(openedIn).getRSRpcServices().get(null, getReq);
+    ClientProtos.GetResponse getResp =  getRegionServer(info).getRSRpcServices().get(null, getReq);
     Result result = ProtobufUtil.toResult(getResp.getResult());
     if (expect) {
       Assert.assertArrayEquals(row, result.getValue(f, null));
@@ -580,99 +599,30 @@ public LoadThread(Pair<OpenedIn, OpenedIn> pair) {
     return region;
   }
 
-  private HRegionServer getRegionServer(OpenedIn openedIn)
-      throws NotServingRegionException {
-    HRegionServer regionServer = null;
-    switch (openedIn) {
-    case PRIMARY:
-      // If secondary is opened in Primary
-      regionServer = getRS();
-      break;
-    case SECONDARY:
-      regionServer = getSecondaryRS();
-      break;
-    case TERTIARY:
-      regionServer = getTertiaryRS();
-      break;
-    }
-    return regionServer;
-  }
-
-  private Region getTertiaryRegion(OpenedIn openedIn) throws NotServingRegionException {
-    Region region = null;
-    switch (openedIn) {
-    case PRIMARY:
-      // If secondary is opened in Primary
-      region = getRS().getRegionByEncodedName(hriTertiary.getEncodedName());
-      break;
-    case SECONDARY:
-      region = getSecondaryRS().getRegionByEncodedName(hriTertiary.getEncodedName());
-      break;
-    case TERTIARY:
-      region = getTertiaryRS().getRegionByEncodedName(hriTertiary.getEncodedName());
-      break;
-    }
-    return region;
-  }
-
-  private Region getSecondaryRegion(Pair<OpenedIn, OpenedIn> pair)
-      throws NotServingRegionException {
-    Region region = null;
-    switch (pair.getSecond()) {
-    case PRIMARY:
-      // If secondary is opened in Primary
-      region = getRS().getRegionByEncodedName(hriSecondary.getEncodedName());
-      break;
-    case SECONDARY:
-      region = getSecondaryRS().getRegionByEncodedName(hriSecondary.getEncodedName());
-      break;
-    case TERTIARY:
-      region = getTertiaryRS().getRegionByEncodedName(hriSecondary.getEncodedName());
-      break;
-    }
-    return region;
-  }
-
-  private Pair<OpenedIn, OpenedIn> openSecondary() throws Exception {
-    OpenedIn primaryOpenedIn = OpenedIn.PRIMARY;
-    OpenedIn secondaryOpenedIn = OpenedIn.SECONDARY;
-    Pair<OpenedIn, OpenedIn> pair = new Pair<OpenedIn, OpenedIn>();
-    try {
-      getRS().getRegion(hriPrimary.getRegionName());
-    } catch (NotServingRegionException e) {
-      try {
-        getSecondaryRS().getRegion(hriPrimary.getRegionName());
-        // primary is found in 2nd region server so open secondary in either 1 or 2
-        primaryOpenedIn = OpenedIn.SECONDARY;
-      } catch (NotServingRegionException e1) {
-        // it is found in 3rd regionserver
-        try {
-          getTertiaryRS().getRegion(hriPrimary.getRegionName());
-          primaryOpenedIn = OpenedIn.TERTIARY;
-        } catch (NotServingRegionException e2) {
-          throw new Exception("Region no where to be found ");
+  private HRegionServer getRegionServer(RegionInfo info) throws Exception {
+    List<ServerName> regionServers = getRegionServers();
+    for (ServerName sn : regionServers) {
+      Collection<HRegion> regions =
+          HTU.getMiniHBaseCluster().getRegionServer(sn).getOnlineRegionsLocalContext();
+      for(HRegion region : regions) {
+        if(region.getRegionInfo().equals(info)) {
+          return HTU.getMiniHBaseCluster().getRegionServer(sn);
         }
       }
     }
-    switch (primaryOpenedIn) {
-    case PRIMARY:
-      // open in secondary RS
-      openRegion(HTU, getSecondaryRS(), hriSecondary);
-      secondaryOpenedIn = OpenedIn.SECONDARY;
-      break;
-    case SECONDARY:
-      // so open it in PRIMARY
-      openRegion(HTU, getTertiaryRS(), hriSecondary);
-      secondaryOpenedIn = OpenedIn.TERTIARY;
-      break;
-    case TERTIARY:
-      openRegion(HTU, getRS(), hriSecondary);
-      secondaryOpenedIn = OpenedIn.PRIMARY;
-      break;
+    return null;
+  }
+
+  private List<ServerName> getRegionServers() throws Exception {
+    List<ServerName> replicaRegionLocations = HTU.getMiniHBaseCluster().getMasterThreads().get(0)
+        .getMaster().getAssignmentManager().getReplicaRegionLocations(hriPrimary);
+    for (RegionServerThread rsThread : HTU.getMiniHBaseCluster().getRegionServerThreads()) {
+      if (!replicaRegionLocations.contains(rsThread.getRegionServer().getServerName())) {
+        replicaRegionLocations.add(rsThread.getRegionServer().getServerName());
+        break;
+      }
     }
-    pair.setFirst(primaryOpenedIn);
-    pair.setSecond(secondaryOpenedIn);
-    return pair;
+    return replicaRegionLocations;
   }
 
   enum OpenedIn {
