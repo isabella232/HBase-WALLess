@@ -260,6 +260,7 @@ public class CellChunkImmutableSegment extends ImmutableSegment {
     offset = ByteBufferUtils.putInt(idxBuffer, offset, dataChunkID);    // write data chunk id
     offset = ByteBufferUtils.putInt(idxBuffer, offset, cell.getOffset());          // offset
     offset = ByteBufferUtils.putInt(idxBuffer, offset, KeyValueUtil.length(cell)); // length
+    // TODO no need to write this any more as the seqId will be written in the original chunk itself
     offset = ByteBufferUtils.putLong(idxBuffer, offset, cell.getSequenceId());     // seqId
 
     return offset;

@@ -33,7 +33,10 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.ExtendedCell;
+import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.KeyValueUtil;
+import org.apache.hadoop.hbase.util.ByteBufferUtils;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -156,7 +159,8 @@ public class MemStoreLABImpl implements MemStoreLAB {
   }
 
   private Cell copyCellInto(Cell cell, int maxAlloc) {
-    int size = KeyValueUtil.length(cell);
+    int cellSize = KeyValueUtil.length(cell);
+    int size = cellSize + SIZE_OF_CELL_SEQ_ID;
     Preconditions.checkArgument(size >= 0, "negative size");
     // Callers should satisfy large allocations directly from JVM since they
     // don't cause fragmentation as badly.
@@ -184,7 +188,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
         tryRetireChunk(c);
       }
     }
-    return copyToChunkCell(cell, c.getData(), allocOffset, size);
+    return copyToChunkCell(cell, c.getData(), allocOffset, cellSize);
   }
 
   /**
@@ -203,6 +207,8 @@ public class MemStoreLABImpl implements MemStoreLAB {
       // serialization format only.
       KeyValueUtil.appendTo(cell, buf, offset, true);
     }
+    // Write the seqId of Cell
+    ByteBufferUtils.putLong(buf, offset + len, cell.getSequenceId());
     // TODO : write the seqid here. For writing seqId we should create a new cell type so
     // that seqId is not used as the state
     if (tagsLen == 0) {
@@ -210,9 +216,9 @@ public class MemStoreLABImpl implements MemStoreLAB {
       // which directly return tagsLen as 0. So we avoid parsing many length components in
       // reading the tagLength stored in the backing buffer. The Memstore addition of every Cell
       // call getTagsLength().
-      return new NoTagByteBufferChunkKeyValue(buf, offset, len, cell.getSequenceId());
+      return new NoTagByteBufferChunkKeyValue(buf, offset, len);
     } else {
-      return new ByteBufferChunkKeyValue(buf, offset, len, cell.getSequenceId());
+      return new ByteBufferChunkKeyValue(buf, offset, len);
     }
   }
 

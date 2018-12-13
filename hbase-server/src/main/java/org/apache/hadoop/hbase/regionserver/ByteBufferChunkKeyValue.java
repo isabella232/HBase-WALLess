@@ -17,11 +17,14 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import org.apache.hadoop.hbase.ByteBufferKeyValue;
-import org.apache.yetus.audience.InterfaceAudience;
+import org.apache.hadoop.hbase.ByteBufferKeyValueWithoutSeqId;
+import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
+import org.apache.hadoop.hbase.util.ClassSize;
+import org.apache.yetus.audience.InterfaceAudience;
 
 /**
  * ByteBuffer based cell which has the chunkid at the 0th offset
@@ -31,18 +34,34 @@ import org.apache.hadoop.hbase.util.ByteBufferUtils;
 // to be serialized
 // chunkId (Integer) + offset (Integer) + length (Integer) + seqId (Long) = 20 bytes
 @InterfaceAudience.Private
-public class ByteBufferChunkKeyValue extends ByteBufferKeyValue {
+public class ByteBufferChunkKeyValue extends ByteBufferKeyValueWithoutSeqId {
+
   public ByteBufferChunkKeyValue(ByteBuffer buf, int offset, int length) {
     super(buf, offset, length);
-  }
-
-  public ByteBufferChunkKeyValue(ByteBuffer buf, int offset, int length, long seqId) {
-    super(buf, offset, length, seqId);
   }
 
   @Override
   public int getChunkId() {
     // The chunkId is embedded at the 0th offset of the bytebuffer
     return ByteBufferUtils.toInt(buf, 0);
+  }
+
+  @Override
+  public void setSequenceId(long seqId) throws IOException {
+    // Are we expected this to be called. Dont think so. As of now throwing exception
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public long getSequenceId() {
+    return ByteBufferUtils.toLong(this.buf, this.offset + this.length);
+  }
+
+  @Override
+  public long heapSize() {
+    if (this.buf.hasArray()) {
+      return ClassSize.align(FIXED_OVERHEAD + length);
+    }
+    return ClassSize.align(FIXED_OVERHEAD) + KeyValueUtil.length(this);
   }
 }

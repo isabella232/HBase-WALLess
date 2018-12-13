@@ -54,7 +54,6 @@ import org.slf4j.LoggerFactory;
 @InterfaceAudience.Private
 public class DurableSlicedChunk extends Chunk {
 
-  public static final int SIZE_OF_CELL_SEQ_ID = Bytes.SIZEOF_LONG;
   public static final int UNUSED_SEQID = 0;
   public static final int OFFSET_TO_SEQID = Bytes.SIZEOF_INT;
   public static final int SIZE_OF_SEQID = Bytes.SIZEOF_INT;
@@ -227,7 +226,7 @@ public class DurableSlicedChunk extends Chunk {
         offsetTmp += (Tag.TAG_LENGTH_SIZE + tagsLen);*/
         long seqId = ByteBufferUtils.toLong(data, offsetTmp);
         this.curCell = new ByteBufferKeyValue(data, this.offset, offsetTmp - this.offset, seqId);
-        this.offset = offsetTmp + SIZE_OF_CELL_SEQ_ID;
+        this.offset = offsetTmp + MemStoreLAB.SIZE_OF_CELL_SEQ_ID;
         return true;
       }
     };

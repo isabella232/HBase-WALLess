@@ -21,6 +21,7 @@ import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ReflectionUtils;
 import org.apache.yetus.audience.InterfaceAudience;
 
@@ -65,6 +66,7 @@ public interface MemStoreLAB {
   String CHUNK_POOL_INITIALSIZE_KEY = "hbase.hregion.memstore.chunkpool.initialsize";
   float POOL_MAX_SIZE_DEFAULT = 1.0f;
   float POOL_INITIAL_SIZE_DEFAULT = 0.0f;
+  int SIZE_OF_CELL_SEQ_ID = Bytes.SIZEOF_LONG;
 
   /**
    * Allocates slice in this LAB and copy the passed Cell into this area. Returns new Cell instance

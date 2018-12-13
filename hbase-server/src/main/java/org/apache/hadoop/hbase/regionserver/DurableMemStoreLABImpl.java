@@ -17,10 +17,7 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
-import static org.apache.hadoop.hbase.regionserver.DurableSlicedChunk.SIZE_OF_CELL_SEQ_ID;
-
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -133,14 +130,6 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     }
     persistWrite(writeEntry);
     return toReturn;
-  }
-
-  @Override
-  protected Cell copyToChunkCell(Cell cell, ByteBuffer buf, int offset, int len) {
-    Cell newCell = super.copyToChunkCell(cell, buf, offset, len);
-    // Write the seqId of Cell
-    ByteBufferUtils.putLong(buf, offset + len, newCell.getSequenceId());
-    return newCell;
   }
 
   private List<Cell> copyCellsIntoMultiChunks(List<Cell> cells) {

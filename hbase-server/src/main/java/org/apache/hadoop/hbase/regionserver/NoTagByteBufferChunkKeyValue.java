@@ -19,9 +19,12 @@ package org.apache.hadoop.hbase.regionserver;
 
 import java.nio.ByteBuffer;
 
-import org.apache.hadoop.hbase.NoTagsByteBufferKeyValue;
-import org.apache.yetus.audience.InterfaceAudience;
+import org.apache.hadoop.hbase.ExtendedCell;
+import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.KeyValue;
+import org.apache.hadoop.hbase.NoTagsKeyValue;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
+import org.apache.yetus.audience.InterfaceAudience;
 
 
 /**
@@ -29,20 +32,33 @@ import org.apache.hadoop.hbase.util.ByteBufferUtils;
  * @see MemStoreLAB
  */
 @InterfaceAudience.Private
-public class NoTagByteBufferChunkKeyValue extends NoTagsByteBufferKeyValue {
+public class NoTagByteBufferChunkKeyValue extends ByteBufferChunkKeyValue {
 
   public NoTagByteBufferChunkKeyValue(ByteBuffer buf, int offset, int length) {
     super(buf, offset, length);
   }
 
-  public NoTagByteBufferChunkKeyValue(ByteBuffer buf, int offset, int length, long seqId) {
-    super(buf, offset, length, seqId);
+  @Override
+  public byte[] getTagsArray() {
+    return HConstants.EMPTY_BYTE_ARRAY;
   }
 
   @Override
-  public int getChunkId() {
-    // The chunkId is embedded at the 0th offset of the bytebuffer
-    return ByteBufferUtils.toInt(buf, 0);
+  public int getTagsLength() {
+    return 0;
   }
 
+  @Override
+  public int getSerializedSize(boolean withTags) {
+    return this.length;
+  }
+
+  @Override
+  public ExtendedCell deepClone() {
+    byte[] copy = new byte[this.length];
+    ByteBufferUtils.copyFromBufferToArray(copy, this.buf, this.offset, 0, this.length);
+    KeyValue kv = new NoTagsKeyValue(copy, 0, copy.length);
+    kv.setSequenceId(this.getSequenceId());
+    return kv;
+  }
 }

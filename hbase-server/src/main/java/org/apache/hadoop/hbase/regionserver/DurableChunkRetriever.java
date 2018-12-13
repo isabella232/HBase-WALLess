@@ -18,7 +18,6 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -190,16 +189,11 @@ public class DurableChunkRetriever {
               break;
             }
             int valueLength = ByteBufferUtils.toInt(buffer, off + Bytes.SIZEOF_INT);
-            long seqId = ByteBufferUtils.toLong(buffer,
-              off + keyLength + valueLength + (2 * Bytes.SIZEOF_INT));
             // clone it to avoid the references to the durable memory area.
+            // TODO this will be costly. Find ways to avoid.  In fact ways to avoid the chunks been dereferenced before these cells been flushed.
+            // TODO handle tags also.. This is not been handled in other Durable* places as well.
             ExtendedCell cell = new ByteBufferChunkKeyValue(buffer, off,
                 keyLength + valueLength + (2 * Bytes.SIZEOF_INT)).deepClone();
-            try {
-              cell.setSequenceId(seqId);
-            } catch (IOException e) {
-              // Will not happen
-            }
             cellsPerFamily.add(cell);
             // include per cell SeqID also here
             off += keyLength + valueLength + (2 * Bytes.SIZEOF_INT) + Bytes.SIZEOF_LONG;

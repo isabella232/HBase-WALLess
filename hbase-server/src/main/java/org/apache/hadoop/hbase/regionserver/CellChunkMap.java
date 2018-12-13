@@ -120,7 +120,7 @@ public class CellChunkMap extends CellFlatMap {
     int lengthOfCell = ByteBufferUtils.toInt(block, offsetInBytes + 2*Bytes.SIZEOF_INT);
     // find the seqID of the cell, skip three integers for chunkID, offset, and length
     // the seqID is plain written as part of the cell representation
-    long cellSeqID = ByteBufferUtils.toLong(block, offsetInBytes + 3*Bytes.SIZEOF_INT);
+    //long cellSeqID = ByteBufferUtils.toLong(block, offsetInBytes + 3*Bytes.SIZEOF_INT);
 
     ByteBuffer buf = chunk.getData();   // get the ByteBuffer where the cell data is stored
     if (buf == null) {
@@ -130,6 +130,6 @@ public class CellChunkMap extends CellFlatMap {
           + chunk.isFromPool() + ". We were looking for a cell at index " + i);
     }
 
-    return new ByteBufferChunkKeyValue(buf, offsetOfCell, lengthOfCell, cellSeqID);
+    return new ByteBufferChunkKeyValue(buf, offsetOfCell, lengthOfCell);
   }
 }
