@@ -3671,11 +3671,15 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
 
   @Override
   @QosPriority(priority=HConstants.MEMSTORE_REPLICATION_QOS)
-  public ReplicateMemstoreResponse replicateMemstore(RpcController controller,
+  public ReplicateMemstoreResponse replicateMemstore(RpcController rpcc,
       ReplicateMemstoreRequest request) throws ServiceException {
     // Probably pass this request also so that it can be used for the next replica.
     // But do not forgot to change replicaOfferd and replicaCommitted
-    CellScanner cells = ((HBaseRpcController) controller).cellScanner();
+    HBaseRpcController controller = (HBaseRpcController) rpcc;
+    CellScanner cells = controller != null ? controller.cellScanner() : null;
+    if (controller != null) {
+      controller.setCellScanner(null);
+    }
     try {
       checkOpen();
       // TODO No need to decode cells here for the next replica replication usages. Again we will
