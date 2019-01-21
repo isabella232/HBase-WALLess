@@ -27,6 +27,7 @@ import org.apache.hadoop.hbase.CellComparator;
 import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.PrivateCellUtil;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.hadoop.hbase.util.ClassSize;
@@ -142,5 +143,15 @@ public class MutableSegment extends Segment {
       return cells;
     }
     return this.memStoreLAB.copyCellsInto(cells);
+  }
+
+  public void maybeCloneWithAllocator(ByteBuff cellScannerBB, MemStoreSizing memstoreSize ) {
+    if(memStoreLAB == null) {
+      return;
+    }
+    if (memstoreSize != null) {
+      incSize(memstoreSize);
+    }
+    this.memStoreLAB.copyCellBB(cellScannerBB);
   }
 }

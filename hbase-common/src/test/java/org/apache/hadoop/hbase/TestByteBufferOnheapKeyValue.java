@@ -23,6 +23,7 @@ import static org.junit.Assert.assertFalse;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.apache.hadoop.hbase.KeyValue.Type;
 import org.apache.hadoop.hbase.testclassification.MiscTests;
 import org.apache.hadoop.hbase.testclassification.SmallTests;
@@ -33,11 +34,11 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 @Category({ MiscTests.class, SmallTests.class })
-public class TestByteBufferKeyValue {
+public class TestByteBufferOnheapKeyValue {
 
   @ClassRule
   public static final HBaseClassTestRule CLASS_RULE =
-      HBaseClassTestRule.forClass(TestByteBufferKeyValue.class);
+      HBaseClassTestRule.forClass(TestByteBufferOnheapKeyValue.class);
 
   private static final String QUAL2 = "qual2";
   private static final String FAM2 = "fam2";
@@ -62,7 +63,7 @@ public class TestByteBufferKeyValue {
     KeyValue kvCell = new KeyValue(row1, fam1, qual1, 0L, Type.Put, row1);
     ByteBuffer buf = ByteBuffer.allocateDirect(kvCell.getBuffer().length);
     ByteBufferUtils.copyFromArrayToBuffer(buf, kvCell.getBuffer(), 0, kvCell.getBuffer().length);
-    ByteBufferExtendedCell offheapKV = new ByteBufferKeyValue(buf, 0, buf.capacity(), 0L);
+    ByteBufferExtendedCell offheapKV = new NoTagOnHeapKeyCell(buf, 0, buf.capacity());
     assertEquals(
       ROW1,
       ByteBufferUtils.toStringBinary(offheapKV.getRowByteBuffer(),
@@ -105,7 +106,7 @@ public class TestByteBufferKeyValue {
     kvCell = new KeyValue(row1, fam2, qual2, 0L, Type.Put, row1);
     buf = ByteBuffer.allocateDirect(kvCell.getBuffer().length);
     ByteBufferUtils.copyFromArrayToBuffer(buf, kvCell.getBuffer(), 0, kvCell.getBuffer().length);
-    offheapKV = new ByteBufferKeyValue(buf, 0, buf.capacity(), 0L);
+    offheapKV = new NoTagOnHeapKeyCell(buf, 0, buf.capacity());
     assertEquals(
       FAM2,
       ByteBufferUtils.toStringBinary(offheapKV.getFamilyByteBuffer(),
@@ -114,15 +115,11 @@ public class TestByteBufferKeyValue {
       QUAL2,
       ByteBufferUtils.toStringBinary(offheapKV.getQualifierByteBuffer(),
         offheapKV.getQualifierPosition(), offheapKV.getQualifierLength()));
-    assertEquals(
-      ROW1,
-      ByteBufferUtils.toStringBinary(offheapKV.getValueByteBuffer(),
-        offheapKV.getValuePosition(), offheapKV.getValueLength()));
     byte[] nullQualifier = new byte[0];
     kvCell = new KeyValue(row1, fam1, nullQualifier, 0L, Type.Put, row1);
     buf = ByteBuffer.allocateDirect(kvCell.getBuffer().length);
     ByteBufferUtils.copyFromArrayToBuffer(buf, kvCell.getBuffer(), 0, kvCell.getBuffer().length);
-    offheapKV = new ByteBufferKeyValue(buf, 0, buf.capacity(), 0L);
+    offheapKV = new NoTagOnHeapKeyCell(buf, 0, buf.capacity());
     assertEquals(
       ROW1,
       ByteBufferUtils.toStringBinary(offheapKV.getRowByteBuffer(),
@@ -145,10 +142,10 @@ public class TestByteBufferKeyValue {
 
   @Test
   public void testByteBufferBackedKeyValueWithTags() throws Exception {
-    KeyValue kvCell = new KeyValue(row1, fam1, qual1, 0L, Type.Put, row1, tags);
+    KeyValue kvCell = new KeyValue(row1, fam1, qual1, 0L, Type.Put, row1);
     ByteBuffer buf = ByteBuffer.allocateDirect(kvCell.getBuffer().length);
     ByteBufferUtils.copyFromArrayToBuffer(buf, kvCell.getBuffer(), 0, kvCell.getBuffer().length);
-    ByteBufferKeyValue offheapKV = new ByteBufferKeyValue(buf, 0, buf.capacity(), 0L);
+    ByteBufferExtendedCell offheapKV = new NoTagOnHeapKeyCell(buf, 0, buf.capacity());
     assertEquals(
       ROW1,
       ByteBufferUtils.toStringBinary(offheapKV.getRowByteBuffer(),
@@ -167,7 +164,7 @@ public class TestByteBufferKeyValue {
         offheapKV.getValuePosition(), offheapKV.getValueLength()));
     assertEquals(0L, offheapKV.getTimestamp());
     assertEquals(Type.Put.getCode(), offheapKV.getTypeByte());
-    // change tags to handle both onheap and offheap stuff
+/*    // change tags to handle both onheap and offheap stuff
     List<Tag> resTags = PrivateCellUtil.getTags(offheapKV);
     Tag tag1 = resTags.get(0);
     assertEquals(t1.getType(), tag1.getType());
@@ -180,7 +177,7 @@ public class TestByteBufferKeyValue {
     Tag res = PrivateCellUtil.getTag(offheapKV, (byte) 2).get();
     assertEquals(Tag.getValueAsString(t2),
       Tag.getValueAsString(tag2));
-    assertFalse(PrivateCellUtil.getTag(offheapKV, (byte) 3).isPresent());
+    assertFalse(PrivateCellUtil.getTag(offheapKV, (byte) 3).isPresent());*/
   }
 
   @Test
@@ -189,7 +186,7 @@ public class TestByteBufferKeyValue {
     ByteBuffer buf = ByteBuffer.allocateDirect(kvCell.getKeyLength());
     ByteBufferUtils.copyFromArrayToBuffer(buf, kvCell.getBuffer(), kvCell.getKeyOffset(),
       kvCell.getKeyLength());
-    ByteBufferExtendedCell offheapKeyOnlyKV = new ByteBufferKeyOnlyKeyValue(buf, 0, buf.capacity());
+    ByteBufferExtendedCell offheapKeyOnlyKV = new NoTagOnHeapKeyCell(buf, 0, buf.capacity());
     assertEquals(
       ROW1,
       ByteBufferUtils.toStringBinary(offheapKeyOnlyKV.getRowByteBuffer(),

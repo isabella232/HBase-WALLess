@@ -1,11 +1,8 @@
 package org.apache.hadoop.hbase.regionserver;
 
-import static org.junit.Assert.assertEquals;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import org.apache.commons.logging.Log;
@@ -16,15 +13,10 @@ import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.testclassification.MediumTests;
 import org.apache.hadoop.hbase.testclassification.RegionServerTests;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.hbase.util.JVMClusterUtil.MasterThread;
-import org.apache.hadoop.hbase.util.JVMClusterUtil.RegionServerThread;
 import org.apache.hadoop.hbase.util.RegionSplitter;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -124,20 +116,20 @@ public class TestDurableChunkRetrieval {
     // if you enable flush the retriever should not retrieve the chunks.
     // Verified with and without flush, both works
     //HTU.getAdmin().flush(table.getName());
-/*    WriteThread[] threads = new WriteThread[10];
-    for(int i = 0 ; i < 10; i++) {
+    WriteThread[] threads = new WriteThread[1000];
+    for(int i = 0 ; i < 1000; i++) {
       threads[i] = new WriteThread(i);
     }
-    for(int i = 0 ; i < 10; i++) {
+    for(int i = 0 ; i < 1000; i++) {
       threads[i].start();
       //Making it serial. Making it parallel corrupts the input cell itself !!! Strange !!!
       //threads[i].join();
     }
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 1000; i++) {
       threads[i].join();
-    }*/
+    }
     System.out.println("completed puts ");
-    Scan s = new Scan();
+  /*  Scan s = new Scan();
     ResultScanner scanner = table.getScanner(s);
     Iterator<Result> iterator = scanner.iterator();
     int count= 0 ;
@@ -156,7 +148,7 @@ public class TestDurableChunkRetrieval {
       System.out.println("The aePath is "+aepPath);
       aepPaths.add(aepPath);
       List<HRegion> regions = rs.getRegionServer().getRegions();
-/*      for(HRegion region : regions) {
+      for(HRegion region : regions) {
         if(!region.getTableDescriptor().getTableName().isSystemTable()) {
           if(region.getRegionInfo().getReplicaId() == 2) {
             toStop = rs;
@@ -164,16 +156,16 @@ public class TestDurableChunkRetrieval {
             break;
           }
         }
-      }*/
+      }
       rs.getRegionServer().stop("for test");
       //Thread.sleep(15000);
-      /*for (Region r : rs.getRegionServer().getRegions(table.getName())) {
+      for (Region r : rs.getRegionServer().getRegions(table.getName())) {
         // now see how does the assignment happen
         aepPath = rs.getRegionServer().getConfiguration().get("hbase.memstore.mslab.durable.path");
         //rs.getRegionServer().abort("for test");
         //rs.getRegionServer().stop("for test");
         break;
-      }*/
+      }
     }
     //toStop.getRegionServer().stop("forTest");
     for (MasterThread mas : HTU.getMiniHBaseCluster().getMasterThreads()) {
@@ -198,7 +190,7 @@ public class TestDurableChunkRetrieval {
       count++;
     }
     System.out.println("After abort results count is "+count);
-    assertEquals("The total rows received should be 1000", count, 1000);
+    assertEquals("The total rows received should be 1000", count, 1000);*/
     // flush this data
 /*    HTU.getAdmin().flush(table.getName());
     
@@ -242,11 +234,11 @@ public class TestDurableChunkRetrieval {
     public WriteThread(int index) {
       this.index = index;
     }
-    byte[] val = new byte[1];
+    byte[] val = new byte[500];
     @Override
     public void run() {
       List<Put> puts = new ArrayList<Put>();
-      for (int i = 0; i < 25; i++) {
+      for (int i = 0; i < 250; i++) {
         Put p = new Put(Bytes.toBytes(index+"row" +index+ i));
         p.addColumn(f, Bytes.toBytes("q"), val);
         try {
@@ -255,10 +247,10 @@ public class TestDurableChunkRetrieval {
           // TODO Auto-generated catch block
           e.printStackTrace();
         }
-        //puts.add(p);
+        puts.add(p);
       }
-/*      try {
-        table.put(puts);
+      /*try {
+        //table.put(puts);
         System.out.println("Done with puts");
       } catch (IOException e) {
         // TODO Auto-generated catch block

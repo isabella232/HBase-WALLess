@@ -18,7 +18,9 @@
 package org.apache.hadoop.hbase.nio;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.ReadableByteChannel;
 
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
@@ -320,6 +322,19 @@ public class SingleByteBuff extends ByteBuff {
     return channelRead(channel, buf);
   }
 
+  @Override
+  public void get(ByteBuffer out, int sourceOffset, int destOffset, int length) {
+    ByteBufferUtils.copyFromBufferToBuffer(buf, out, sourceOffset, destOffset, length);
+  }
+
+  @Override
+  public ByteBuffer[] accumulate() {
+    ByteBuffer duplicate = buf.slice();
+    ByteBuffer[] bb = new ByteBuffer[1];
+    bb[0] = duplicate;
+    return bb;
+  }
+  
   @Override
   public boolean equals(Object obj) {
     if(!(obj instanceof SingleByteBuff)) return false;

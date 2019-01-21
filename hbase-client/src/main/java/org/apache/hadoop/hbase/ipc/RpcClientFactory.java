@@ -67,7 +67,7 @@ public final class RpcClientFactory {
   private static String getRpcClientClass(Configuration conf) {
     String rpcClientClass = conf.get(CUSTOM_RPC_CLIENT_IMPL_CONF_KEY);
     if (rpcClientClass == null) {
-      return NettyRpcClient.class.getName();
+      return BlockingRpcClient.class.getName();
     }
     String mappedName = DEPRECATED_NAME_MAPPING.get(rpcClientClass);
     return mappedName == null ? rpcClientClass : mappedName;

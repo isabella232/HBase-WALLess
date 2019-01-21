@@ -177,6 +177,15 @@ public abstract class Chunk {
   }
 
   /**
+   * This is not thread safe- the caller should ensure this is called in thread safe way
+   * @return the free size in the current chunk
+   */
+  public int getFreeSizeInChunk() {
+    int oldOffset = nextFreeOffset.get();
+    return (data.capacity() - oldOffset);
+  }
+
+  /**
    * @return This chunk's backing data.
    */
   ByteBuffer getData() {

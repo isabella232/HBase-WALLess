@@ -643,6 +643,7 @@ abstract class ServerRpcConnection implements Closeable {
     MethodDescriptor md = null;
     Message param = null;
     CellScanner cellScanner = null;
+    ByteBuff cellScannerBB = null;
     try {
       if (header.hasRequestParam() && header.getRequestParam()) {
         md = this.service.getDescriptorForType().findMethodByName(
@@ -671,9 +672,10 @@ abstract class ServerRpcConnection implements Closeable {
         buf.position(offset);
         ByteBuff dup = buf.duplicate();
         dup.limit(offset + header.getCellBlockMeta().getLength());
-        // TODO here....  dup is the BB carrying whole cells data. 
-        cellScanner = this.rpcServer.cellBlockBuilder.createCellScannerReusingBuffers(
-            this.codec, this.compressionCodec, dup);
+        // TODO here.... dup is the BB carrying whole cells data.
+        cellScannerBB = dup;
+        cellScanner = this.rpcServer.cellBlockBuilder.createCellScannerReusingBuffers(this.codec,
+          this.compressionCodec, dup);
       }
     } catch (Throwable t) {
       InetSocketAddress address = this.rpcServer.getListenerAddress();
@@ -707,6 +709,7 @@ abstract class ServerRpcConnection implements Closeable {
     }
     ServerCall<?> call = createCall(id, this.service, md, header, param, cellScanner, totalRequestSize,
       this.addr, timeout, this.callCleanup);
+    call.cellScannerBB = cellScannerBB;
 
     if (!this.rpcServer.scheduler.dispatch(new CallRunner(this.rpcServer, call))) {
       this.rpcServer.callQueueSizeInBytes.add(-1 * call.getSize());

@@ -35,7 +35,7 @@ public class HFileContextBuilder {
   /** Whether checksum is enabled or not **/
   private boolean usesHBaseChecksum = true;
   /** Whether mvcc is to be included in the Read/Write **/
-  private boolean includesMvcc = true;
+  private boolean includesMvcc = false;
   /** Whether tags are to be included in the Read/Write **/
   private boolean includesTags = false;
   /** Compression algorithm used **/
@@ -81,7 +81,7 @@ public class HFileContextBuilder {
   }
 
   public HFileContextBuilder withIncludesMvcc(boolean includesMvcc) {
-    this.includesMvcc = includesMvcc;
+    this.includesMvcc = false;
     return this;
   }
 

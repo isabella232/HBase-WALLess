@@ -31,6 +31,7 @@ import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ClassSize;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
@@ -134,6 +135,11 @@ public abstract class AbstractMemStore implements MemStore {
   @Override
   public void persist(List<Cell> cells, MemStoreSizing memstoreSizing) {
     active.persist(cells, false, memstoreSizing);
+  }
+
+  @Override
+  public void persist(ByteBuff cellScannerBB, MemStoreSizing memstoreSizing) {
+   active.maybeCloneWithAllocator(cellScannerBB,  memstoreSizing); 
   }
 
   @Override

@@ -19,11 +19,15 @@
 package org.apache.hadoop.hbase.regionserver.memstore.replication;
 
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellUtil;
-import org.apache.yetus.audience.InterfaceAudience;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ClassSize;
+import org.apache.yetus.audience.InterfaceAudience;
 
 /**
  * This is similar to WALEdit, but mainly encapsulates all the cells corresponding to a transaction
@@ -31,38 +35,61 @@ import org.apache.hadoop.hbase.util.ClassSize;
  */
 @InterfaceAudience.Private
 public class MemstoreEdits {
-  private ArrayList<Cell> cells = null;
-
-  public MemstoreEdits(int cellCount) {
-    cells = new ArrayList<>(cellCount);
-  }
+  private Map<byte[], List<Cell>> familyMap = 
+      new TreeMap<byte[], List<Cell>>(Bytes.BYTES_COMPARATOR);
 
   public MemstoreEdits() {
-    cells = new ArrayList<>();
+    familyMap = new TreeMap<byte[], List<Cell>>(Bytes.BYTES_COMPARATOR);
   }
 
-  public MemstoreEdits add(Cell cell) {
-    this.cells.add(cell);
+  public MemstoreEdits add(byte[] fam, Cell cell) {
+    List<Cell> cellList = familyMap.get(fam);
+    if (cellList == null) {
+      cellList = new ArrayList<Cell>();
+      familyMap.put(fam, cellList);
+    }
+    cellList.add(cell);
+    return this;
+  }
+
+  public MemstoreEdits add(byte[] fam, List<Cell> cells) {
+    List<Cell> cellList = familyMap.get(fam);
+    if (cellList == null) {
+      cellList = new ArrayList<Cell>();
+      familyMap.put(fam, cellList);
+    }
+    cellList.addAll(cells);
     return this;
   }
 
   public boolean isEmpty() {
-    return cells.isEmpty();
+    return familyMap.isEmpty();
   }
 
   public int size() {
-    return cells.size();
+    int cellsCount = 0;
+    for (List<Cell> cells : familyMap.values()) {
+      cellsCount += cells.size();
+    }
+    return cellsCount;
   }
 
-  public ArrayList<Cell> getCells() {
-    return cells;
+  public Map<byte[], List<Cell>> getFamMap() {
+    return this.familyMap;
   }
 
   public long heapSize() {
-    long ret = ClassSize.ARRAYLIST;
-    for (Cell cell : cells) {
-      ret += CellUtil.estimatedHeapSizeOf(cell);
+    // Revisit
+    long ret = ClassSize.TREEMAP;
+    for (List<Cell> cells : familyMap.values()) {
+      for (Cell cell : cells) {
+        ret += CellUtil.estimatedHeapSizeOf(cell);
+      }
     }
     return ret;
+  }
+
+  public int getSize() {
+    return familyMap.values().size();
   }
 }

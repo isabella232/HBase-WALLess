@@ -30,6 +30,7 @@ import org.apache.hadoop.hbase.NoTagsKeyValue;
 import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.yetus.audience.InterfaceAudience;
+import org.mortbay.log.Log;
 
 /**
  * Codec that does KeyValue version 1 serialization.
@@ -97,8 +98,12 @@ public class KeyValueCodec implements Codec {
       } else {
         this.current = createCell(bb.array(), bb.arrayOffset() + bb.position(), len);
       }
-      buf.skip(len);
+      skip(len);
       return true;
+    }
+
+    protected void skip(int len) {
+      buf.skip(len);
     }
 
     @Override

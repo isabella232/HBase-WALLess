@@ -26,6 +26,7 @@ import org.apache.hadoop.hbase.CellScannable;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.yetus.audience.InterfaceAudience;
 
 /**
@@ -103,4 +104,7 @@ public interface HBaseRpcController extends RpcController, CellScannable {
    * cancellation state does not change during this call.
    */
   void notifyOnCancel(RpcCallback<Object> callback, CancellationCallback action) throws IOException;
+
+  void setCellScannerBB(ByteBuff bb);
+  ByteBuff getCellScannerBB();
 }

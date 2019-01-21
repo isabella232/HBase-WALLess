@@ -31,6 +31,8 @@ import org.apache.hadoop.hbase.exceptions.RegionMovedException;
 import org.apache.hadoop.hbase.io.ByteBufferListOutputStream;
 import org.apache.hadoop.hbase.io.ByteBufferPool;
 import org.apache.hadoop.hbase.ipc.RpcServer.CallCleanup;
+import org.apache.hadoop.hbase.nio.ByteBuff;
+import org.apache.hadoop.hbase.nio.SingleByteBuff;
 import org.apache.hadoop.hbase.security.User;
 import org.apache.hbase.thirdparty.com.google.protobuf.BlockingService;
 import org.apache.hbase.thirdparty.com.google.protobuf.CodedOutputStream;
@@ -90,6 +92,7 @@ abstract class ServerCall<T extends ServerRpcConnection> implements RpcCall, Rpc
   // cumulative size of serialized exceptions
   private long exceptionSize = 0;
   private final boolean retryImmediatelySupported;
+  protected ByteBuff cellScannerBB;
 
   @edu.umd.cs.findbugs.annotations.SuppressWarnings(value="NP_NULL_ON_SOME_PATH",
       justification="Can't figure why this complaint is happening... see below")
@@ -146,9 +149,14 @@ abstract class ServerCall<T extends ServerRpcConnection> implements RpcCall, Rpc
     if (this.reqCleanup != null) {
       this.reqCleanup.run();
       this.reqCleanup = null;
+      this.cellScannerBB = null;
     }
   }
 
+  @Override
+  public ByteBuff getCellBB() {
+    return this.cellScannerBB;
+  }
   @Override
   public String toString() {
     return toShortString() + " param: " +
@@ -207,9 +215,10 @@ abstract class ServerCall<T extends ServerRpcConnection> implements RpcCall, Rpc
           cellBlockSize = this.cellBlockStream.size();
         }
       } else {
-        ByteBuffer b = this.cellBlockBuilder.buildCellBlock(this.connection.codec,
+        ByteBuff bb = this.cellBlockBuilder.buildCellBlock(this.connection.codec,
           this.connection.compressionCodec, cells);
-        if (b != null) {
+        if (bb != null) {
+          ByteBuffer b = ((SingleByteBuff)bb).getEnclosingByteBuffer();
           cellBlockSize = b.remaining();
           cellBlock = new ArrayList<>(1);
           cellBlock.add(b);

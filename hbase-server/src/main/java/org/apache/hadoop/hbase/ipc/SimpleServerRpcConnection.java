@@ -243,7 +243,6 @@ class SimpleServerRpcConnection extends ServerRpcConnection {
       // need to keep the inc / dec correct.
       incRpcCount();
     }
-
     count = channelDataRead(channel, data);
 
     if (count >= 0 && data.remaining() == 0) { // count==0 if dataLength == 0

@@ -262,6 +262,13 @@ public abstract class Segment {
     }
   }
 
+  // TODO
+  protected void incSize(MemStoreSizing memstoreSize) {
+    synchronized (this) {
+      this.segmentSize.incMemStoreSize(memstoreSize);
+    }
+  }
+  
   public long getMinSequenceId() {
     return minSequenceId;
   }

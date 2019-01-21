@@ -40,6 +40,8 @@ message ReplicateMemstoreRequest {
   // It is better that the primary pass on the replicas and the replicas use that info to do the replication from then onwards
   repeated uint32 replicas = 4;
   repeated ServerName locations = 5;
+  // If needed move this above locations.
+  required  uint32 totalCellSizeInCurrBatch = 6;
 }
 
 message ReplicateMemstoreResponse {

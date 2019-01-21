@@ -702,7 +702,7 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
   public boolean isClusterUp() {
     return true;
   }
-
+  
   @Override
   public ReplicateMemstoreResponse replicateMemstore(RpcController controller,
       ReplicateMemstoreRequest request) throws ServiceException {

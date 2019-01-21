@@ -81,6 +81,7 @@ import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.io.hfile.InvalidHFileException;
 import org.apache.hadoop.hbase.log.HBaseMarkers;
 import org.apache.hadoop.hbase.monitoring.MonitoredTask;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.quotas.RegionSizeStore;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionContext;
 import org.apache.hadoop.hbase.regionserver.compactions.CompactionLifeCycleTracker;
@@ -2769,6 +2770,15 @@ public class HStore implements Store, HeapSize, StoreConfigInformation, Propagat
     lock.readLock().lock();
     try {
       return memstore.addPersistedCells(readPnt, memStoreSize);
+    } finally {
+      lock.readLock().unlock();
+    }
+  }
+
+  public void persist(ByteBuff cellScannerBB, MemStoreSizing memstoreSize) throws IOException {
+    lock.readLock().lock();
+    try {
+      memstore.persist(cellScannerBB, memstoreSize);
     } finally {
       lock.readLock().unlock();
     }

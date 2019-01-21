@@ -26,6 +26,7 @@ import java.io.IOException;
 
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.HBaseInterfaceAudience;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hbase.thirdparty.com.google.protobuf.BlockingService;
 import org.apache.hbase.thirdparty.com.google.protobuf.Descriptors.MethodDescriptor;
 import org.apache.hbase.thirdparty.com.google.protobuf.Message;
@@ -57,6 +58,8 @@ public interface RpcCall extends RpcCallContext {
    * @return The CellScanner that can carry input and result payload.
    */
   CellScanner getCellScanner();
+
+  ByteBuff getCellBB();
 
   /**
    * @return The timestamp when the call is constructed.

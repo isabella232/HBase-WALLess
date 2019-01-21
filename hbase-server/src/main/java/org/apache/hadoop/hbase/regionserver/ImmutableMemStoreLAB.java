@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.yetus.audience.InterfaceAudience;
 
 /**
@@ -151,5 +152,11 @@ public class ImmutableMemStoreLAB implements MemStoreLAB {
   @Override
   public boolean isEmpty() {
     return false;
+  }
+
+  @Override
+  public void copyCellBB(ByteBuff cellScannerBB) {
+    // TODO Auto-generated method stub
+    
   }
 }

@@ -123,7 +123,7 @@ public class TestRpcServerSlowConnectionSetup {
 
     int callId = 10;
     Call call = new Call(callId, TestProtobufRpcProto.getDescriptor().findMethodByName("ping"),
-        EmptyRequestProto.getDefaultInstance(), null, EmptyResponseProto.getDefaultInstance(), 1000,
+        EmptyRequestProto.getDefaultInstance(), null, null, EmptyResponseProto.getDefaultInstance(), 1000,
         HConstants.NORMAL_QOS, null, MetricsConnection.newCallStats());
     RequestHeader requestHeader = IPCUtil.buildRequestHeader(call, null);
     dos.writeInt(IPCUtil.getTotalSizeWhenWrittenDelimited(requestHeader, call.param));

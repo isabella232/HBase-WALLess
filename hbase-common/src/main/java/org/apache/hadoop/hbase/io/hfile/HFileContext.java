@@ -40,7 +40,7 @@ public class HFileContext implements HeapSize, Cloneable {
   /** Whether checksum is enabled or not**/
   private boolean usesHBaseChecksum = true;
   /** Whether mvcc is to be included in the Read/Write**/
-  private boolean includesMvcc = true;
+  private boolean includesMvcc = false;
   /**Whether tags are to be included in the Read/Write**/
   private boolean includesTags;
   /**Compression algorithm used**/
@@ -132,7 +132,7 @@ public class HFileContext implements HeapSize, Cloneable {
   }
 
   public void setIncludesMvcc(boolean includesMvcc) {
-    this.includesMvcc = includesMvcc;
+    this.includesMvcc = false;
   }
 
   public boolean isIncludesTags() {

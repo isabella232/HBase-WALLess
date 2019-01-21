@@ -35,6 +35,8 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.ExtendedCell;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.KeyValueUtil;
+import org.apache.hadoop.hbase.NoTagOnHeapKeyCell;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -191,6 +193,11 @@ public class MemStoreLABImpl implements MemStoreLAB {
     return copyToChunkCell(cell, c.getData(), allocOffset, cellSize);
   }
 
+  @Override
+  public void copyCellBB(ByteBuff cellScannerBB) {
+    
+  }
+
   /**
    * Clone the passed cell by copying its data into the passed buf and create a cell with a chunkid
    * out of it
@@ -216,7 +223,7 @@ public class MemStoreLABImpl implements MemStoreLAB {
       // which directly return tagsLen as 0. So we avoid parsing many length components in
       // reading the tagLength stored in the backing buffer. The Memstore addition of every Cell
       // call getTagsLength().
-      return new NoTagByteBufferChunkKeyValue(buf, offset, len);
+      return new NoTagOnHeapKeyCell(buf, offset, len);
     } else {
       return new ByteBufferChunkKeyValue(buf, offset, len);
     }

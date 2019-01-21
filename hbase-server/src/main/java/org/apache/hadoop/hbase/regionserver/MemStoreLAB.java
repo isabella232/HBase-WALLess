@@ -21,6 +21,7 @@ import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ReflectionUtils;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -157,4 +158,6 @@ public interface MemStoreLAB {
   static String getMemstoreDurablePath(Configuration conf) {
     return conf.get("hbase.memstore.mslab.durable.path");
   }
+
+  void copyCellBB(ByteBuff cellScannerBB);
 }

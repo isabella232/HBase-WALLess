@@ -92,6 +92,14 @@ public class ByteBufferOutputStream extends OutputStream
     return curBuf;
   }
 
+  /**
+   * This return the underlying BB
+   * @return ByteBuffer
+   */
+  public ByteBuffer getByteBufferWithoutFlip() {
+    return curBuf;
+  }
+
   protected void checkSizeAndGrow(int extra) {
     long capacityNeeded = curBuf.position() + (long) extra;
     if (capacityNeeded > curBuf.limit()) {

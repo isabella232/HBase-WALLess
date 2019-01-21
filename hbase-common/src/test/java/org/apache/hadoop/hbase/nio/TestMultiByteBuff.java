@@ -403,6 +403,19 @@ public class TestMultiByteBuff {
   }
 
   @Test
+  public void testCopyToBuffer() {
+    ByteBuffer b1 = ByteBuffer.allocate(8);
+    ByteBufferUtils.putByte(b1, 0, (byte)1);
+    ByteBufferUtils.putInt(b1, 1, 8);
+    ByteBuffer b2 = ByteBuffer.allocate(8);
+    ByteBuffer b3 = ByteBuffer.allocate(8);
+    MultiByteBuff mbb1 = new MultiByteBuff(b1, b2, b3);
+    ByteBuffer bb =ByteBuffer.allocate(17);
+    mbb1.get(bb, 1, 0, 17);
+    System.out.println(bb.getInt(0));
+    System.out.println("The bb is "+bb);
+  }
+  @Test
   public void testHasRemaining() {
     ByteBuffer b1 = ByteBuffer.allocate(8);
     ByteBuffer b2 = ByteBuffer.allocate(8);

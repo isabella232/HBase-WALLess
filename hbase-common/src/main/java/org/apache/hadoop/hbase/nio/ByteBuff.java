@@ -18,7 +18,9 @@
 package org.apache.hadoop.hbase.nio;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.ReadableByteChannel;
 
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
@@ -409,11 +411,28 @@ public abstract class ByteBuff {
    * @throws IOException
    */
   public abstract int read(ReadableByteChannel channel) throws IOException;
+  
+  /**
+   * Copies the content from this ByteBuff to a ByteBuffer
+   * @param out the ByteBuffer to which the copy has to happen
+   * @param sourceOffset the offset in the ByteBuff from which the elements has to be copied
+   * @param destOffset the offset in the ByteBuffer to which the copy to should happen
+   * @param length the length in this ByteBuff upto which the elements has to be copied
+   */
+  public abstract void get(ByteBuffer out, int sourceOffset, int destOffset, int length);
+
+  /**
+   * Create bytebuffers that are sliced from the current position
+   * @return array of buffers
+   * @throws IOException
+   */
+  public abstract ByteBuffer[] accumulate();
 
   // static helper methods
   public static int channelRead(ReadableByteChannel channel, ByteBuffer buf) throws IOException {
     if (buf.remaining() <= NIO_BUFFER_LIMIT) {
-      return channel.read(buf);
+      int read = channel.read(buf);
+      return read;
     }
     int originalLimit = buf.limit();
     int initialRemaining = buf.remaining();

@@ -18,12 +18,19 @@
  */
 package org.apache.hadoop.hbase.regionserver.memstore.replication.protobuf;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.TreeMap;
 
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellScanner;
+import org.apache.hadoop.hbase.FamilyCellScanner;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
@@ -31,6 +38,7 @@ import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplica
 import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hbase.thirdparty.com.google.protobuf.UnsafeByteOperations;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -38,29 +46,39 @@ import org.apache.yetus.audience.InterfaceAudience;
 @InterfaceAudience.Private
 public class MemstoreReplicationProtobufUtil {
 
-  public static Pair<ReplicateMemstoreRequest, List<Cell>> buildReplicateMemstoreEntryRequest(
+  public static Pair<ReplicateMemstoreRequest,  Map<byte[], List<Cell>>> buildReplicateMemstoreEntryRequest(
       final List<MemstoreReplicationEntry> entries, byte[] encodedRegionName,
       List<Pair<Integer, ServerName>> pipeline, boolean specialCell) {
     // Accumulate all the Cells seen in here.
-    List<Cell> allCells = new ArrayList<>();
+    Map<byte[], List<Cell>> allCells = new TreeMap<byte[], List<Cell>>(Bytes.BYTES_COMPARATOR);
     ReplicateMemstoreRequest.Builder reqBuilder = ReplicateMemstoreRequest.newBuilder();
     int replicasOffsered = 0;
-    for (MemstoreReplicationEntry entry : entries) {
-      MemstoreReplicationKey key = entry.getMemstoreReplicationKey();
-      MemstoreEdits edit = entry.getMemstoreEdits();
-      List<Cell> cells = edit.getCells();
+    int totalCellSizeInCurrBatch = 0;
+    for (MemstoreReplicationEntry memstoreEntry : entries) {
+      MemstoreReplicationKey key = memstoreEntry.getMemstoreReplicationKey();
+      MemstoreEdits edit = memstoreEntry.getMemstoreEdits();
       // Collect up the cells
-      allCells.addAll(cells);
+      Set<Entry<byte[], List<Cell>>> entrySet = edit.getFamMap().entrySet();
+      for (Entry<byte[], List<Cell>> entry : entrySet) {
+        List<Cell> list = allCells.get(entry.getKey());
+        if (list == null) {
+          list = new ArrayList<Cell>();
+          allCells.put(entry.getKey(), list);
+        }
+        list.addAll(entry.getValue());
+      }
       MemstoreReplicaProtos.MemstoreReplicationEntry.Builder entryBuilder =
           MemstoreReplicaProtos.MemstoreReplicationEntry.newBuilder();
-      entryBuilder.setAssociatedCellCount(cells.size());
+      entryBuilder.setAssociatedCellCount(edit.getSize());
       entryBuilder.setSequenceId(key.getSequenceId());
       reqBuilder.addEntry(entryBuilder.build());
+      totalCellSizeInCurrBatch += memstoreEntry.getCurrentMemstoreEntrySize();
       replicasOffsered = key.getReplicasOffered();// Its ok to overwrite. Write comments.. Handle.
                                                   // TODO
     }
     reqBuilder.setEncodedRegionName(UnsafeByteOperations.unsafeWrap(encodedRegionName));
     reqBuilder.setReplicasOffered(replicasOffsered);
+    reqBuilder.setTotalCellSizeInCurrBatch(totalCellSizeInCurrBatch);
     for (Pair<Integer, ServerName> replicaId : pipeline) {
       reqBuilder.addReplicas(replicaId.getFirst());
       if (specialCell) {
@@ -70,7 +88,7 @@ public class MemstoreReplicationProtobufUtil {
     return new Pair<>(reqBuilder.build(), allCells);
   }
 
-  public static CellScanner getCellScannerOnCells(final List<Cell> cells) {
+  public static CellScanner getCellScannerOnCells(final Collection<Cell> cells) {
     return new CellScanner() {
       private final Iterator<? extends Cell> entries = cells.iterator();
       private Cell currentCell;
@@ -88,6 +106,43 @@ public class MemstoreReplicationProtobufUtil {
         }
         this.currentCell = this.entries.next();
         return true;
+      }
+    };
+  }
+
+  public static FamilyCellScanner getCellScannerOnCells(final Map<byte[], List<Cell>> cells) {
+    return new FamilyCellScanner() {
+      private final Iterator<Entry<byte[], List<Cell>>> entries = cells.entrySet().iterator();
+      private Pair<byte[], CellScanner> currentCellScanner;
+
+      @Override
+      public Pair<byte[], CellScanner> next() {
+        if (entries.hasNext()) {
+          Entry<byte[], List<Cell>> next = entries.next();
+          if (next == null) {
+            return null;
+          }
+          currentCellScanner = new Pair<byte[], CellScanner>(next.getKey(),
+              MemstoreReplicationProtobufUtil.getCellScannerOnCells(next.getValue()));
+          return currentCellScanner;
+        }
+        return null;
+      }
+
+      @Override
+      public Cell current() {
+        if (this.currentCellScanner != null) {
+          return this.currentCellScanner.getSecond().current();
+        }
+        return null;
+      }
+
+      @Override
+      public boolean advance() throws IOException {
+        if (this.currentCellScanner != null) {
+          return this.currentCellScanner.getSecond().advance();
+        }
+        return false;
       }
     };
   }

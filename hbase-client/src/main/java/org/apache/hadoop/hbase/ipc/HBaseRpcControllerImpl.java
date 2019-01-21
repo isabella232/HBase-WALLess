@@ -28,6 +28,7 @@ import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.yetus.audience.InterfaceAudience;
 
 /**
@@ -65,6 +66,7 @@ public class HBaseRpcControllerImpl implements HBaseRpcController {
    * block that implements CellScanner.
    */
   private CellScanner cellScanner;
+  private ByteBuff cellScannerBB;
 
   public HBaseRpcControllerImpl() {
     this((CellScanner) null);
@@ -91,6 +93,16 @@ public class HBaseRpcControllerImpl implements HBaseRpcController {
   @Override
   public void setCellScanner(final CellScanner cellScanner) {
     this.cellScanner = cellScanner;
+  }
+
+  @Override
+  public void setCellScannerBB(ByteBuff bb) {
+    this.cellScannerBB = bb;
+  }
+
+  @Override
+  public ByteBuff getCellScannerBB() {
+    return this.cellScannerBB;
   }
 
   @Override

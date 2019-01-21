@@ -23,6 +23,7 @@ import java.io.IOException;
 
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.yetus.audience.InterfaceAudience;
 
 /**
@@ -132,5 +133,15 @@ public class DelegatingHBaseRpcController implements HBaseRpcController {
   public void notifyOnCancel(RpcCallback<Object> callback, CancellationCallback action)
       throws IOException {
     delegate.notifyOnCancel(callback, action);
+  }
+
+  @Override
+  public ByteBuff getCellScannerBB() {
+    return delegate.getCellScannerBB();
+  }
+
+  @Override
+  public void setCellScannerBB(ByteBuff bb) {
+    this.delegate.setCellScannerBB(bb);
   }
 }

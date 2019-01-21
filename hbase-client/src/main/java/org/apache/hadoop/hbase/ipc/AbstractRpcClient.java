@@ -402,7 +402,7 @@ public abstract class AbstractRpcClient<T extends RpcConnection> implements RpcC
     final MetricsConnection.CallStats cs = MetricsConnection.newCallStats();
     cs.setStartTime(EnvironmentEdgeManager.currentTime());
     final AtomicInteger counter = concurrentCounterCache.getUnchecked(addr);
-    Call call = new Call(nextCallId(), md, param, hrc.cellScanner(), returnType,
+    Call call = new Call(nextCallId(), md, param, hrc.cellScanner(), hrc.getCellScannerBB(), returnType,
         hrc.getCallTimeout(), hrc.getPriority(), new RpcCallback<Call>() {
           @Override
           public void run(Call call) {
@@ -418,6 +418,10 @@ public abstract class AbstractRpcClient<T extends RpcConnection> implements RpcC
       }
       cs.setConcurrentCallsPerServer(count);
       T connection = getConnection(remoteId);
+      if(call.cellsBB != null) {
+        // Setting the cellScannerBB
+        hrc.setCellScannerBB(call.cellsBB);
+      }
       connection.sendRequest(call, hrc);
     } catch (Exception e) {
       call.setException(toIOE(e));

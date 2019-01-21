@@ -18,17 +18,22 @@
 package org.apache.hadoop.hbase.nio;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.InvalidMarkException;
+import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.ReadableByteChannel;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ObjectIntPair;
 import org.apache.yetus.audience.InterfaceAudience;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesting;
 
 /**
@@ -41,6 +46,7 @@ import org.apache.hbase.thirdparty.com.google.common.annotations.VisibleForTesti
 @InterfaceAudience.Private
 public class MultiByteBuff extends ByteBuff {
 
+  private static final Logger LOG = LoggerFactory.getLogger(MultiByteBuff.class);
   private final ByteBuffer[] items;
   // Pointer to the current item in the MBB
   private ByteBuffer curItem = null;
@@ -622,11 +628,16 @@ public class MultiByteBuff extends ByteBuff {
    */
   @Override
   public MultiByteBuff slice() {
+    ByteBuffer[] copy = sliceInternal();
+    return new MultiByteBuff(copy);
+  }
+
+  private ByteBuffer[] sliceInternal() {
     ByteBuffer[] copy = new ByteBuffer[this.limitedItemIndex - this.curItemIndex + 1];
     for (int i = curItemIndex, j = 0; i <= this.limitedItemIndex; i++, j++) {
       copy[j] = this.items[i].slice();
     }
-    return new MultiByteBuff(copy);
+    return copy;
   }
 
   /**
@@ -1031,6 +1042,45 @@ public class MultiByteBuff extends ByteBuff {
       }
     }
     return total;
+  }
+
+  @Override
+  public void get(ByteBuffer out, int sourceOffset, int destOffset, int length) {
+    // TODO : The caller is passing the pos. Better not to pass it and use the existing API
+    int index = sourceOffset;
+    int itemIndex;
+    if (this.itemBeginPos[this.curItemIndex + 1] > index) {
+      itemIndex = this.curItemIndex;
+    } else {
+      itemIndex = getItemIndexFromCurItemIndex(index);
+    }
+    ByteBuffer item = items[itemIndex];
+    int offsetInItem = index - this.itemBeginPos[itemIndex];
+    if ((item.limit() - offsetInItem) >= length) {
+      // If the destination can hold the length - is upto the caller to identify
+      ByteBufferUtils.copyFromBufferToBuffer(item, out, offsetInItem, destOffset, length);
+    } else {
+      int offset = destOffset;
+      int locCurItemIndex = itemIndex;
+      ByteBuffer locCurItem = item;
+      int srcOff = offsetInItem;
+      while (length > 0) {
+        int toRead = Math.min(length, (locCurItem.limit() - srcOff));
+        ByteBufferUtils.copyFromBufferToBuffer(locCurItem, out, srcOff, offset,
+          toRead);
+        length -= toRead;
+        if (length == 0) break;
+        locCurItemIndex++;
+        locCurItem = this.items[locCurItemIndex];
+        srcOff = locCurItem.position();
+        offset += toRead;
+      }
+    }
+  }
+
+  @Override
+  public ByteBuffer[] accumulate() {
+    return sliceInternal();
   }
 
   @Override

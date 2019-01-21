@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -105,6 +106,7 @@ import org.apache.hadoop.hbase.ipc.ServerRpcController;
 import org.apache.hadoop.hbase.log.HBaseMarkers;
 import org.apache.hadoop.hbase.master.MasterRpcServices;
 import org.apache.hadoop.hbase.net.Address;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.procedure2.RSProcedureCallable;
 import org.apache.hadoop.hbase.quotas.ActivePolicyEnforcement;
 import org.apache.hadoop.hbase.quotas.OperationQuota;
@@ -1272,7 +1274,7 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
   protected RpcServerInterface createRpcServer(Server server, Configuration conf,
       RpcSchedulerFactory rpcSchedulerFactory, InetSocketAddress bindAddress, String name)
       throws IOException {
-    boolean reservoirEnabled = conf.getBoolean(RESERVOIR_ENABLED_KEY, true);
+    boolean reservoirEnabled = conf.getBoolean(RESERVOIR_ENABLED_KEY, false);
     try {
       return RpcServerFactory.createRpcServer(server, name, getServices(),
           bindAddress, // use final bindAddress for this server.
@@ -3670,36 +3672,35 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
   }
 
   @Override
-  @QosPriority(priority=HConstants.MEMSTORE_REPLICATION_QOS)
+  @QosPriority(priority = HConstants.MEMSTORE_REPLICATION_QOS)
   public ReplicateMemstoreResponse replicateMemstore(RpcController rpcc,
       ReplicateMemstoreRequest request) throws ServiceException {
     // Probably pass this request also so that it can be used for the next replica.
     // But do not forgot to change replicaOfferd and replicaCommitted
     HBaseRpcController controller = (HBaseRpcController) rpcc;
-    CellScanner cells = controller != null ? controller.cellScanner() : null;
+/*    FamilyCellScanner cells =
+        controller != null ? ((FamilyCellScanner) controller.cellScanner()) : null;*/
     if (controller != null) {
       controller.setCellScanner(null);
     }
+    ByteBuff cellScannerBB = ((HBaseRpcController) controller).getCellScannerBB();
+    int pos = cellScannerBB.position();
+    int limit = cellScannerBB.limit();
+    Map<byte[], List<Cell>> allCells = new TreeMap<byte[], List<Cell>>(Bytes.BYTES_COMPARATOR);
     try {
       checkOpen();
       // TODO No need to decode cells here for the next replica replication usages. Again we will
       // end up encoding at the RPC server. We should have a Special controller and Call which carry
       // the payload buf directly and we should be able to use that directy here
-      List<Cell> allCells = new ArrayList<>();
-      try {
-        while (cells.advance()) {
-          allCells.add(cells.current());
-        }
-      } catch (Exception e) {
-        throw new ServiceException(e);
-      }
       ByteString regionName = request.getEncodedRegionName();
       int replicasOffered = request.getReplicasOffered();
       HRegion region = (HRegion) regionServer.getRegionByEncodedName(regionName.toStringUtf8());
       assert !(ServerRegionReplicaUtil.isDefaultReplica(region.getRegionInfo()));
       ReplicateMemstoreResponse response = null;
+      cellScannerBB.position(pos);
+      cellScannerBB.limit(limit);
       try {
-        response = region.replicateMemstore(request, allCells, replicasOffered);
+        response = region.replicateMemstore(request, allCells, replicasOffered, cellScannerBB);
       } catch (IOException e1) {
         LOG.error("Exception in getting the memstore response from the pipeline " + e1 + " "
             + region.getRegionInfo());

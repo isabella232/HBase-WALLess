@@ -28,7 +28,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.ExtendedCell;
+import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.KeyValueUtil;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.ObjectIntPair;
 import org.apache.yetus.audience.InterfaceAudience;
@@ -67,8 +69,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
       DurableChunkCreator chunkCreator) {
     super(regionName, cfName, conf, chunkCreator);
   }
-
-  // TODO this needs to be revisited!!..
+  
   @Override
   public List<Cell> copyCellsInto(List<Cell> cells) {
     int totalSize = 0;
@@ -104,6 +105,51 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
       }
     }
     return copyCellsToChunk(cells, c, allocOffset, writeEntry);
+  }
+
+  /**
+   * this is not thread safe. caller will ensure it is thread safe
+   * @param buff
+   */
+  @Override
+  public void copyCellBB(ByteBuff buff) {
+    int totalSize = buff.limit() - buff.position();
+    DurableSlicedChunk c = null;
+    int temp = totalSize;
+    int pos = buff.position();
+    while (true) {
+      if (temp == 0) {
+        break;
+      }
+      this.lock.lock();
+      try {
+        while (temp != 0) {
+          // Try to get the chunk
+          c = (DurableSlicedChunk) getOrMakeChunk();
+          if (c != null) {
+            int freeSizeInChunk = c.getFreeSizeInChunk();
+            int lentoCopy = Math.min(freeSizeInChunk, temp);
+            if (lentoCopy > 0) {
+              int offset = c.alloc(lentoCopy);
+              buff.get(c.data, pos, offset, lentoCopy);
+              // persist then and there.
+              c.persist(offset, lentoCopy);
+              temp -= lentoCopy;
+              pos += lentoCopy;
+            }
+            // retire this chunk as ideally we don have space in that chunk now. This will help to
+            // get
+            // the new one
+            if (freeSizeInChunk <= 0) {
+              // retire only if the chunk is full
+              tryRetireChunk(c);
+            }
+          }
+        }
+      } finally {
+        lock.unlock();
+      }
+    }
   }
 
   private WriteEntry addWriteEntry(DurableSlicedChunk c, int offset, int len,

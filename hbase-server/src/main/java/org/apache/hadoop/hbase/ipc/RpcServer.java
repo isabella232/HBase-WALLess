@@ -405,6 +405,7 @@ public abstract class RpcServer implements RpcServerInterface,
       status.resume("Servicing call");
       //get an instance of the method arg type
       HBaseRpcController controller = new HBaseRpcControllerImpl(call.getCellScanner());
+      if (call instanceof ServerCall) controller.setCellScannerBB(((ServerCall)call).cellScannerBB);
       controller.setCallTimeout(call.getTimeout());
       Message result = call.getService().callBlockingMethod(md, controller, param);
       long receiveTime = call.getReceiveTime();

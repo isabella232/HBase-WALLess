@@ -29,6 +29,7 @@ import java.io.IOException;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.hadoop.hbase.client.MetricsConnection;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
 import org.apache.htrace.core.Span;
 import org.apache.htrace.core.Tracer;
@@ -43,6 +44,7 @@ class Call {
    * to the rpc and receiving the response.
    */
   CellScanner cells;
+  ByteBuff cellsBB;
   @edu.umd.cs.findbugs.annotations.SuppressWarnings(value = "IS2_INCONSISTENT_SYNC",
       justification = "Direct access is only allowed after done")
   Message response; // value, null if error
@@ -61,11 +63,12 @@ class Call {
   Timeout timeoutTask;
 
   protected Call(int id, final Descriptors.MethodDescriptor md, Message param,
-      final CellScanner cells, final Message responseDefaultType, int timeout, int priority,
+      final CellScanner cells, ByteBuff cellsBB, final Message responseDefaultType, int timeout, int priority,
       RpcCallback<Call> callback, MetricsConnection.CallStats callStats) {
     this.param = param;
     this.md = md;
     this.cells = cells;
+    this.cellsBB = cellsBB;
     this.callStats = callStats;
     this.callStats.setStartTime(EnvironmentEdgeManager.currentTime());
     this.responseDefaultType = responseDefaultType;

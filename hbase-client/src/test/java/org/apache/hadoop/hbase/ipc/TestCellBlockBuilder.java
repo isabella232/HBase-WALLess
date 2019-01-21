@@ -82,7 +82,7 @@ public class TestCellBlockBuilder {
     Cell[] cells = getCells(count, size);
     CellScanner cellScanner = sized ? getSizedCellScanner(cells)
         : CellUtil.createCellScanner(Arrays.asList(cells).iterator());
-    ByteBuffer bb = builder.buildCellBlock(codec, compressor, cellScanner);
+    ByteBuffer bb = ((SingleByteBuff)builder.buildCellBlock(codec, compressor, cellScanner)).getEnclosingByteBuffer();
     cellScanner = builder.createCellScannerReusingBuffers(codec, compressor,
         new SingleByteBuff(bb));
     int i = 0;

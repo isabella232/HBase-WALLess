@@ -83,7 +83,7 @@ public class TestRegionReplicaCordinator {
   private MemstoreReplicationEntry createEntry(boolean metaMarkerReq) {
     MemstoreReplicationKey key = new MemstoreReplicationKey(Bytes.toBytes("1234"), 0);
     MemstoreEdits edits = new MemstoreEdits();
-    edits.add(new KeyValue());
+    edits.add(new byte[0], new KeyValue());
     MemstoreReplicationEntry entry = new MemstoreReplicationEntry(key, edits, metaMarkerReq);
     return entry;
   }

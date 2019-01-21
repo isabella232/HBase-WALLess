@@ -24,6 +24,7 @@ import java.util.Optional;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.hadoop.hbase.exceptions.UnexpectedStateException;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 
 /**
  * The MemStore holds in-memory modifications to the Store. Modifications are {@link Cell}s.
@@ -151,5 +152,7 @@ public interface MemStore {
 
   default long addPersistedCells(Optional<Long> readPnt, MemStoreSizing memStoreSize){ return -1; }
 
-  void persist(List<Cell> cells, MemStoreSizing sizeAccounting);;
+  void persist(List<Cell> cells, MemStoreSizing sizeAccounting);
+
+  void persist(ByteBuff cellScannerBB, MemStoreSizing sizeAccounting);
 }

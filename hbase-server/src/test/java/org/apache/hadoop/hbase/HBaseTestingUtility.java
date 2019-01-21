@@ -2132,6 +2132,19 @@ public class HBaseTestingUtility extends HBaseZKTestingUtility {
       t.put(put);
     }
   }
+  
+
+  public void loadNumericRows(final Table t, final byte[][] f, int startRow, int endRow)
+      throws IOException {
+    for (int i = startRow; i < endRow; i++) {
+      byte[] data = Bytes.toBytes(String.valueOf(i));
+      Put put = new Put(data);
+      for (int id = 0; id < f.length; id++) {
+        put.addColumn(f[id], null, data);
+      }
+      t.put(put);
+    }
+  }
 
   public void loadRandomRows(final Table t, final byte[] f, int rowSize, int totalRows)
       throws IOException {

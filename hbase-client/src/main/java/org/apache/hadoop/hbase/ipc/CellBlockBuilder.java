@@ -27,12 +27,16 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.DoNotRetryIOException;
+import org.apache.hadoop.hbase.FamilyCellScanner;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,8 +47,12 @@ import org.apache.hadoop.hbase.io.ByteBufferListOutputStream;
 import org.apache.hadoop.hbase.io.ByteBufferOutputStream;
 import org.apache.hadoop.hbase.io.ByteBufferPool;
 import org.apache.hadoop.hbase.nio.ByteBuff;
+import org.apache.hadoop.hbase.nio.MultiByteBuff;
 import org.apache.hadoop.hbase.nio.SingleByteBuff;
+import org.apache.hadoop.hbase.util.ByteBufferUtils;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ClassSize;
+import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.io.compress.CodecPool;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionInputStream;
@@ -114,17 +122,47 @@ class CellBlockBuilder {
    *         been flipped and is ready for reading. Use limit to find total size.
    * @throws IOException
    */
-  public ByteBuffer buildCellBlock(final Codec codec, final CompressionCodec compressor,
+  public ByteBuff buildCellBlock(final Codec codec, final CompressionCodec compressor,
       final CellScanner cellScanner) throws IOException {
     ByteBufferOutputStreamSupplier supplier = new ByteBufferOutputStreamSupplier();
-    if (buildCellBlock(codec, compressor, cellScanner, supplier)) {
+    if (cellScanner == null) {
+      return null;
+    }
+    if (buildCellBlock(codec, compressor, cellScanner, supplier, null)) {
       ByteBuffer bb = supplier.baos.getByteBuffer();
       // If no cells, don't mess around. Just return null (could be a bunch of existence checking
       // gets or something -- stuff that does not return a cell).
-      return bb.hasRemaining() ? bb : null;
+      return bb.hasRemaining() ? new SingleByteBuff(bb) : null;
     } else {
       return null;
     }
+  }
+
+  public ByteBuff buildCellBlock(final Codec codec, final CompressionCodec compressor,
+      final FamilyCellScanner familyCellScanner) throws IOException {
+    ByteBufferOutputStreamSupplier supplier = new ByteBufferOutputStreamSupplier();
+    Pair<byte[], CellScanner> cellScanner = null;
+    List<ByteBuffer> bbs = new ArrayList<ByteBuffer>();
+    if (familyCellScanner == null) {
+      return null;
+    }
+    while ((cellScanner = familyCellScanner.next()) != null) {
+      byte[] key = cellScanner.getFirst();
+      if (buildCellBlock(codec, compressor, cellScanner.getSecond(), supplier, key)) {
+        ByteBuffer bb = supplier.baos.getByteBuffer();
+        bbs.add(bb);
+      }
+      // If no cells, don't mess around. Just return null (could be a bunch of existence checking
+      // gets or something -- stuff that does not return a cell).
+    }
+    if (!bbs.isEmpty()) {
+      if (bbs.size() == 1) {
+        return new SingleByteBuff(bbs.get(0));
+      }
+      MultiByteBuff mbb = new MultiByteBuff(bbs.toArray(new ByteBuffer[bbs.size()]));
+      return mbb;
+    }
+    return null;
   }
 
   private static final class ByteBufOutputStreamSupplier implements OutputStreamSupplier {
@@ -152,7 +190,7 @@ class CellBlockBuilder {
   public ByteBuf buildCellBlock(Codec codec, CompressionCodec compressor, CellScanner cellScanner,
       ByteBufAllocator alloc) throws IOException {
     ByteBufOutputStreamSupplier supplier = new ByteBufOutputStreamSupplier(alloc);
-    if (buildCellBlock(codec, compressor, cellScanner, supplier)) {
+    if (buildCellBlock(codec, compressor, cellScanner, supplier, null)) {
       return supplier.buf;
     } else {
       return null;
@@ -160,7 +198,7 @@ class CellBlockBuilder {
   }
 
   private boolean buildCellBlock(final Codec codec, final CompressionCodec compressor,
-      final CellScanner cellScanner, OutputStreamSupplier supplier) throws IOException {
+      final CellScanner cellScanner, OutputStreamSupplier supplier, byte[] key) throws IOException {
     if (cellScanner == null) {
       return false;
     }
@@ -168,7 +206,26 @@ class CellBlockBuilder {
       throw new CellScannerButNoCodecException();
     }
     int bufferSize = cellBlockBuildingInitialBufferSize;
-    encodeCellsTo(supplier.get(bufferSize), cellScanner, codec, compressor);
+    OutputStream os = supplier.get(bufferSize);
+    if (key != null) {
+      // means it is familycellscanner
+      ByteBufferUtils.putInt(os, key.length);
+      os.write(key);
+    }
+    // Hack.. We should do this for any supplier -  do similar for the ByteBufOS also.(netty). Need to check
+    // the netty APIs to get the writer index and then add this detail. - TODO
+    if (key != null && supplier instanceof ByteBufferOutputStreamSupplier) {
+      // write dummy - Any better way to avoid this write??
+      ByteBufferUtils.putInt(os, 0);
+    }
+    encodeCellsTo(os, cellScanner, codec, compressor);
+    if (key != null && supplier instanceof ByteBufferOutputStreamSupplier) {
+      // put back the position here. Helps to understand at the region level when there is an MBB
+      // as to how much to be read for the current column family.
+      ByteBuffer byteBuffer =
+          ((ByteBufferOutputStreamSupplier) supplier).baos.getByteBufferWithoutFlip();
+      byteBuffer.putInt((Bytes.SIZEOF_INT + key.length), byteBuffer.position());
+    }
     if (LOG.isTraceEnabled() && bufferSize < supplier.size()) {
       LOG.trace("Buffer grew from initial bufferSize=" + bufferSize + " to " + supplier.size()
           + "; up hbase.ipc.cellblock.building.initial.buffersize?");
@@ -201,7 +258,7 @@ class CellBlockBuilder {
       }
     }
   }
-
+  
   /**
    * Puts CellScanner Cells into a cell block using passed in <code>codec</code> and/or
    * <code>compressor</code>.

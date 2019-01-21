@@ -35,7 +35,6 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayDeque;
 import java.util.Locale;
@@ -43,18 +42,29 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ThreadLocalRandom;
+
 import javax.security.sasl.SaslException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.DoNotRetryIOException;
+import org.apache.hadoop.hbase.FamilyCellScanner;
 import org.apache.hadoop.hbase.exceptions.ConnectionClosingException;
 import org.apache.hadoop.hbase.io.ByteArrayOutputStream;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController.CancellationCallback;
 import org.apache.hadoop.hbase.log.HBaseMarkers;
+import org.apache.hadoop.hbase.nio.ByteBuff;
+import org.apache.hadoop.hbase.nio.SingleByteBuff;
 import org.apache.hadoop.hbase.security.HBaseSaslRpcClient;
 import org.apache.hadoop.hbase.security.SaslUtil;
 import org.apache.hadoop.hbase.security.SaslUtil.QualityOfProtection;
+import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.CellBlockMeta;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.ConnectionHeader;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.ExceptionResponse;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.RequestHeader;
+import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.ResponseHeader;
 import org.apache.hadoop.hbase.trace.TraceUtil;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
 import org.apache.hadoop.hbase.util.ExceptionUtil;
@@ -63,20 +73,13 @@ import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.StringUtils;
+import org.apache.hbase.thirdparty.com.google.protobuf.Message;
+import org.apache.hbase.thirdparty.com.google.protobuf.Message.Builder;
+import org.apache.hbase.thirdparty.com.google.protobuf.RpcCallback;
 import org.apache.htrace.core.TraceScope;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.hbase.thirdparty.com.google.protobuf.Message;
-import org.apache.hbase.thirdparty.com.google.protobuf.Message.Builder;
-import org.apache.hbase.thirdparty.com.google.protobuf.RpcCallback;
-import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.CellBlockMeta;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.ConnectionHeader;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.ExceptionResponse;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.RequestHeader;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.ResponseHeader;
 
 /**
  * Thread that reads responses and notifies callers. Each connection owns a socket connected to a
@@ -259,6 +262,8 @@ class BlockingRpcConnection extends RpcConnection implements Runnable {
         }
         NetUtils.connect(this.socket, remoteId.getAddress(), this.rpcClient.connectTO);
         this.socket.setSoTimeout(this.rpcClient.readTO);
+        // making it blocking. Risky
+        this.socket.getChannel().configureBlocking(true);
         return;
       } catch (SocketTimeoutException toe) {
         /*
@@ -599,11 +604,34 @@ class BlockingRpcConnection extends RpcConnection implements Runnable {
    * @see #readResponse()
    */
   private void writeRequest(Call call) throws IOException {
-    ByteBuffer cellBlock = this.rpcClient.cellBlockBuilder.buildCellBlock(this.codec,
-      this.compressor, call.cells);
+    ByteBuff cellBlock = null;
+    boolean cellBlockFound = false;
+    if (call.cellsBB  != null) {
+      cellBlockFound = true;
+      cellBlock = call.cellsBB;
+    } else {
+      if (call.cells instanceof FamilyCellScanner) {
+        cellBlock = this.rpcClient.cellBlockBuilder.buildCellBlock(this.codec, this.compressor,
+          (FamilyCellScanner) call.cells);
+      } else {
+        cellBlock =
+            this.rpcClient.cellBlockBuilder.buildCellBlock(this.codec, this.compressor, call.cells);
+      }
+    }
+    // It is null so setting it.
+    if (call.cellsBB == null && cellBlock != null) {
+      call.cellsBB = cellBlock;
+    }
     CellBlockMeta cellBlockMeta;
     if (cellBlock != null) {
-      cellBlockMeta = CellBlockMeta.newBuilder().setLength(cellBlock.limit()).build();
+      org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.CellBlockMeta.Builder newBuilder =
+          CellBlockMeta.newBuilder();
+      if (call.cellsBB != null) {
+        newBuilder.setLength(cellBlock.limit() - cellBlock.position());
+      } else {
+        newBuilder.setLength(cellBlock.limit());
+      }
+      cellBlockMeta = newBuilder.build();
     } else {
       cellBlockMeta = null;
     }
@@ -622,7 +650,15 @@ class BlockingRpcConnection extends RpcConnection implements Runnable {
     // from here, we do not throw any exception to upper layer as the call has been tracked in the
     // pending calls map.
     try {
-      call.callStats.setRequestSizeBytes(write(this.out, requestHeader, call.param, cellBlock));
+      if (call.cells instanceof FamilyCellScanner || cellBlockFound) {
+        // making it blocking. Risky
+        //this.socket.getChannel().configureBlocking(true);
+        call.callStats.setRequestSizeBytes(write(this.socket.getChannel(), requestHeader,
+          call.param, cellBlock, call.cellsBB != null));
+      } else {
+        call.callStats.setRequestSizeBytes(write(this.out, requestHeader, call.param,
+          (cellBlock != null) ? ((SingleByteBuff) cellBlock).getEnclosingByteBuffer() : null));
+      }
     } catch (Throwable t) {
       if(LOG.isTraceEnabled()) {
         LOG.trace("Error while writing call, call_id:" + call.id, t);

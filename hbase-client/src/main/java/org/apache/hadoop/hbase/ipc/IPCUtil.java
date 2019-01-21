@@ -17,33 +17,46 @@
  */
 package org.apache.hadoop.hbase.ipc;
 
-import org.apache.hbase.thirdparty.com.google.common.base.Preconditions;
-import org.apache.hbase.thirdparty.com.google.protobuf.CodedOutputStream;
-import org.apache.hbase.thirdparty.com.google.protobuf.Message;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
+import java.nio.channels.GatheringByteChannel;
 
 import org.apache.hadoop.hbase.DoNotRetryIOException;
 import org.apache.hadoop.hbase.HConstants;
-import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.hadoop.hbase.exceptions.ConnectionClosingException;
+import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.CellBlockMeta;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.ExceptionResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.RPCProtos.RequestHeader;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
 import org.apache.hadoop.ipc.RemoteException;
+import org.apache.hbase.thirdparty.com.google.common.base.Preconditions;
+import org.apache.hbase.thirdparty.com.google.protobuf.CodedOutputStream;
+import org.apache.hbase.thirdparty.com.google.protobuf.Message;
+import org.apache.yetus.audience.InterfaceAudience;
 
 /**
  * Utility to help ipc'ing.
  */
 @InterfaceAudience.Private
 class IPCUtil {
+
+  public static int write(final GatheringByteChannel channel, final Message header,
+      final Message param, final ByteBuff cellBlock, final boolean cellBB) throws IOException {
+    // Must calculate total size and write that first so other side can read it all in in one
+    // swoop. This is dictated by how the server is currently written. Server needs to change
+    // if we are to be able to write without the length prefixing.
+    int totalSize = IPCUtil.getTotalSizeWhenWrittenDelimited(header, param);
+    if (cellBlock != null) {
+      totalSize += cellBlock.remaining();
+    }
+    return write(channel, header, param, cellBlock, totalSize, cellBB);
+  }
 
   /**
    * Write out header, param, and cell block if there is one.
@@ -64,6 +77,62 @@ class IPCUtil {
       totalSize += cellBlock.remaining();
     }
     return write(dos, header, param, cellBlock, totalSize);
+  }
+
+  private static int write(final GatheringByteChannel channel, final Message header,
+      final Message param, final ByteBuff cellBlock, final int totalSize, final boolean cellBB)
+      throws IOException {
+    // I confirmed toBytes does same as DataOutputStream#writeInt.
+    int size = 0;
+    if (param != null) {
+      size += param.getSerializedSize();
+      size += CodedOutputStream.computeRawVarint32Size(param.getSerializedSize());
+    }
+    if (header != null) {
+      size += header.getSerializedSize();
+      size += CodedOutputStream.computeRawVarint32Size(header.getSerializedSize());
+    }
+    ByteBuffer bb = ByteBuffer.allocate(Bytes.SIZEOF_INT + size);
+    byte[] bytes = Bytes.toBytes(totalSize);
+    //ByteBufferUtils.copyFromArrayToBuffer(bb, bytes, 0, bytes.length);
+    CodedOutputStream cos = CodedOutputStream.newInstance(bb);
+    cos.write(bytes, 0, bytes.length);
+    // This allocates a buffer that is the size of the message internally.
+    cos.writeMessageNoTag(header);
+    if (param != null) {
+      cos.writeMessageNoTag(param);
+    }
+    cos.flush();
+    cos.checkNoSpaceLeft();
+    bb.flip();
+    ByteBuffer[] bbs = null;
+    if (cellBlock != null) {
+      //bbs = cellBlock.accumulate();
+      if (cellBB) {
+        // It is always from the current position. In this case it is non zero
+        bbs = cellBlock.accumulate(cellBlock.position(), cellBlock.remaining());
+      } else {
+        bbs = cellBlock.accumulate(0, cellBlock.remaining());
+      }
+    }
+    ByteBuffer[] res = new ByteBuffer[bbs.length + 1];
+    res[0] = bb;
+    for (int i = 1; i < res.length; i++) {
+      res[i] = bbs[i - 1];
+    }
+    try {
+      // TODO : Use buffer chain concept of 64*1024
+      for (ByteBuffer buf : res) {
+        while (true) {
+          if (buf.hasRemaining()) {
+            channel.write(res);
+          }
+        }
+      }
+    } catch (Throwable e) {
+      throw e;
+    }
+    return totalSize;
   }
 
   private static int write(final OutputStream dos, final Message header, final Message param,
