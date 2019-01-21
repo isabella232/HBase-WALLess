@@ -110,9 +110,9 @@ class IPCUtil {
       //bbs = cellBlock.accumulate();
       if (cellBB) {
         // It is always from the current position. In this case it is non zero
-        bbs = cellBlock.accumulate(cellBlock.position(), cellBlock.remaining());
+        bbs = cellBlock.accumulate();
       } else {
-        bbs = cellBlock.accumulate(0, cellBlock.remaining());
+        bbs = cellBlock.accumulate();
       }
     }
     ByteBuffer[] res = new ByteBuffer[bbs.length + 1];
