@@ -126,6 +126,8 @@ class IPCUtil {
         while (true) {
           if (buf.hasRemaining()) {
             channel.write(res);
+          } else {
+            break;
           }
         }
       }
