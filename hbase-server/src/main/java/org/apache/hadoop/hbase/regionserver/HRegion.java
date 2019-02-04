@@ -291,6 +291,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
    */
   protected volatile long lastReplayedOpenRegionSeqId = -1L;
   protected volatile long lastReplayedCompactionSeqId = -1L;
+  protected boolean replicaAvailable = false;
 
   //////////////////////////////////////////////////////////////////////////////
   // Members
@@ -1010,6 +1011,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
             RegionInfo.toPrimaryRegionName(this.getRegionInfo().getRegionName()), dataPool);
       }
     }
+    this.replicaAvailable = (this.getTableDescriptor().getRegionReplication() > 1);
     this.lastReplayedOpenRegionSeqId = maxSeqId;
 
     this.writestate.setReadOnly(ServerRegionReplicaUtil.isReadOnly(this));
@@ -3651,12 +3653,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         final MiniBatchOperationInProgress<Mutation> miniBatchOp) throws IOException {
       final MemstoreEdits memstoreEdits = new MemstoreEdits();
       final Pair<Integer, MemstoreEdits> pair = new Pair<Integer, MemstoreEdits>();
+      pair.setFirst(0);
       visitBatchOperations(true, nextIndexToProcess + miniBatchOp.size(), new Visitor() {
         @Override
         public boolean visit(int index) throws IOException {
           // TODO skip this checking some thing like SKIP_WAL.
           // TODO handle cells from CP.
-          pair.setFirst(addFamilyMapToMemstoreEdit(familyCellMaps[index], memstoreEdits));
+          int len = pair.getFirst();
+          pair.setFirst(len + addFamilyMapToMemstoreEdit(familyCellMaps[index], memstoreEdits));
           return true;
         }
       });
@@ -4354,7 +4358,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // TODO this logic should be part of a WAL impl and fully plugged in with out any core changes
       // as here. It is just a PoC
       if (!memstoreEdit.isEmpty() && !this.getRegionInfo().getTable().isSystemTable()) {
-        if (this.memstoreReplicator != null) {
+        if (replicaAvailable && this.memstoreReplicator != null) {
           writeEntry = replicateCurrentBatch(memstoreEdit, 1, pair.getFirst());
         }
       }

@@ -193,9 +193,45 @@ public class MemStoreLABImpl implements MemStoreLAB {
     return copyToChunkCell(cell, c.getData(), allocOffset, cellSize);
   }
 
+  // for testing purpose. Adding the same code here. This is not needed ideally
   @Override
-  public void copyCellBB(ByteBuff cellScannerBB) {
-    
+  public void copyCellBB(ByteBuff buff) {
+    int totalSize = buff.limit() - buff.position();
+    Chunk c = null;
+    int temp = totalSize;
+    int pos = buff.position();
+    while (true) {
+      if (temp == 0) {
+        break;
+      }
+      this.lock.lock();
+      try {
+        while (temp != 0) {
+          // Try to get the chunk
+          c = getOrMakeChunk();
+          if (c != null) {
+            int freeSizeInChunk = c.getFreeSizeInChunk();
+            int lentoCopy = Math.min(freeSizeInChunk, temp);
+            if (lentoCopy > 0) {
+              int offset = c.alloc(lentoCopy);
+              buff.get(c.data, pos, offset, lentoCopy);
+              // persist then and there.
+              temp -= lentoCopy;
+              pos += lentoCopy;
+            }
+            // retire this chunk as ideally we don have space in that chunk now. This will help to
+            // get
+            // the new one
+            if (freeSizeInChunk <= 0) {
+              // retire only if the chunk is full
+              tryRetireChunk(c);
+            }
+          }
+        }
+      } finally {
+        lock.unlock();
+      }
+    }
   }
 
   /**
@@ -223,7 +259,8 @@ public class MemStoreLABImpl implements MemStoreLAB {
       // which directly return tagsLen as 0. So we avoid parsing many length components in
       // reading the tagLength stored in the backing buffer. The Memstore addition of every Cell
       // call getTagsLength().
-      return new NoTagOnHeapKeyCell(buf, offset, len);
+      //return new NoTagOnHeapKeyCell(buf, offset, len, cell.getSequenceId());
+      return new NoTagByteBufferChunkKeyValue(buf, offset, len);
     } else {
       return new ByteBufferChunkKeyValue(buf, offset, len);
     }

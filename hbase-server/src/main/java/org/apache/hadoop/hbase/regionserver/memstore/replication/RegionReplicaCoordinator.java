@@ -367,7 +367,7 @@ public class RegionReplicaCoordinator {
         // This happens only for the system tables. Ideally should solve in the caller place.
         // Just leaving this for now. Because for META and namespace table we should still mark
         // the special cells in WAL and handle it. That is yet to be done.
-        LOG.info("The pipeline is null " + specialCell + " " + this.curRegion);
+        //LOG.info("The pipeline is null " + specialCell + " " + this.curRegion);
         return null;
       }
       // Early out. Already there are not enough replicas for making the write as successful. Why to

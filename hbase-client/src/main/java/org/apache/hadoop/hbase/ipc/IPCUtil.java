@@ -107,13 +107,7 @@ class IPCUtil {
     bb.flip();
     ByteBuffer[] bbs = null;
     if (cellBlock != null) {
-      //bbs = cellBlock.accumulate();
-      if (cellBB) {
-        // It is always from the current position. In this case it is non zero
-        bbs = cellBlock.accumulate();
-      } else {
-        bbs = cellBlock.accumulate();
-      }
+      bbs = cellBlock.accumulate();
     }
     ByteBuffer[] res = new ByteBuffer[bbs.length + 1];
     res[0] = bb;
@@ -123,12 +117,8 @@ class IPCUtil {
     try {
       // TODO : Use buffer chain concept of 64*1024
       for (ByteBuffer buf : res) {
-        while (true) {
-          if (buf.hasRemaining()) {
-            channel.write(res);
-          } else {
-            break;
-          }
+        while (buf.hasRemaining()) {
+          channel.write(res);
         }
       }
     } catch (Throwable e) {
