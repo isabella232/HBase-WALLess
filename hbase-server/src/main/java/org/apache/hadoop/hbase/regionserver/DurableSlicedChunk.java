@@ -208,25 +208,17 @@ public class DurableSlicedChunk extends Chunk {
         return this.curCell;
       }
 
-      // TODO use BBUtils APIs
       @Override
       public boolean advance() throws IOException {
-        int keyLen, valLen, tagsLen;
         if (endOffset.isPresent() && this.offset >= endOffset.get()) return false;
-        int offsetTmp = this.offset;
-        if(!isEOCToBeMarked(offsetTmp)) return false;
-        keyLen = ByteBufferUtils.toInt(data, offsetTmp);
-        if (keyLen == EO_CELLS) return false;
-        offsetTmp += KeyValue.KEY_LENGTH_SIZE;
-        valLen = ByteBufferUtils.toInt(data, offsetTmp);
-        offsetTmp += keyLen + valLen + Bytes.SIZEOF_INT;
-        // Read tags
-        // TODO : Revisit this
-        /*tagsLen = ByteBufferUtils.readAsInt(data, offsetTmp, Tag.TAG_LENGTH_SIZE);
-        offsetTmp += (Tag.TAG_LENGTH_SIZE + tagsLen);*/
-        long seqId = ByteBufferUtils.toLong(data, offsetTmp);
-        this.curCell = new ByteBufferKeyValue(data, this.offset, offsetTmp - this.offset, seqId);
-        this.offset = offsetTmp + MemStoreLAB.SIZE_OF_CELL_SEQ_ID;
+        if(!isEOCToBeMarked(this.offset)) return false;
+        // Read the cell length
+        int cellLen = ByteBufferUtils.toInt(data, this.offset);
+        int cellOffset = this.offset + Bytes.SIZEOF_INT;
+        if (cellLen == EO_CELLS) return false;
+        long seqId = ByteBufferUtils.toLong(data, cellOffset + cellLen);
+        this.curCell = new ByteBufferKeyValue(data, cellOffset, cellLen, seqId);
+        this.offset = cellOffset + cellLen + MemStoreLAB.SIZE_OF_CELL_SEQ_ID;
         return true;
       }
     };

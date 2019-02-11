@@ -93,12 +93,13 @@ public class KeyValueCodec implements Codec {
       }
       int len = buf.getInt();
       ByteBuffer bb = buf.asSubByteBuffer(len);
-      if (bb.isDirect()) {
-        this.current = createCell(bb, bb.position(), len);
-      } else {
-        this.current = createCell(bb.array(), bb.arrayOffset() + bb.position(), len);
-      }
+      int curPos = bb.position();
       skip(len);
+      if (bb.isDirect()) {
+        this.current = createCell(bb, curPos, len);
+      } else {
+        this.current = createCell(bb.array(), bb.arrayOffset() + curPos, len);
+      }
       return true;
     }
 

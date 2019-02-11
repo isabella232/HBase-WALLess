@@ -18,6 +18,7 @@
 package org.apache.hadoop.hbase.regionserver;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -28,10 +29,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellScanner;
 import org.apache.hadoop.hbase.ExtendedCell;
-import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.KeyValueUtil;
 import org.apache.hadoop.hbase.nio.ByteBuff;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.ObjectIntPair;
 import org.apache.yetus.audience.InterfaceAudience;
 
@@ -74,9 +75,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
   public List<Cell> copyCellsInto(List<Cell> cells) {
     int totalSize = 0;
     for (Cell cell : cells) {
-      totalSize += serializedSizeOf(cell);
-      // Currently seqId being written after every cell. May be waste of space (from tests).
-      totalSize += SIZE_OF_CELL_SEQ_ID;// We need to serialize seqId also for durable MSLABs
+      totalSize += sizeNeedForCell(serializedSizeOf(cell));
     }
     DurableSlicedChunk c = null;
     int allocOffset = 0;
@@ -105,6 +104,12 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
       }
     }
     return copyCellsToChunk(cells, c, allocOffset, writeEntry);
+  }
+
+  private int sizeNeedForCell(int cellLen) {
+    // We need to serialize seqId
+    // We need to serialize cell length (Excluding seqId length) also for durable MSLABs
+    return cellLen + SIZE_OF_CELL_SEQ_ID + Bytes.SIZEOF_INT;
   }
 
   /**
@@ -167,15 +172,20 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
   private List<Cell> copyCellsToChunk(List<Cell> cells, DurableSlicedChunk c, int allocOffset,
       WriteEntry writeEntry) {
     List<Cell> toReturn = new ArrayList<>(cells.size());
-    int cellSize;
+    int cellLen;
     for (Cell cell : cells) {
-      cellSize = serializedSizeOf(cell);
-      toReturn.add(copyToChunkCell(cell, c.getData(), allocOffset, cellSize));
-      allocOffset += cellSize;
-      allocOffset += SIZE_OF_CELL_SEQ_ID;// We wrote seqId also.
+      cellLen = serializedSizeOf(cell);
+      toReturn.add(copyToChunkCell(cell, c.getData(), allocOffset, cellLen));
+      allocOffset += sizeNeedForCell(cellLen);
     }
     persistWrite(writeEntry);
     return toReturn;
+  }
+
+  protected Cell copyToChunkCell(Cell cell, ByteBuffer buf, int offset, int len) {
+    // First write the cellLen 4 bytes.
+    ByteBufferUtils.putInt(buf, offset, len);
+    return super.copyToChunkCell(cell, buf, offset + Bytes.SIZEOF_INT, len);
   }
 
   private List<Cell> copyCellsIntoMultiChunks(List<Cell> cells) {
@@ -190,7 +200,7 @@ public class DurableMemStoreLABImpl extends MemStoreLABImpl {
     this.lock.lock();
     try {
       for (int i = 0; i < cells.size(); i++) {
-        int cellSize = serializedSizeOf(cells.get(i)) + SIZE_OF_CELL_SEQ_ID;
+        int cellSize = sizeNeedForCell(serializedSizeOf(cells.get(i)));
         ObjectIntPair<DurableSlicedChunk> chunkAndOffset = allocChunk(cellSize);
         offsets[i] = chunkAndOffset;
         if (lastChunk == null || lastChunk != chunkAndOffset.getFirst()) {

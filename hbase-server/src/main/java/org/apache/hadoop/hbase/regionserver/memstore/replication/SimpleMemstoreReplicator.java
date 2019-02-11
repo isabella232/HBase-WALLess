@@ -44,6 +44,7 @@ import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
 import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
+import org.apache.hadoop.hbase.codec.KeyValueCodecWithTagsAndSeqNo;
 import org.apache.hadoop.hbase.exceptions.TimeoutIOException;
 import org.apache.hadoop.hbase.ipc.HBaseRpcController;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
@@ -85,6 +86,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     // fails. Adding a new config may be needed. As of now just making this to 2. And the multiplier to 1.
     this.conf.setInt("hbase.client.serverside.retries.multiplier", 1);
     this.conf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, 2);
+    // We need to write the seqId also along with all cells for the memstore replication
+    this.conf.set(HConstants.RPC_CODEC_CONF_KEY,
+        KeyValueCodecWithTagsAndSeqNo.class.getCanonicalName());
 
     // TODO : Better math considering Regions count also? As per the cur parallel model, this is enough
     // use the regular RPC timeout for replica replication RPC's
