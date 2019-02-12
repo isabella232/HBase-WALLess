@@ -166,7 +166,7 @@ public class DurableSlicedChunk extends Chunk {
    */
   void markEndOfCells() {
     // We move from one chunk to another. Mark in the prev chunk at the end of last cell.
-    // Write a Key length as -1 to denote this is the end of cells here. In replay we
+    // Write a Cell length of 0 to denote this is the end of cells here. In replay we
     // consider this.
     if (isEOCToBeMarked(this.nextFreeOffset.get())) {
       ByteBufferUtils.putInt(this.data, this.nextFreeOffset.get(), EO_CELLS);

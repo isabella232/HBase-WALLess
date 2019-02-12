@@ -36,7 +36,6 @@ import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreEdits;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.regionserver.memstore.replication.MemstoreReplicationKey;
 import org.apache.hadoop.hbase.shaded.protobuf.ProtobufUtil;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
@@ -53,7 +52,7 @@ public class MemstoreReplicationProtobufUtil {
     Map<byte[], List<Cell>> allCells = new TreeMap<byte[], List<Cell>>(Bytes.BYTES_COMPARATOR);
     ReplicateMemstoreRequest.Builder reqBuilder = ReplicateMemstoreRequest.newBuilder();
     int replicasOffsered = 0;
-    int totalCellSizeInCurrBatch = 0;
+    long maxSeqId = 0;
     for (MemstoreReplicationEntry memstoreEntry : entries) {
       MemstoreReplicationKey key = memstoreEntry.getMemstoreReplicationKey();
       MemstoreEdits edit = memstoreEntry.getMemstoreEdits();
@@ -67,18 +66,13 @@ public class MemstoreReplicationProtobufUtil {
         }
         list.addAll(entry.getValue());
       }
-      MemstoreReplicaProtos.MemstoreReplicationEntry.Builder entryBuilder =
-          MemstoreReplicaProtos.MemstoreReplicationEntry.newBuilder();
-      entryBuilder.setAssociatedCellCount(edit.getSize());
-      entryBuilder.setSequenceId(key.getSequenceId());
-      reqBuilder.addEntry(entryBuilder.build());
-      totalCellSizeInCurrBatch += memstoreEntry.getCurrentMemstoreEntrySize();
+      maxSeqId = Math.max(maxSeqId, key.getSequenceId());
       replicasOffsered = key.getReplicasOffered();// Its ok to overwrite. Write comments.. Handle.
                                                   // TODO
     }
     reqBuilder.setEncodedRegionName(UnsafeByteOperations.unsafeWrap(encodedRegionName));
     reqBuilder.setReplicasOffered(replicasOffsered);
-    reqBuilder.setTotalCellSizeInCurrBatch(totalCellSizeInCurrBatch);
+    reqBuilder.setMaxSequenceId(maxSeqId);
     for (Pair<Integer, ServerName> replicaId : pipeline) {
       reqBuilder.addReplicas(replicaId.getFirst());
       if (specialCell) {

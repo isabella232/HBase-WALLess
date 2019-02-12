@@ -74,7 +74,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.ByteBufferUtil;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -168,7 +167,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClientProtos.CoprocessorServiceCall;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.RegionLoad;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.ClusterStatusProtos.StoreSequenceId;
-import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.MemstoreReplicationEntry;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreRequest;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.MemstoreReplicaProtos.ReplicateMemstoreResponse;
 import org.apache.hadoop.hbase.shaded.protobuf.generated.SnapshotProtos.SnapshotDescription;
@@ -184,7 +182,6 @@ import org.apache.hadoop.hbase.shaded.protobuf.generated.WALProtos.StoreDescript
 import org.apache.hadoop.hbase.snapshot.SnapshotDescriptionUtils;
 import org.apache.hadoop.hbase.snapshot.SnapshotManifest;
 import org.apache.hadoop.hbase.trace.TraceUtil;
-import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.CancelableProgressable;
 import org.apache.hadoop.hbase.util.ClassSize;
@@ -2755,12 +2752,12 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
       if (async) {
         res.setFirst(this.memstoreReplicator.replicateAsync(memstoreReplicationKey, memstoreEdits,
-          replicaCordinator, KeyValueUtil.length(kv), true));
+          replicaCordinator, true));
         // Anoop : TODO No need to check response.getFailedReplicasCount here?
         return res;
       }
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
-        memstoreEdits, replicaCordinator, 0, true);
+        memstoreEdits, replicaCordinator, true);
       res.setSecond(memstoreReplicationKey.getWriteEntry());
       if (response.getFailedReplicasCount() > 0) {
         // this failedReplicas cannot be modified. So better
@@ -2787,7 +2784,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
         // As
         // of now leave it this way.
         ReplicateMemstoreResponse response = this.memstoreReplicator
-            .replicate(memstoreReplicationKey, memstoreEdits, replicaCordinator, 0, true);
+            .replicate(memstoreReplicationKey, memstoreEdits, replicaCordinator, true);
         writeNum = memstoreReplicationKey.getWriteEntry();
         if (response.getFailedReplicasCount() > 0) {
           List<Integer> failedReplicas = response.getFailedReplicasList();
@@ -3649,23 +3646,19 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       return walEdits;
     }
 
-    public Pair<Integer, MemstoreEdits> buildMemstoreEdit(
+    public MemstoreEdits buildMemstoreEdit(
         final MiniBatchOperationInProgress<Mutation> miniBatchOp) throws IOException {
       final MemstoreEdits memstoreEdits = new MemstoreEdits();
-      final Pair<Integer, MemstoreEdits> pair = new Pair<Integer, MemstoreEdits>();
-      pair.setFirst(0);
       visitBatchOperations(true, nextIndexToProcess + miniBatchOp.size(), new Visitor() {
         @Override
         public boolean visit(int index) throws IOException {
           // TODO skip this checking some thing like SKIP_WAL.
           // TODO handle cells from CP.
-          int len = pair.getFirst();
-          pair.setFirst(len + addFamilyMapToMemstoreEdit(familyCellMaps[index], memstoreEdits));
+          addFamilyMapToMemstoreEdit(familyCellMaps[index], memstoreEdits);
           return true;
         }
       });
-      pair.setSecond(memstoreEdits);
-      return pair;
+      return memstoreEdits;
     }
 
     /**
@@ -3753,20 +3746,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
     }
 
-    private int addFamilyMapToMemstoreEdit(Map<byte[], List<Cell>> familyMap,
+    private void addFamilyMapToMemstoreEdit(Map<byte[], List<Cell>> familyMap,
         MemstoreEdits memstoreEdits) {
       Set<Entry<byte[], List<Cell>>> keySet = familyMap.entrySet();
-      int length = 0;
       for (Entry<byte[], List<Cell>> entry : keySet) {
         byte[] key = entry.getKey();
         List<Cell> edits = entry.getValue();
-        int listSize = edits.size();
-        for (int i = 0; i < listSize; i++) {
-          length += KeyValueUtil.length(edits.get(i));
-        }
         memstoreEdits.add(key, edits);
       }
-      return length;
     }
   }
 
@@ -4333,8 +4320,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // STEP 3. Build WAL edit
       List<Pair<NonceKey, WALEdit>> walEdits = batchOp.buildWALEdits(miniBatchOp);
       // Build MemstoreEdit to be replicated to replica regions.
-      Pair<Integer, MemstoreEdits> pair = batchOp.buildMemstoreEdit(miniBatchOp);
-      memstoreEdit = pair.getSecond();
+      memstoreEdit = batchOp.buildMemstoreEdit(miniBatchOp);
 
       // STEP 4. Append the WALEdits to WAL and sync.
       for(Iterator<Pair<NonceKey, WALEdit>> it = walEdits.iterator(); it.hasNext();) {
@@ -4359,7 +4345,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // as here. It is just a PoC
       if (!memstoreEdit.isEmpty() && !this.getRegionInfo().getTable().isSystemTable()) {
         if (replicaAvailable && this.memstoreReplicator != null) {
-          writeEntry = replicateCurrentBatch(memstoreEdit, 1, pair.getFirst());
+          writeEntry = replicateCurrentBatch(memstoreEdit, 1);
         }
       }
       // if null create one
@@ -4400,7 +4386,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
   }
 
   private WriteEntry replicateCurrentBatch(MemstoreEdits memstoreEdits,
-      int replicasOffered, int size) throws IOException {
+      int replicasOffered) throws IOException {
     MemstoreReplicationKey memstoreReplicationKey = new MemstoreReplicationKey(
         this.getRegionInfo().getEncodedNameAsBytes(), replicasOffered);
     // replicasOffered is +1ed considering this region write will be success now.
@@ -4408,7 +4394,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // ensure that we do things in order (probably easier for flush special entry? We need
       // that to be done.)
       ReplicateMemstoreResponse response = this.memstoreReplicator.replicate(memstoreReplicationKey,
-          memstoreEdits, replicaCordinator, size, false);
+          memstoreEdits, replicaCordinator, false);
       checkIfMinWriteReplicSatisfied(response);
       // TODO : need to handle all exceptions - make things synchronous in terms of
       // replication to all the replicas. End the mvcc in case of exception
@@ -4513,14 +4499,8 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       ByteBuff cellScannerBB, int replicasOffered) throws IOException {
     startRegionOperation(Operation.REPLAY_BATCH_MUTATE);
     try {
-      List<MemstoreReplicationEntry> entries = request.getEntryList();
-      long[] seqIds = new long[entries.size()];
       //TODO : also send marker RPCs with special flags. So that we can isolate it and process it.
       // I think that is how it is already
-      int entryCounter = 0;
-      for (MemstoreReplicationEntry entry : entries) {
-        seqIds[entryCounter++] = entry.getSequenceId();
-      }
       // TODO We will be in replay mode. This will never happen. Do we need to check this for
       // replication also?
       // checkReadOnly();
@@ -4532,8 +4512,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // We wont be calling other methods which required write row locks directly on this replica
       // regions.(Like checkAndPut, increment etc).. Only plain Cell write op will come to here. We
       // don't really worry abt what kind of Mutation it is.
-      long maxSeqId = seqIds[seqIds.length - 1];
-      int totalCellSize = request.getTotalCellSizeInCurrBatch();
+      long maxSeqId = request.getMaxSequenceId();
       Map<byte[], ByteBuff> data = new TreeMap<byte[], ByteBuff>(Bytes.BYTES_COMPARATOR);
       int pos = cellScannerBB.position();
       while (pos < cellScannerBB.limit()) {
@@ -4554,7 +4533,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
           // to indicate what is the format to deserialize the cells.
           Cell kv = new ByteBufferKeyValue(bb, bb.position() + Bytes.SIZEOF_INT,
               (len - Bytes.SIZEOF_INT));
-          handleMetaMarkerCell(kv, replicasOffered, seqIds[0]);
+          handleMetaMarkerCell(kv, replicasOffered, maxSeqId);
           // Handle meta marker here. Assume it is always processed stand alone
           return;
         }
@@ -4563,21 +4542,15 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       }
       this.updatesLock.readLock().lock();
       try {
-        // Assuming now only one store.
-        // TODO : We need to seperate this also. Seperate sizes to be passed per memstore.
-        MemStoreSizing sizeAccounting = new MemStoreSizing(totalCellSize, 0, totalCellSize);
-        List<HStore> stores = this.getStores();
-        Set<byte[]> keySet = data.keySet();
-        for (byte[] fam : keySet) {
-          for (HStore store : stores) {
-            if (Bytes.equals(fam, Bytes.toBytes(store.getColumnFamilyName()))) {
-              store.persist(data.get(fam), sizeAccounting);
-            }
-          }
+        for (Entry<byte[], ByteBuff> cfData : data.entrySet()) {
+          HStore store = this.getStore(cfData.getKey());
+          int cfDataLen = cfData.getValue().remaining();
+          MemStoreSizing sizeAccounting = new MemStoreSizing(cfDataLen, 0, cfDataLen);
+          store.persist(cfData.getValue(), sizeAccounting);
+          // We know the size so increment the memstoreSizing directly
+          // Update the currentMaxSeqId
+          this.incMemStoreSize(sizeAccounting);
         }
-        // We know the size so increment the memstoreSizing directly
-        // Update the currentMaxSeqId
-        this.incMemStoreSize(sizeAccounting);
         this.currentMaxSeqId.getAndAccumulate(maxSeqId, (x, y) -> Math.max(x, y));
       } finally {
         this.updatesLock.readLock().unlock();
@@ -4587,39 +4560,6 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
       // TODO metrics should be updated but need a new one.. Should not directly affect the normal
       // put/delete metrics.
     }
-  }
-
-  private  long[] splitCells(ReplicateMemstoreRequest request, List<Cell> cells,
-      NavigableMap<byte[], List<Cell>> familyMap, int replicasOffered) throws IOException {
-    List<MemstoreReplicationEntry> entries = request.getEntryList();
-    long[] seqIds = new long[entries.size()];
-    int cellCounter = 0;
-    int entryCounter = 0;
-    for (MemstoreReplicationEntry entry : entries) {
-      seqIds[entryCounter++] = entry.getSequenceId();
-      int count = entry.getAssociatedCellCount();
-      for (int i = 0; i < count; i++) {
-        Cell cell = cells.get(cellCounter);
-        cellCounter++;
-        if (cell == null) {
-          throw new ArrayIndexOutOfBoundsException("Expected=" + count + ", index=" + i);
-        }
-        if (CellUtil.matchingFamily(cell, WALEdit.METAFAMILY)) {
-          handleMetaMarkerCell(cell, replicasOffered, entry.getSequenceId());
-        } else {
-          byte[] fam = CellUtil.cloneFamily(cell);
-          List<Cell> list = familyMap.get(fam);
-          if (list == null) {
-            list = new ArrayList<Cell>();
-            familyMap.put(fam, list);
-          }
-          list.add(cell);
-        }
-        CellUtil.setSequenceId(cell, entry.getSequenceId());
-      }
-    }
-    Arrays.sort(seqIds);
-    return seqIds;
   }
 
   private void handleMetaMarkerCell(Cell cell, int replicasOffered, long seqId)

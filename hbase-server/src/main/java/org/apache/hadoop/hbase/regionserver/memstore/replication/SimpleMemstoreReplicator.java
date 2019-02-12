@@ -128,10 +128,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   @Override
   public ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
-      MemstoreEdits memstoreEdits, RegionReplicaCoordinator replicaCordinator, int size, boolean metaMarkerReq)
+      MemstoreEdits memstoreEdits, RegionReplicaCoordinator replicaCordinator, boolean metaMarkerReq)
       throws IOException {
     CompletableFuture<ReplicateMemstoreResponse> future =
-        offerForReplicate(memstoreReplicationKey, memstoreEdits, replicaCordinator, size, metaMarkerReq);
+        offerForReplicate(memstoreReplicationKey, memstoreEdits, replicaCordinator, metaMarkerReq);
     try {
       return future.get(replicationTimeout, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
@@ -145,9 +145,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   private CompletableFuture<ReplicateMemstoreResponse> offerForReplicate(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaCoordinator replicaCordinator, int size, boolean metaMarkerReq) throws IOException {
+      RegionReplicaCoordinator replicaCordinator, boolean metaMarkerReq) throws IOException {
     MemstoreReplicationEntry entry = new MemstoreReplicationEntry(memstoreReplicationKey,
-        memstoreEdits, size, metaMarkerReq);
+        memstoreEdits, metaMarkerReq);
     CompletableFuture<ReplicateMemstoreResponse> future = replicaCordinator.append(entry);
     offer(replicaCordinator, entry);
     return future;
@@ -156,9 +156,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
   @Override
   public CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaCoordinator replicaCordinator, int size, boolean metaMarkerReq) throws IOException {
+      RegionReplicaCoordinator replicaCordinator, boolean metaMarkerReq) throws IOException {
     // ideally the same should be done for both async and sync case. But it does not work so.
-    return offerForReplicate(memstoreReplicationKey, memstoreEdits, replicaCordinator, size,
+    return offerForReplicate(memstoreReplicationKey, memstoreEdits, replicaCordinator,
         metaMarkerReq);
   }
 
@@ -438,9 +438,6 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
       } else {
         MemstoreReplicaProtos.ReplicateMemstoreRequest.Builder reqBuilder =
             MemstoreReplicaProtos.ReplicateMemstoreRequest.newBuilder();
-        for (int i = 0; i < request.getRequest().getEntryCount(); i++) {
-          reqBuilder.addEntry(request.getRequest().getEntry(i));
-        }
         // This needs to be done. Otherwise we miss the actual replica pipeline details itself
         // and in the next replica the request is empty and we just don't replicate at all.
         for (int i = 0; i < request.getRequest().getReplicasCount(); i++) {
@@ -449,10 +446,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
         for (int i = 0; i < request.getRequest().getLocationsCount(); i++) {
           reqBuilder.addLocations(request.getRequest().getLocations(i));
         }
-        reqBuilder.setTotalCellSizeInCurrBatch(request.getRequest().getTotalCellSizeInCurrBatch());
         reqBuilder.setEncodedRegionName(
           UnsafeByteOperations.unsafeWrap(location.getRegion().getEncodedNameAsBytes()));
         reqBuilder.setReplicasOffered(request.getRequest().getReplicasOffered() + 1);
+        reqBuilder.setMaxSequenceId(request.getRequest().getMaxSequenceId());
         return stub.replicateMemstore(controller, reqBuilder.build());
       }
     }

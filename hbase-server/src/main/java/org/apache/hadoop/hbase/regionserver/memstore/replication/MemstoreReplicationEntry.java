@@ -34,19 +34,12 @@ public class MemstoreReplicationEntry {
   private CompletableFuture<ReplicateMemstoreResponse> future;
   private long seq;
   private boolean metaMarkerReq;
-  private int currentSize;
 
   public MemstoreReplicationEntry(MemstoreReplicationKey memstoreRepKey,
       MemstoreEdits memstoreEdits, boolean metaMarkerReq) {
-    this(memstoreRepKey, memstoreEdits, 0, metaMarkerReq);
-  }
-  
-  public MemstoreReplicationEntry(MemstoreReplicationKey memstoreRepKey,
-      MemstoreEdits memstoreEdits, int size, boolean metaMarkerReq) {
     this.memstoreReplicationKey = memstoreRepKey;
     this.memstoreEdits = memstoreEdits;
     this.metaMarkerReq = metaMarkerReq;
-    this.currentSize = size;
   }
 
   public MemstoreReplicationKey getMemstoreReplicationKey() {
@@ -80,9 +73,5 @@ public class MemstoreReplicationEntry {
 
   public boolean isMetaMarkerReq() {
     return this.metaMarkerReq;
-  }
-
-  public int getCurrentMemstoreEntrySize() {
-    return this.currentSize;
   }
 }

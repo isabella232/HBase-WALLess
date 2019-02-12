@@ -150,6 +150,7 @@ public interface MemStore {
    */
   default void stopReplayingFromWAL(){return;}
 
+  // TODO this is not implemented in CompactingMS
   default long addPersistedCells(Optional<Long> readPnt, MemStoreSizing memStoreSize){ return -1; }
 
   void persist(List<Cell> cells, MemStoreSizing sizeAccounting);

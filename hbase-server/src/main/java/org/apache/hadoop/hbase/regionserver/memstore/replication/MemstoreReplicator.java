@@ -37,7 +37,7 @@ public interface MemstoreReplicator {
    */
   ReplicateMemstoreResponse replicate(MemstoreReplicationKey memstoreReplicationKey,
       MemstoreEdits memstoreEdits, RegionReplicaCoordinator replicaCordinator,
-      int size, boolean metaMarkerReq) throws IOException;
+      boolean metaMarkerReq) throws IOException;
 
   /**
    * Called by a replica region to replicate to its next replicas. Note that we get the
@@ -59,7 +59,7 @@ public interface MemstoreReplicator {
   // Make this async version also to generate the mvcc within itself
   CompletableFuture<ReplicateMemstoreResponse> replicateAsync(
       MemstoreReplicationKey memstoreReplicationKey, MemstoreEdits memstoreEdits,
-      RegionReplicaCoordinator replicaCordinator, int size, boolean metaMarkerReq) throws IOException;
+      RegionReplicaCoordinator replicaCordinator, boolean metaMarkerReq) throws IOException;
 
   /**
    * Picks up the next replication thread available when requested by the caller
