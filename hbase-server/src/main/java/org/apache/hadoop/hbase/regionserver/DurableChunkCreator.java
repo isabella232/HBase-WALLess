@@ -45,7 +45,7 @@ private String path = null;
   // as in mnemonic's ChunkBufferNGTest
   // Test this new unique Ids concepts.
   private NonVolatileMemAllocator allocator;
-  private DurableChunkRetrieverV2 retriever = null;
+  private DurableChunkRetriever retriever = null;
   private long durableBigChunkSize;
   private int curChunkIndex = 0;
 
@@ -131,7 +131,7 @@ private String path = null;
   @Override
   protected void initializePools(int chunkSize, long globalMemStoreSize, float poolSizePercentage,
       float indexChunkSizePercentage, float initialCountPercentage, HRegionServer hrs) {
-    retriever = new DurableChunkRetrieverV2(hrs);
+    retriever = new DurableChunkRetriever(hrs);
     hrs.setRetriever(retriever);
     super.initializePools(chunkSize, globalMemStoreSize, poolSizePercentage,
       indexChunkSizePercentage, initialCountPercentage, hrs);

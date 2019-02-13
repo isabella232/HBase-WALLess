@@ -17,212 +17,182 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
-import java.io.File;
-import java.nio.ByteBuffer;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
+import java.util.NavigableMap;
+import java.util.NavigableSet;
+import java.util.Optional;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.TreeSet;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.ExtendedCell;
-import org.apache.hadoop.hbase.util.ByteBufferUtils;
+import org.apache.hadoop.hbase.CellScanner;
+import org.apache.hadoop.hbase.client.RegionInfo;
+import org.apache.hadoop.hbase.regionserver.ChunkCreator.MemStoreChunkPool;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
-import org.apache.mnemonic.ChunkBuffer;
-import org.apache.mnemonic.DurableChunk;
-import org.apache.mnemonic.NonVolatileMemAllocator;
-import org.apache.mnemonic.Reclaim;
-import org.apache.mnemonic.Utils;
 import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-// TODO Remove this and then rename DurableChunkRetrieverV2 to DurableChunkRetriever.
 @InterfaceAudience.Private
 public class DurableChunkRetriever {
-  private Map<Pair<String, String>, Map<Short, ByteBuffer>> regionFamilyChunks =
-      new ConcurrentHashMap<Pair<String, String>, Map<Short, ByteBuffer>>();
-  
-  private Map<Pair<String, String>, List<Cell>> regionFamilyCells =
-      new ConcurrentHashMap<Pair<String, String>, List<Cell>>();
-  private static final Log LOG = LogFactory.getLog(DurableChunkRetriever.class);
-  private String durablePath;
-  private NonVolatileMemAllocator allocator;
-  // Offset to track the allocation inside the bigChunk.
-  private AtomicLong offset = new AtomicLong(0);
-  private int maxCount;
-  // if we have a bigger value this does not work. So creating some random value for now
-  // as in mnemonic's ChunkBufferNGTest
-  private long uniqueId = 23l;
-  private int chunkSize;
-  private static DurableChunkRetriever INSTANCE;
 
-  // TODO : How faster we  bring back the data ? Does it matter here??
-  public static void initialize(String path, int chunkSize, int maxCount) {
-    DurableChunkRetriever retriever = INSTANCE;
-    if (retriever != null) return;
-    if (new File(path).exists()) {
-      INSTANCE = new DurableChunkRetriever(path, chunkSize, maxCount);
+  private static final Logger LOG = LoggerFactory.getLogger(DurableChunkRetriever.class);
+
+  private static final CellScanner EMPTY_SCANNER = new CellScanner() {
+    @Override
+    public Cell current() {
+      return null;
     }
-  }
 
-  public static DurableChunkRetriever getInstance() {
-    return INSTANCE;
+    @Override
+    public boolean advance() throws IOException {
+      return false;
+    }
+  };
+
+  // TODO need some chore service which will check against HM whether now these kept chunks can be
+  // released. It can so happen that the replica regions are there many RS which all restarted. The
+  // primary replica will get opened in one of the RS. Then in other RS also the chunks can be
+  // released. Chore will check to HM whether the primary is up and Good. If so release chunks.
+  private NavigableMap<byte[], NavigableMap<byte[], List<DurableSlicedChunk>>> chunks =
+      new TreeMap<>(Bytes.BYTES_COMPARATOR);
+  private NavigableSet<byte[]> regionsToIgnore = new TreeSet<>(Bytes.BYTES_COMPARATOR);
+  private HRegionServer hrs;
+
+  public DurableChunkRetriever(HRegionServer hrs) {
+    this.hrs = hrs;
   }
-  
-  DurableChunkRetriever(String path, int chunkSize, int maxCount) {
-    this.durablePath = path;
-    this.maxCount = maxCount;
+ 
+  public boolean appendChunk(Pair<byte[], byte[]> regionStore, DurableSlicedChunk chunk) {
+    byte[] primaryRegionName = null;
     try {
-      allocator = new NonVolatileMemAllocator(
-          Utils.getNonVolatileMemoryAllocatorService("pmem"), 1l, durablePath, false);
-      // TODO : Understand what is this
-      allocator.setChunkReclaimer(new Reclaim<Long>() {
-        @Override
-        public boolean reclaim(Long mres, Long sz) {
+      // Verify the case where a replica region was hosted and the primary is trying to be assigned
+      // to that server because we found the existing AEP chunk file. Whether the primary region
+      // name and replica region name mapping is happening fine
+      primaryRegionName = RegionInfo.toPrimaryRegionName(regionStore.getFirst());
+    } catch (IOException e) {
+      // Do not expect this to happen.
+    }
+    NavigableMap<byte[], List<DurableSlicedChunk>> storeVsChunks = this.chunks
+        .get(primaryRegionName);
+    if (storeVsChunks != null) {
+      // Already we know this region is not online in other servers. Means we need to keep it for
+      // later replay!
+      addChunkUnderStore(regionStore.getSecond(), chunk, storeVsChunks);
+    } else {
+      if (this.regionsToIgnore.contains(primaryRegionName)) {
+        // We already checked abt this region and see it is already online in another RS. So just
+        // ignore this chunk. It can be used by any one now.
+        return false;
+      } else {
+        // TODO: We are doing for every region. Should we read through all the chunks and collect the
+        // region names and then issue one shot to the master?
+        boolean toBeKept =
+            (this.hrs != null) ? !(this.hrs.atleastOneReplicaGood(regionStore.getFirst())) : true;
+        if (toBeKept) {
+          storeVsChunks = new TreeMap<>(Bytes.BYTES_COMPARATOR);
+          // the chunks are always stored with the primary region name
+          this.chunks.put(primaryRegionName, storeVsChunks);
+          addChunkUnderStore(regionStore.getSecond(), chunk, storeVsChunks);
+        } else {
+          this.regionsToIgnore.add(primaryRegionName);
           return false;
         }
-      });
-      // this.uniqueId = this.durablePath.hashCode();
-      this.chunkSize = chunkSize;
-      // TODO : fetch this on RS start itself or after RS is initialized and before region opening
-      // happens?
-      retrieveDurableChunks();
-    } catch (Throwable t) {
-      throw new RuntimeException("Exception while retrieving the chunks", t);
+      }
     }
+    return true;
   }
 
-  private void retrieveDurableChunks() {
-    if (allocator != null) {
-      // retrieve the chunk
-      long hanlderId = allocator.getHandler(uniqueId);
-      DurableChunk<NonVolatileMemAllocator> durableChunk = allocator.retrieveChunk(hanlderId);
-      if (durableChunk != null) {
-        for (int i = 0; i < maxCount; i++) {
-          long offsetToUse = this.offset.getAndAdd(chunkSize);
-          ChunkBuffer chunkBuffer = durableChunk.getChunkBuffer(offsetToUse, chunkSize);
-          if (chunkBuffer != null) {
-            ByteBuffer buffer = chunkBuffer.get();
-            int chunkId = buffer.getInt(0);
-            int inUse = buffer.getInt(DurableSlicedChunk.OFFSET_TO_SEQID
-                + DurableSlicedChunk.SIZE_OF_SEQID + Bytes.SIZEOF_INT);
-            int offset = DurableSlicedChunk.OFFSET_TO_SEQID + DurableSlicedChunk.SIZE_OF_SEQID
-                + DurableSlicedChunk.SIZE_OF_OFFSETMETA;
-            if (inUse != 0) {
-              int regionNameLength = buffer.getInt(offset);
-              String regionName = ByteBufferUtils.toStringBinary(buffer, offset + Bytes.SIZEOF_INT,
-                regionNameLength);
-              int familyNameLength = buffer.getInt(offset + Bytes.SIZEOF_INT + regionNameLength);
-              String familyName = ByteBufferUtils.toStringBinary(buffer,
-                offset + 2 * Bytes.SIZEOF_INT + regionNameLength, familyNameLength);
-              Pair<String, String> pair = new Pair<String, String>(regionName, familyName);
-              short chunkSeqId = buffer.getShort(DurableSlicedChunk.OFFSET_TO_SEQID);
-              Map<Short, ByteBuffer> chunkList = this.regionFamilyChunks.get(pair);
-              if (chunkList == null) {
-                // TODO : this needs refactor. We need to collect cells per family. so we need
-                // unique Id per store
-                chunkList = new TreeMap<Short, ByteBuffer>();
-              }
-              this.regionFamilyChunks.put(pair, chunkList);
-              chunkList.put(chunkSeqId, buffer);
-            } else {
-              if (LOG.isTraceEnabled()) {
-                LOG.trace("Chunk with id " + chunkId + " not in use");
-              }
-            }
+  private void addChunkUnderStore(byte[] store, DurableSlicedChunk chunk,
+      NavigableMap<byte[], List<DurableSlicedChunk>> storeVsChunks) {
+    List<DurableSlicedChunk> storeChunks = storeVsChunks.get(store);
+    if (storeChunks == null) {
+      storeChunks = new ArrayList<>();
+      storeVsChunks.put(store, storeChunks);
+    }
+    storeChunks.add(chunk);
+  }
+
+  public CellScanner getCellScanner(byte[] region, byte[] store) {
+    List<DurableSlicedChunk> storeChunks = getSortedChunks(region, store);
+    if (storeChunks.isEmpty()) {
+      return EMPTY_SCANNER;
+    }
+    final Iterator<DurableSlicedChunk> chunksItr = storeChunks.iterator();
+    final DurableSlicedChunk firstChunk = chunksItr.next();
+    Pair<Integer, Integer> cellsOffsetMeta = firstChunk.getCellsOffsetMeta();
+    LOG.debug("For region : {} store : {} cells offset meta : {}", Bytes.toStringBinary(region),
+        Bytes.toStringBinary(store), cellsOffsetMeta);
+    CellScanner scanner = new CellScanner() {
+      private CellScanner curChunkCellScanner = firstChunk
+          .getCellScanner(Optional.of(cellsOffsetMeta.getSecond()));
+
+      @Override
+      public Cell current() {
+        return this.curChunkCellScanner.current();
+      }
+
+      @Override
+      public boolean advance() throws IOException {
+        while (true) {
+          if (this.curChunkCellScanner.advance()) return true;
+          // Cur chunk is over. Move to the next one.
+          DurableSlicedChunk chunk = (chunksItr.hasNext()) ? chunksItr.next() : null;
+          if (chunk.getSeqId() > cellsOffsetMeta.getFirst()) {
+            // We have reached till the last chunk. Just ignore remaining chunks.
+            chunk = null;
           }
+          if (chunk == null) break;
+          Optional<Integer> cellsOffsetForChunk = getCellsOffsetForChunk(chunk);
+          if (cellsOffsetForChunk != null) {
+            this.curChunkCellScanner = chunk.getCellScanner(cellsOffsetForChunk);
+          } else {
+            break;
+          }
+          // we have reached the last cell scanner
         }
-        extractCellsPerRegion();
-        // we need to close it here other wise the new chunk creator cannot
-        // create a durable memory area with the same path.
-        close();
+        return false;
       }
-    }
+
+      private Optional<Integer> getCellsOffsetForChunk(DurableSlicedChunk chunk) {
+        if (chunk.getSeqId() == cellsOffsetMeta.getFirst()) {
+          return Optional.of(cellsOffsetMeta.getSecond());
+        }
+        return Optional.empty();
+      }
+    };
+    return scanner;
   }
 
-  private void extractCellsPerRegion() {
-    // now we have a sorted set of chunks for each region and its family
-    Set<Entry<Pair<String, String>, Map<Short, ByteBuffer>>> entrySet =
-        regionFamilyChunks.entrySet();
-    for (Entry<Pair<String, String>, Map<Short, ByteBuffer>> entry : entrySet) {
-      List<Cell> cellsPerFamily = this.regionFamilyCells.get(entry.getKey());
-      if (cellsPerFamily == null) {
-        cellsPerFamily = new ArrayList<Cell>();
+  private List<DurableSlicedChunk> getSortedChunks(byte[] region, byte[] store) {
+    NavigableMap<byte[], List<DurableSlicedChunk>> storeVsChunks = this.chunks.get(region);
+    List<DurableSlicedChunk> storeChunks = storeVsChunks == null ? new ArrayList<>()
+        : storeVsChunks.get(store);
+    // Sort the chunks as per the seqId.
+    storeChunks.sort(new Comparator<DurableSlicedChunk>() {
+      @Override
+      public int compare(DurableSlicedChunk c1, DurableSlicedChunk c2) {
+        return c1.getSeqId() - c2.getSeqId();
       }
-      this.regionFamilyCells.put(entry.getKey(), cellsPerFamily);
-      Collection<ByteBuffer> values = entry.getValue().values();
-      List<ByteBuffer> buffers = new ArrayList<ByteBuffer>(values);
-      ByteBuffer firstBuffer = buffers.get(0);
-      long metaData = firstBuffer.getLong(DurableSlicedChunk.OFFSET_TO_OFFSETMETA);
-      int lastChunkSeqId = (int)(metaData >> Integer.SIZE);
-      int endOffset = (int)(Bytes.MASK_FOR_LOWER_INT_IN_LONG ^ metaData);
-      int offset = DurableSlicedChunk.OFFSET_TO_SEQID + DurableSlicedChunk.SIZE_OF_SEQID
-          + DurableSlicedChunk.SIZE_OF_OFFSETMETA;
-      // already the buffers should be ordered based on chunk's seqID
-      for (ByteBuffer buffer : buffers) {
-        // TODO : Again getting these infos. Can avoid
-        int regionNameLength = buffer.getInt(offset);
-        int familyNameLength =
-            buffer.getInt(offset + Bytes.SIZEOF_INT + regionNameLength);
-        short chunkSeqId = buffer.getShort(DurableSlicedChunk.OFFSET_TO_SEQID);
-        int dataStartOffset = offset + 2 * Bytes.SIZEOF_INT + regionNameLength + familyNameLength;
-        int off = dataStartOffset;
-        // TODO : handle multiple chunk cases. Need to test
-        while (off <= endOffset) {
-          if (chunkSeqId <= lastChunkSeqId) {
-            if (buffer.capacity() - off < Bytes.SIZEOF_INT) {
-              // we should have atleast int space to read the key length
-              // break the inner loop and go back to the next chunk
-              break;
-            }
-            int keyLength = ByteBufferUtils.toInt(buffer, off);
-            // if the buffer was closed out by us forcefully since we did not have enough space
-            // -1 indicates forceful close, 0 indicates the batch was over with it
-            if (keyLength == -1 || keyLength == 0) {
-              break;
-            }
-            int valueLength = ByteBufferUtils.toInt(buffer, off + Bytes.SIZEOF_INT);
-            // clone it to avoid the references to the durable memory area.
-            // TODO this will be costly. Find ways to avoid.  In fact ways to avoid the chunks been dereferenced before these cells been flushed.
-            // TODO handle tags also.. This is not been handled in other Durable* places as well.
-            ExtendedCell cell = new ByteBufferChunkKeyValue(buffer, off,
-                keyLength + valueLength + (2 * Bytes.SIZEOF_INT)).deepClone();
-            cellsPerFamily.add(cell);
-            // include per cell SeqID also here
-            off += keyLength + valueLength + (2 * Bytes.SIZEOF_INT) + Bytes.SIZEOF_LONG;
+    });
+    return storeChunks;
+  }
+
+  public void finishRegionReplay(byte[] region, MemStoreChunkPool dataPool) {
+    if (chunks != null) {
+      NavigableMap<byte[], List<DurableSlicedChunk>> storeChunks = this.chunks.remove(region);
+      if (storeChunks != null) {
+        for (List<DurableSlicedChunk> chunks : storeChunks.values()) {
+          for (DurableSlicedChunk chunk : chunks) {
+            dataPool.putbackChunks(chunk);
           }
         }
       }
     }
-  }
-
-  public List<Cell> getCellsPerFamily(String regionName, String famName) {
-    return this.regionFamilyCells.get(new Pair<String, String>(regionName, famName));
-  }
-
-  public void clear() {
-    this.regionFamilyCells.clear();
-  }
-
-  public void clearRegionChunk(String regionName, String famName) {
-    this.regionFamilyCells.remove(new Pair<String, String>(regionName, famName));
-  }
-
-  public void close() {
-    // this close should be done after after the data is retrieved back
-    allocator.close();
-  }
-
-  public static DurableChunkRetriever resetInstance() {
-    DurableChunkRetriever cur = INSTANCE;
-    INSTANCE = null;
-    return cur;
   }
 }

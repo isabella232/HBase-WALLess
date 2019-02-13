@@ -484,7 +484,7 @@ public class HRegionServer extends HasThread implements
 
   private ChunkCreator memstoreChunkCreator;
   // TODO : Better way. for now allowing to be set in the region server direclty
-  private DurableChunkRetrieverV2 retriever;
+  private DurableChunkRetriever retriever;
 
   /**
    * Nonce manager. Nonces are used to make operations like increment and append idempotent
@@ -3893,11 +3893,11 @@ public class HRegionServer extends HasThread implements
     return response.getStatus();
   }
 
-  public void setRetriever(DurableChunkRetrieverV2 retriever) {
+  public void setRetriever(DurableChunkRetriever retriever) {
     this.retriever = retriever;
   }
 
-  public DurableChunkRetrieverV2 getRetriver() {
+  public DurableChunkRetriever getRetriver() {
     return this.retriever;
   }
 

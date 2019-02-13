@@ -970,7 +970,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
     if (this.getRegionServerServices() != null
         && MemStoreLAB.getMemstoreDurablePath(conf) != null) {
       MemStoreChunkPool dataPool = null;
-      DurableChunkRetrieverV2 chunkRetriever = ((HRegionServer) this.getRegionServerServices()).getRetriver();
+      DurableChunkRetriever chunkRetriever = ((HRegionServer) this.getRegionServerServices()).getRetriver();
       if (this.getChunkCreator() != null) {
         assert this.getChunkCreator() instanceof DurableChunkCreator;
         dataPool = ((DurableChunkCreator) this.getChunkCreator()).getDataPool();
