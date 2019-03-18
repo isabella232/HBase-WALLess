@@ -106,6 +106,7 @@ public class RegionReplicaCoordinator {
   private volatile ArrayList<MemstoreReplicationEntry> entryBuffer = new ArrayList<>();
   private volatile long curMaxConsumedSeq = 0;
   private int replicationThreadIndex;
+  private int connIndex;
   // Those replicas whose health is marked as BAD already in this primary
   private Set<Integer> badReplicas;
   // This is a subset of badReplicas. We will add to below DS only after the region is marked as BAD
@@ -120,7 +121,7 @@ public class RegionReplicaCoordinator {
   private int tableReplication;
 
   public RegionReplicaCoordinator(Configuration conf, RegionInfo currentRegion,
-      MultiVersionConcurrencyControl mvcc, int minWriteReplicas, int replicationThreadIndex,
+      MultiVersionConcurrencyControl mvcc, int minWriteReplicas, int replicationThreadIndex, int replicaConnIndex,
       int tableReplication) {
     this.conf = conf;
     this.curRegion = currentRegion;
@@ -128,6 +129,7 @@ public class RegionReplicaCoordinator {
     this.minNonPrimaryWriteReplicas = minWriteReplicas - 1;
     this.tableReplication = tableReplication;
     this.replicationThreadIndex = replicationThreadIndex;
+    this.connIndex = replicaConnIndex;
     if (RegionReplicaUtil.isDefaultReplica(this.curRegion)) {
       badReplicas = new HashSet<>();
       badReplicasInMeta = new HashSet<>();
@@ -217,6 +219,10 @@ public class RegionReplicaCoordinator {
 
   public int getReplicationThreadIndex() {
     return this.replicationThreadIndex;
+  }
+
+  public int getConnIndex() {
+    return this.connIndex;
   }
 
   public List<Integer> processBadReplicas(List<Integer> replicas) {

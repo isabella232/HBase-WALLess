@@ -67,5 +67,7 @@ public interface MemstoreReplicator {
    */
   public int getNextReplicationThread();
 
+  public int getNextConnectionIndex();
+
   public long getReplicationTimeout();
 }

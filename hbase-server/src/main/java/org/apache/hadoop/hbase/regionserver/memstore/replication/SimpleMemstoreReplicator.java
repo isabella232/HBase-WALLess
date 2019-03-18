@@ -29,8 +29,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
@@ -42,7 +40,6 @@ import org.apache.hadoop.hbase.client.ClusterConnection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.RegionAdminServiceCallable;
 import org.apache.hadoop.hbase.client.RegionInfo;
-import org.apache.hadoop.hbase.client.RegionReplicaUtil;
 import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
 import org.apache.hadoop.hbase.codec.KeyValueCodecWithTagsAndSeqNo;
 import org.apache.hadoop.hbase.exceptions.TimeoutIOException;
@@ -59,25 +56,27 @@ import org.apache.hadoop.hbase.util.HasThread;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hbase.thirdparty.com.google.protobuf.UnsafeByteOperations;
 import org.apache.yetus.audience.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @InterfaceAudience.Private
 public class SimpleMemstoreReplicator implements MemstoreReplicator {
   private static final Logger LOG = LoggerFactory.getLogger(SimpleMemstoreReplicator.class);
   private static final String MEMSTORE_REPLICATION_THREAD_COUNT = 
       "hbase.regionserver.memstore.replication.threads";
+  private static final String MEMSTORE_REPLICATION_CONNECTIONS_COUNT = 
+      "hbase.regionserver.memstore.replication.connections";
   private final Configuration conf;
-  private ClusterConnection primaryToReplicaConnection;
-  private ClusterConnection replicaToReplicaConnection;
+  private ClusterConnection[] connections;
   private final int operationTimeout;
   private final ReplicationThread[] replicationThreads;
   private final long replicationTimeout;
   protected static final int DEFAULT_WAL_SYNC_TIMEOUT_MS = 5 * 60 * 1000;
   protected final RegionServerServices rs;
   private AtomicInteger threadIndex = new AtomicInteger(0);
-  private final RpcControllerFactory primaryRpcControllerFactory;
-  private final RpcControllerFactory replicaRpcControllerFactory;
-  private final RpcRetryingCallerFactory primaryRpcRetryingCallerFactory;
-  private final RpcRetryingCallerFactory replicaRpcRetryingCallerFactory;
+  private AtomicInteger connIndex = new AtomicInteger(0);
+  private final RpcControllerFactory rpcControllerFactory;
+  private final RpcRetryingCallerFactory rpcRetryingCallerFactory;
   
   public SimpleMemstoreReplicator(Configuration conf, RegionServerServices rs) {
     this.conf = HBaseConfiguration.create(conf);
@@ -97,27 +96,24 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
     // TODO As of now using the same config and default value as for WAL sync timeout. Better to
     // have a new config.
+    int numWriterThreads = this.conf.getInt(MEMSTORE_REPLICATION_THREAD_COUNT,
+      HConstants.DEFAULT_REGION_SERVER_HANDLER_COUNT);
+    int numConn = this.conf.getInt(MEMSTORE_REPLICATION_CONNECTIONS_COUNT, (numWriterThreads));
     this.replicationTimeout = this.conf.getLong("hbase.regionserver.mutations.sync.timeout",
         DEFAULT_WAL_SYNC_TIMEOUT_MS);
-
-    try {
-      this.primaryToReplicaConnection = (ClusterConnection) ConnectionFactory.createConnection(this.conf);
-    } catch (IOException ex) {
-      throw new RuntimeException("Exception while creating SimpleMemstoreReplicator", ex);
+    this.connections = new ClusterConnection[numConn];
+    for (int i = 0; i < numConn; i++) {
+      try {
+        this.connections[i] =
+            (ClusterConnection) ConnectionFactory.createConnection(this.conf);
+      } catch (IOException ex) {
+        throw new RuntimeException("Exception while creating SimpleMemstoreReplicator", ex);
+      }
     }
-    try {
-      this.replicaToReplicaConnection = (ClusterConnection) ConnectionFactory.createConnection(this.conf);
-    } catch (IOException ex) {
-      throw new RuntimeException("Exception while creating SimpleMemstoreReplicator", ex);
-    }
-    int numWriterThreads = this.conf.getInt(MEMSTORE_REPLICATION_THREAD_COUNT,
-        HConstants.DEFAULT_REGION_SERVER_HANDLER_COUNT);
-    this.primaryRpcRetryingCallerFactory = RpcRetryingCallerFactory
-        .instantiate(primaryToReplicaConnection.getConfiguration());
-    this.replicaRpcRetryingCallerFactory = RpcRetryingCallerFactory
-        .instantiate(replicaToReplicaConnection.getConfiguration());
-    this.primaryRpcControllerFactory = RpcControllerFactory.instantiate(primaryToReplicaConnection.getConfiguration());
-    this.replicaRpcControllerFactory = RpcControllerFactory.instantiate(replicaToReplicaConnection.getConfiguration());
+    this.rpcRetryingCallerFactory =
+        RpcRetryingCallerFactory.instantiate(connections[0].getConfiguration());
+    this.rpcControllerFactory =
+        RpcControllerFactory.instantiate(connections[0].getConfiguration());
     this.replicationThreads = new ReplicationThread[numWriterThreads];
     for (int i = 0; i < numWriterThreads; i++) {
       this.replicationThreads[i] = new ReplicationThread();
@@ -192,10 +188,8 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
 
   // called only when the region replicator is created
   @Override
-  public synchronized int getNextReplicationThread() {
-    int res = (threadIndex.get()) % this.replicationThreads.length;
-    threadIndex.incrementAndGet();
-    return res;
+  public int getNextReplicationThread() {
+    return (threadIndex.getAndIncrement()) % this.replicationThreads.length;
   }
 
   /*
@@ -251,19 +245,9 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
           //'Coding error, see method javadoc. row=null, tableName=tableName)';
           // Since we know the region and its start key it is ok to pass it here
           //
-          ClusterConnection con;
-          RpcControllerFactory controllerFactory;
-          RpcRetryingCallerFactory retryingCallerFactory;
-          if (RegionReplicaUtil
-              .isDefaultReplica(replicaCordinator.getRegionInfo().getReplicaId())) {
-            con = primaryToReplicaConnection;
-            controllerFactory = primaryRpcControllerFactory;
-            retryingCallerFactory = primaryRpcRetryingCallerFactory;
-          } else {
-            con = replicaToReplicaConnection;
-            controllerFactory = replicaRpcControllerFactory;
-            retryingCallerFactory = replicaRpcRetryingCallerFactory;
-          }
+          ClusterConnection con = connections[replicaCordinator.getConnIndex()];
+          RpcControllerFactory controllerFactory = rpcControllerFactory;
+          RpcRetryingCallerFactory retryingCallerFactory = rpcRetryingCallerFactory;
           RegionReplicaReplayCallable callable = new RegionReplicaReplayCallable(con,
             controllerFactory, replicaCordinator.getTableName(), nextRegionLocation,
               nextRegionLocation.getRegion(), nextRegionLocation.getRegion().getStartKey(),
@@ -293,6 +277,10 @@ public class SimpleMemstoreReplicator implements MemstoreReplicator {
     } finally {
       markResponse(request, replicationEntries, builder.build(), replicaCordinator);
     }
+  }
+
+  public int getNextConnectionIndex() {
+    return (connIndex.getAndIncrement()) % this.connections.length;
   }
 
   private void markResponse(RequestEntryHolder request,

@@ -1204,10 +1204,16 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver, Regi
 
   private void initMemstoreReplication(RegionServerServices rsServices, Set<byte[]> families) {
     this.memstoreReplicator = rsServices.getMemstoreReplicator();
-    int replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
+    int replicationThreadIndex = -1;
+    int replicaConnIndex = -1;
+    if (RegionReplicaUtil.isDefaultReplica(this.getRegionInfo())) {
+      // only for primary we need this. Helps in aggregating the regions better
+      replicationThreadIndex = this.memstoreReplicator.getNextReplicationThread();
+    }
+    replicaConnIndex = this.memstoreReplicator.getNextConnectionIndex();
     this.replicaCordinator = new RegionReplicaCoordinator(this.conf, this.getRegionInfo(),
         this.mvcc, this.htableDescriptor.getMinRegionReplication(), replicationThreadIndex,
-        this.getTableDescriptor().getRegionReplication());
+        replicaConnIndex, this.getTableDescriptor().getRegionReplication());
     this.memStoreAsyncAddService = rsServices.getMemStoreAsyncAddService();
   }
 

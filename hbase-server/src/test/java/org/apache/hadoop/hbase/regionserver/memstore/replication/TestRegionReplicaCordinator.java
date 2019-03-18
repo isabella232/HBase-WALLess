@@ -42,7 +42,7 @@ public class TestRegionReplicaCordinator {
   public void testPullEntries() throws Exception {
     RegionInfo regionInfo = new HRegionInfo(1234, TableName.META_TABLE_NAME, 0);
     RegionReplicaCoordinator replicaCordinator = new RegionReplicaCoordinator(null, regionInfo,
-        mvcc, 1, 0, 3);
+        mvcc, 1,1, 0, 3);
     MemstoreReplicationEntry e1 = createEntry(false);
     MemstoreReplicationEntry e2 = createEntry(false);
     MemstoreReplicationEntry e3 = createEntry(false);
