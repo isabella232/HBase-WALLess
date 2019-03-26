@@ -17,112 +17,105 @@
  */
 package org.apache.hadoop.hbase.regionserver;
 
-import java.io.File;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
-import org.apache.mnemonic.DurableChunk;
-import org.apache.mnemonic.NonVolatileMemAllocator;
-import org.apache.mnemonic.Reclaim;
-import org.apache.mnemonic.Utils;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import lib.llpl.PersistentHeap;
+import lib.llpl.PersistentMemoryBlock;
 
 @InterfaceAudience.Private
 public class DurableChunkCreator extends ChunkCreator {
 
   private static final Logger LOG = LoggerFactory.getLogger(DurableChunkCreator.class);
+  private static final long DEFAULT_META_BLOCK_SIZE = 1024l;
   // Size for one durable chunk been created over the pmem.
   static final String DURABLECHUNK_SIZE = "hbase.durablechunk.size";
+  // TODO : Just create 2MB memory blocks and also 2 MB bytebuffers. To see if that is making
+  // the startup faster
   private static final long DEFAULT_DURABLECHUNK_SIZE = 8L * 1024 * 1024 * 1024;// 8 GB
-private String path = null;
-  private DurableChunk<NonVolatileMemAllocator> durableBigChunk[];
+  private String path = null;
+  private PersistentMemoryBlock metaBlock;
+  private PersistentMemoryBlock durableBigChunk[];
+  private DurableChunkRetriever retriever = null;
   // Offset to track the allocation inside the bigChunk.
   private long offsetInCurChunk = 0;
   // if we have a bigger value this does not work. So creating some random value for now
   // as in mnemonic's ChunkBufferNGTest
   // Test this new unique Ids concepts.
-  private NonVolatileMemAllocator allocator;
-  private DurableChunkRetriever retriever = null;
+  private PersistentHeap heap;
   private long durableBigChunkSize;
   private int curChunkIndex = 0;
 
-  DurableChunkCreator(Configuration config, int chunkSize, long globalMemStoreSize, String durablePath) {
+  DurableChunkCreator(Configuration config, int chunkSize, long globalMemStoreSize,
+      String durablePath) {
     super(chunkSize, true, globalMemStoreSize, 1.0F, 1.0F, null, 0);// TODO what should be last arg?
     this.path = durablePath;
-    // This config is used for easy testing. Once we get a sweet spot we can remove this - I
-    // believe, if at all we get one
     // Do validation. but for now creating max sized allocator
-    boolean exists = new File(durablePath).exists();
-    if (exists) {
-      LOG.info("Durable memstore backed file found. Hence retrieving data from it "+durablePath);
-    }
-    long allocatorSize = (long) ((2 * globalMemStoreSize));
+    boolean exists = PersistentHeap.exists(durablePath);
     if (exists) {
       // capacity is not used when we want to get back the data. only on creation it is needed.
-      allocatorSize = 1l;
+      LOG.info(
+        "LLPL Durable memstore backed file found. Hence retrieving data from it " + durablePath);
+      heap = PersistentHeap.getHeap(durablePath);
+      // get the meta block
+      metaBlock = heap.memoryBlockFromHandle(heap.getRoot());
+    } else {
+      // get the actual size that is required
+      long allocatorSize = (long) ((2 * globalMemStoreSize));
+      heap = PersistentHeap.getHeap(durablePath, allocatorSize);
+      metaBlock = heap.allocateMemoryBlock(DEFAULT_META_BLOCK_SIZE, false);
+      // set the meta block as the root for the heap. From the meta block retrieve other block
+      // offsets
+      heap.setRoot(metaBlock.handle());
     }
-    allocator = new NonVolatileMemAllocator(
-        // creating twice the size of the configured memory. This works for now
-        Utils.getNonVolatileMemoryAllocatorService("pmem"), allocatorSize, // TODO this 2x is not needed. Give correctvalue.
-        durablePath, !exists);
-    // TODO : Understand what is this
-    allocator.setChunkReclaimer(new Reclaim<Long>() {
-      @Override
-      public boolean reclaim(Long mres, Long sz) {
-        return false;
-      }
-    });
     // This does not work with > 15G
     // so let us create multiple smaller chunks based on the memstoreSizeFactor
     durableBigChunkSize = config.getLong(DURABLECHUNK_SIZE, DEFAULT_DURABLECHUNK_SIZE);
     int numOfChunks = (int) (globalMemStoreSize / durableBigChunkSize);
     long remainingChunksLen = (globalMemStoreSize % durableBigChunkSize);
     LOG.info("Size of a durable chunk : " + durableBigChunkSize + ", Full size chunks : "
-        + numOfChunks + ", Remaining size : " + remainingChunksLen + " "+this.path);
-   // create as many chunks needed.
-    durableBigChunk =
-        remainingChunksLen > 0 ? new DurableChunk[numOfChunks + 1] : new DurableChunk[numOfChunks];
+        + numOfChunks + ", Remaining size : " + remainingChunksLen + " " + this.path);
+    // create as many chunks needed.
+    durableBigChunk = remainingChunksLen > 0 ? new PersistentMemoryBlock[numOfChunks + 1]
+        : new PersistentMemoryBlock[numOfChunks];
     long now = System.currentTimeMillis();
-    // For now starting with some uniqueId - going with 23l because that is what we used previously
-    long uniqueId = 23l;
     // On testing, with a memstore global size as around 33G we get around 4 chunks each of size 8G.
     // It takes around 112 secs on startup. We should find a sweet spot if at all it exists
+    long offset = 0;
     for (int i = 0; i < numOfChunks; i++) {
       if (exists) {
         // retrieve the last chunk. TODO : check if we need to set the handler again
-        durableBigChunk[i] = allocator.retrieveChunk(allocator.getHandler(uniqueId++));
+        durableBigChunk[i] = heap.memoryBlockFromHandle(metaBlock.getLong(offset));
         if (durableBigChunk[i] == null) {
           LOG.warn("The chunk is null");
         }
       } else {
-        durableBigChunk[i] = allocator.createChunk(durableBigChunkSize);
+        durableBigChunk[i] = heap.allocateMemoryBlock(durableBigChunkSize, false);
         if (durableBigChunk[i] == null) {
           throw new RuntimeException("Not able to create a durable chunk");
         }
-        LOG.info("the size of the chunk is " + durableBigChunk[i].getSize());
-        // TODO : See if we are able to retrieve back all the chunks with the uniqueId
-        // Internally the native code does this
-        // if (key < MAX_HANDLER_STORE_LEN && key >= 0) {
-        // D_RW(root)->hdl_buf[key] = value; // -> see the array here. so this should work ideally
-        // }
-        allocator.setHandler(uniqueId++, durableBigChunk[i].getHandler());
-
+        LOG.info("the size of the chunk is " + durableBigChunk[i].size());
+        metaBlock.setLong(offset, durableBigChunk[i].handle());
       }
+      // increment the offset
+      offset += Bytes.SIZEOF_LONG;
     }
     if (remainingChunksLen > 0) {
       if (exists) {
-        // retrieve the last chunk. TODO : check if we need to set the handler again
+        // retrieve the last chunk
         durableBigChunk[durableBigChunk.length - 1] =
-            allocator.retrieveChunk(allocator.getHandler(uniqueId));
+            heap.memoryBlockFromHandle(metaBlock.getLong(offset));
       } else {
-        durableBigChunk[durableBigChunk.length - 1] = allocator.createChunk(remainingChunksLen);
+        durableBigChunk[durableBigChunk.length - 1] =
+            heap.allocateMemoryBlock(remainingChunksLen, false);
         if (durableBigChunk[durableBigChunk.length - 1] == null) {
           throw new RuntimeException("Not able to create that extra chunk durable chunk");
         }
-        allocator.setHandler(uniqueId, durableBigChunk[durableBigChunk.length - 1].getHandler());
+        metaBlock.setLong(offset, durableBigChunk[durableBigChunk.length - 1].handle());
       }
     }
     LOG.info("Time taken to create all chunks : " + (System.currentTimeMillis() - now) + "ms");
@@ -153,17 +146,18 @@ private String path = null;
     // will be created at the starting of RS itself and will get pooled. We have check to make sure
     // this. So not handling the multi thread here intentionally.
     for (; curChunkIndex < durableBigChunk.length;) {
-      DurableChunk<NonVolatileMemAllocator> tempChunk = this.durableBigChunk[curChunkIndex];
+      PersistentMemoryBlock tempChunk = this.durableBigChunk[curChunkIndex];
       // TODO we should align the memstoreSizeFactor and chunkSize. There should not be any memory
       // waste from a DurableChunk.
-      if (offsetInCurChunk + size > tempChunk.getSize()) {
+      if (offsetInCurChunk + size > tempChunk.size()) {
         // once we reach the max of one durable chunk, go to the next durable chunk and allocate
         // buffers out of it.
         curChunkIndex++;
         this.offsetInCurChunk = 0;
         continue;
       }
-      DurableSlicedChunk chunk = new DurableSlicedChunk(id, tempChunk, this.offsetInCurChunk, size, this);
+      DurableSlicedChunk chunk =
+          new DurableSlicedChunk(id, tempChunk, this.offsetInCurChunk, size, this);
       addToChunkMap(chunk);
       this.offsetInCurChunk += size;
       return chunk;
@@ -178,8 +172,8 @@ private String path = null;
   protected void close() {
     // when there is abrupt shutdown and another process tries to read it we are able to
     // read the data. Even if the close has not happened
-    if (this.allocator != null) {
-      this.allocator.close();
+    if (this.heap != null) {
+      this.heap.close();
     }
   }
 
@@ -202,15 +196,16 @@ private String path = null;
     @Override
     protected void createInitialChunks(int chunkSize, int initialCount) {
       for (int i = 0; i < initialCount; i++) {
-        DurableSlicedChunk chunk = createChunk(true, CompactingMemStore.IndexType.ARRAY_MAP,
-            chunkSize);
+        DurableSlicedChunk chunk =
+            createChunk(true, CompactingMemStore.IndexType.ARRAY_MAP, chunkSize);
         chunk.init();
         // we need to ensure we do this every time.
         Pair<byte[], byte[]> ownerRegionStore = chunk.getOwnerRegionStore();
-        if(ownerRegionStore != null) {
+        if (ownerRegionStore != null) {
           LOG.info("The region name is " + Bytes.toString(ownerRegionStore.getFirst()));
         }
-        // Still I see that on RS coming back the namespace and meta are not coming back online. Need to fix or see if any config issue
+        // Still I see that on RS coming back the namespace and meta are not coming back online.
+        // Need to fix or see if any config issue
         if (ownerRegionStore == null || !(retriever.appendChunk(ownerRegionStore, chunk))) {
           chunk.prepopulateChunk();
           reclaimedChunks.add(chunk);

@@ -27,13 +27,12 @@ import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.util.ByteBufferUtils;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
-import org.apache.mnemonic.ChunkBuffer;
-import org.apache.mnemonic.DurableChunk;
-import org.apache.mnemonic.NonVolatileMemAllocator;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import lib.llpl.ChunkBuffer;
+import lib.llpl.PersistentMemoryBlock;
 /**
  * Notes on what this chunk should have
  * 1) this chunk should have the region name to which the current chunk is associated.
@@ -54,6 +53,7 @@ import org.slf4j.LoggerFactory;
 @InterfaceAudience.Private
 public class DurableSlicedChunk extends Chunk {
 
+  static final Logger LOG = LoggerFactory.getLogger(DurableSlicedChunk.class);
   public static final int UNUSED_SEQID = 0;
   public static final int OFFSET_TO_SEQID = Bytes.SIZEOF_INT;
   public static final int SIZE_OF_SEQID = Bytes.SIZEOF_INT;
@@ -62,13 +62,12 @@ public class DurableSlicedChunk extends Chunk {
   public static final int OFFSET_TO_REGION_IDENTIFIER = OFFSET_TO_OFFSETMETA + SIZE_OF_OFFSETMETA; 
   private static final int EO_CELLS = 0;
 
-  static final Logger LOG = LoggerFactory.getLogger(DurableSlicedChunk.class);
-  private DurableChunk<NonVolatileMemAllocator> durableChunk;
+  private PersistentMemoryBlock durableChunk;
   private ChunkBuffer chunkBuffer;
   private long offset;
   private static byte[] dummy;
 
-  public DurableSlicedChunk(int id, DurableChunk<NonVolatileMemAllocator> durableBigChunk,
+  public DurableSlicedChunk(int id, PersistentMemoryBlock durableBigChunk,
       long offset, int size, ChunkCreator chunkCreator) {
     super(size, id, true, chunkCreator);// Durable chunks are always created out of pool.
     this.offset = offset;
@@ -108,7 +107,7 @@ public class DurableSlicedChunk extends Chunk {
       offset += Bytes.SIZEOF_INT;
       ByteBufferUtils.copyFromArrayToBuffer(this.data, offset, cfName, 0, cfName.length);
       offset += cfName.length;
-      chunkBuffer.syncToLocal(OFFSET_TO_REGION_IDENTIFIER, (offset - OFFSET_TO_REGION_IDENTIFIER));
+      chunkBuffer.sync(OFFSET_TO_REGION_IDENTIFIER, (offset - OFFSET_TO_REGION_IDENTIFIER));
     }
     return offset;
   }
@@ -150,15 +149,15 @@ public class DurableSlicedChunk extends Chunk {
   public void prePutbackToPool() {
     // TODO check why write using BBUtils not working in some cases.
     ByteBufferUtils.putInt(data, OFFSET_TO_SEQID, UNUSED_SEQID);
-    chunkBuffer.syncToLocal(OFFSET_TO_SEQID, SIZE_OF_SEQID);
+    chunkBuffer.sync(OFFSET_TO_SEQID, SIZE_OF_SEQID);
   }
 
   public void persist(long offset, int len) {
-    this.chunkBuffer.syncToLocal(offset, len);
+    this.chunkBuffer.sync(offset, len);
   }
 
   public void persist() {
-    this.chunkBuffer.syncToLocal();
+    this.chunkBuffer.sync();
   }
 
   /*
