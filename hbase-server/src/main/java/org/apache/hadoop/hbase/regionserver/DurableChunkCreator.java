@@ -54,19 +54,25 @@ public class DurableChunkCreator extends ChunkCreator {
       String durablePath) {
     super(chunkSize, true, globalMemStoreSize, 1.0F, 1.0F, null, 0);// TODO what should be last arg?
     this.path = durablePath;
-    // Do validation. but for now creating max sized allocator
-    boolean exists = PersistentHeap.exists(durablePath);
+    boolean exists = true;
+    // TODO : LLPL needs to fix this for now passing 0 as suggested.
+    // Also we need minimum 100G heap name spaces in devdax mode.
+    // that is wasting too much of space. LLPL team has raised a concern regarding the same
+    heap = PersistentHeap.getHeap(durablePath, 0);
+    try {
+    metaBlock = heap.memoryBlockFromHandle(heap.getRoot());
+    } catch(Exception e ) {
+      // the only way for now to know if it is a fresh start or a restart case.
+      LOG.info("Probably a fresh start " , e);
+      exists = false;
+    }
     if (exists) {
       // capacity is not used when we want to get back the data. only on creation it is needed.
       LOG.info(
         "LLPL Durable memstore backed file found. Hence retrieving data from it " + durablePath);
-      heap = PersistentHeap.getHeap(durablePath);
-      // get the meta block
-      metaBlock = heap.memoryBlockFromHandle(heap.getRoot());
+      // we already have the meta block with us
     } else {
       // get the actual size that is required
-      long allocatorSize = (long) ((2 * globalMemStoreSize));
-      heap = PersistentHeap.getHeap(durablePath, allocatorSize);
       metaBlock = heap.allocateMemoryBlock(DEFAULT_META_BLOCK_SIZE, false);
       // set the meta block as the root for the heap. From the meta block retrieve other block
       // offsets
@@ -84,15 +90,15 @@ public class DurableChunkCreator extends ChunkCreator {
         : new PersistentMemoryBlock[numOfChunks];
     long now = System.currentTimeMillis();
     // On testing, with a memstore global size as around 33G we get around 4 chunks each of size 8G.
-    // It takes around 112 secs on startup. We should find a sweet spot if at all it exists
-    long offset = 0;
+    // starting from offset 1 due to a bug in LLPL.
+    long offset = 1l;
     for (int i = 0; i < numOfChunks; i++) {
       if (exists) {
-        // retrieve the last chunk. TODO : check if we need to set the handler again
         durableBigChunk[i] = heap.memoryBlockFromHandle(metaBlock.getLong(offset));
         if (durableBigChunk[i] == null) {
           LOG.warn("The chunk is null");
         }
+        LOG.info("the size of the retrieved chunk is " + durableBigChunk[i].size());
       } else {
         durableBigChunk[i] = heap.allocateMemoryBlock(durableBigChunkSize, false);
         if (durableBigChunk[i] == null) {
@@ -109,6 +115,7 @@ public class DurableChunkCreator extends ChunkCreator {
         // retrieve the last chunk
         durableBigChunk[durableBigChunk.length - 1] =
             heap.memoryBlockFromHandle(metaBlock.getLong(offset));
+        LOG.info("the size of the retrieved chunk is " + durableBigChunk[durableBigChunk.length - 1] );
       } else {
         durableBigChunk[durableBigChunk.length - 1] =
             heap.allocateMemoryBlock(remainingChunksLen, false);
@@ -207,7 +214,8 @@ public class DurableChunkCreator extends ChunkCreator {
         // Still I see that on RS coming back the namespace and meta are not coming back online.
         // Need to fix or see if any config issue
         if (ownerRegionStore == null || !(retriever.appendChunk(ownerRegionStore, chunk))) {
-          chunk.prepopulateChunk();
+          // Not needed any more as the LLPL itself will do the prepopulate. So we should be good here
+          //chunk.prepopulateChunk();
           reclaimedChunks.add(chunk);
         }
       }
