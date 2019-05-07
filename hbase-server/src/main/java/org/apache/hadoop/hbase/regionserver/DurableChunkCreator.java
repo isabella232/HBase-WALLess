@@ -90,10 +90,12 @@ public class DurableChunkCreator extends ChunkCreator {
         : new PersistentMemoryBlock[numOfChunks];
     long now = System.currentTimeMillis();
     // On testing, with a memstore global size as around 33G we get around 4 chunks each of size 8G.
-    // starting from offset 1 due to a bug in LLPL.
-    long offset = 1l;
+    long offset = 0l;
     for (int i = 0; i < numOfChunks; i++) {
       if (exists) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("the offset to retrieve is " + metaBlock.getLong(offset));
+        }
         durableBigChunk[i] = heap.memoryBlockFromHandle(metaBlock.getLong(offset));
         if (durableBigChunk[i] == null) {
           LOG.warn("The chunk is null");
@@ -104,7 +106,8 @@ public class DurableChunkCreator extends ChunkCreator {
         if (durableBigChunk[i] == null) {
           throw new RuntimeException("Not able to create a durable chunk");
         }
-        LOG.info("the size of the chunk is " + durableBigChunk[i].size());
+        LOG.info("the size of the chunk is " + durableBigChunk[i].size() + " at offset "
+            + durableBigChunk[i].handle());
         metaBlock.setLong(offset, durableBigChunk[i].handle());
       }
       // increment the offset
